@@ -50,6 +50,8 @@ public class ContractListService {
             criteria.contractDateTo(),
             criteria.minimumLoanAmount(),
             criteria.maximumLoanAmount(),
+            criteria.isDraft(),
+            normalize(criteria.workflowStatus()),
             resolvePage(criteria.page()),
             resolveSize(criteria.size()),
             ContractListSortField.fromApiName(criteria.sortColumn()).apiName(),

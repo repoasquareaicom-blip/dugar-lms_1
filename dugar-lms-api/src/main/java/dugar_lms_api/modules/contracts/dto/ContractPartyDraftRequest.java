@@ -1,0 +1,9 @@
+package dugar_lms_api.modules.contracts.dto;
+
+import java.util.List;
+
+public record ContractPartyDraftRequest(
+    Long contractId,
+    List<PartyDraftDto> parties
+) {
+}

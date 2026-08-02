@@ -13,6 +13,8 @@ public record ContractListCriteria(
     LocalDate contractDateTo,
     BigDecimal minimumLoanAmount,
     BigDecimal maximumLoanAmount,
+    Boolean isDraft,
+    String workflowStatus,
     Integer page,
     Integer size,
     String sortColumn,

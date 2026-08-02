@@ -180,14 +180,27 @@ public class ContractListRepository {
     private QueryParts queryParts(ContractListCriteria criteria) {
         StringBuilder whereSql = new StringBuilder("""
             WHERE c.is_active = TRUE
-              AND EXISTS (
-                  SELECT 1
-                  FROM contract_repayment_structures repayment_exists
-                  WHERE repayment_exists.contract_id = c.contract_id
-              )
             """);
         MapSqlParameterSource params = new MapSqlParameterSource();
 
+        if (Boolean.TRUE.equals(criteria.isDraft())) {
+            whereSql.append(" AND c.is_draft = TRUE\n");
+            if (criteria.workflowStatus() == null || criteria.workflowStatus().isBlank()) {
+                whereSql.append(" AND UPPER(COALESCE(c.status, '')) = 'DRAFT'\n");
+            }
+        } else {
+            whereSql.append("""
+                  AND (c.is_draft IS NULL OR c.is_draft = FALSE)
+                  AND UPPER(COALESCE(c.status, '')) = 'Y'
+                  AND EXISTS (
+                      SELECT 1
+                      FROM contract_repayment_structures repayment_exists
+                      WHERE repayment_exists.contract_id = c.contract_id
+                  )
+                """);
+        }
+
+        appendEqualsFilter(whereSql, params, "UPPER(c.status)", "workflowStatus", normalizeUpper(criteria.workflowStatus()));
         appendKeywordFilter(whereSql, params, criteria.keyword());
         appendEqualsFilter(whereSql, params, "c.area_code", "branch", criteria.branch());
         appendEqualsFilter(whereSql, params, "c.status", "status", criteria.status());
@@ -236,6 +249,13 @@ public class ContractListRepository {
 
     private void appendEqualsFilter(StringBuilder whereSql, MapSqlParameterSource params, String column, String paramName, Object value) {
         appendFilter(whereSql, params, column + " = :" + paramName, paramName, value);
+    }
+
+    private String normalizeUpper(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim().toUpperCase();
     }
 
     private void appendGreaterThanOrEqualFilter(StringBuilder whereSql, MapSqlParameterSource params, String column, String paramName, Object value) {

@@ -1,0 +1,28 @@
+ALTER TABLE assets
+    ADD COLUMN IF NOT EXISTS asset_secured VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS product_type VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS deal_of_assets VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS vehicle_make VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS version VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS fuel_type VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS kms_run NUMERIC(18,2),
+    ADD COLUMN IF NOT EXISTS property_type VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS flat_no VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS apartment_no VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS street_name TEXT,
+    ADD COLUMN IF NOT EXISTS area_name VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS property_city VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS property_state VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS distance_from_office NUMERIC(10,2),
+    ADD COLUMN IF NOT EXISTS any_rent_received VARCHAR(10),
+    ADD COLUMN IF NOT EXISTS rent_amount NUMERIC(18,2),
+    ADD COLUMN IF NOT EXISTS guideline_value NUMERIC(18,2),
+    ADD COLUMN IF NOT EXISTS nature_of_business VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS date_of_incorporation DATE,
+    ADD COLUMN IF NOT EXISTS is_secured VARCHAR(10);
+
+ALTER TABLE asset_insurances
+    ADD COLUMN IF NOT EXISTS idv_amount NUMERIC(18,2);
+
+CREATE INDEX IF NOT EXISTS idx_assets_product_type
+    ON assets (product_type);
