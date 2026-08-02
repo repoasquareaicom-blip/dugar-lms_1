@@ -9,6 +9,18 @@ dugar-lms-ui/yarn-debug.log*
 dugar-lms-ui/yarn-error.log*
 dugar-lms-ui/pnpm-debug.log*
 
+dugar-lms-frontend/node_modules/
+dugar-lms-frontend/dist/
+dugar-lms-frontend/.env
+dugar-lms-frontend/.env.*
+!dugar-lms-frontend/.env.example
+dugar-lms-frontend/*.log
+dugar-lms-frontend/npm-debug.log*
+dugar-lms-frontend/yarn-debug.log*
+dugar-lms-frontend/yarn-error.log*
+dugar-lms-frontend/pnpm-debug.log*
+dugar-lms-frontend/dugarlms20/
+
 dugar-lms-api/target/
 dugar-lms-api/*.log
 dugar-lms-api/migration_data/

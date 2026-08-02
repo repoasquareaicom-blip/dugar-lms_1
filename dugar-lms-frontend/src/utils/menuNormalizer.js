@@ -1,0 +1,183 @@
+import { resolveMenuPath } from './menuRouteMap';
+
+const ICON_BY_NAME = [
+  { keys: ['dashboard'], icon: 'LayoutDashboard' },
+  { keys: ['credit'], icon: 'HandCoins' },
+  { keys: ['master'], icon: 'FolderTree' },
+  { keys: ['transaction'], icon: 'ArrowLeftRight' },
+  { keys: ['contract'], icon: 'FileSpreadsheet' },
+  { keys: ['party'], icon: 'Users' },
+  { keys: ['account'], icon: 'BookOpenCheck' },
+  { keys: ['voucher', 'receipt'], icon: 'ReceiptIndianRupee' },
+  { keys: ['report', 'ratio'], icon: 'FileBarChart2' },
+  { keys: ['collection'], icon: 'HandHelping' },
+  { keys: ['legal'], icon: 'Scale' },
+  { keys: ['analytics'], icon: 'ChartNoAxesCombined' },
+  { keys: ['admin'], icon: 'Settings2' },
+];
+
+function normalizeText(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function resolveIcon(menu) {
+  if (menu?.icon) return menu.icon;
+
+  const menuName = normalizeText(menu?.menuName || menu?.menu_name);
+  const menuCode = normalizeText(menu?.menuCode || menu?.menu_code);
+  const source = `${menuName} ${menuCode}`;
+  const match = ICON_BY_NAME.find((entry) => entry.keys.some((key) => source.includes(key)));
+
+  return match?.icon || 'Circle';
+}
+
+function sortMenus(items) {
+  const hasDisplayOrder = items.some((item) => item.displayOrder !== undefined || item.display_order !== undefined);
+
+  if (!hasDisplayOrder) {
+    return [...items];
+  }
+
+  return [...items].sort((a, b) => {
+    const orderA = Number(a.displayOrder ?? a.display_order ?? 0);
+    const orderB = Number(b.displayOrder ?? b.display_order ?? 0);
+
+    if (orderA !== orderB) return orderA - orderB;
+    return 0;
+  });
+}
+
+function normalizeMenuItems(menus = []) {
+  if (!Array.isArray(menus)) return [];
+
+  return sortMenus(menus).map((menu, index) => {
+    const rawOrder = menu.displayOrder ?? menu.display_order;
+    const normalized = {
+      ...menu,
+      menuId: menu.menuId ?? menu.menu_id ?? `${menu.menuCode || menu.menuName || 'menu'}-${index}`,
+      menuName: menu.menuName || menu.menu_name || menu.label || 'Menu',
+      menuCode: menu.menuCode || menu.menu_code || '',
+      path: menu.urlPath || menu.path || '#',
+      urlPath: menu.urlPath || menu.path || '#',
+      icon: resolveIcon(menu),
+      displayOrder: rawOrder === undefined ? index + 1 : Number(rawOrder),
+      subMenus: normalizeMenuItems(menu.children || menu.subMenus || menu.submenus || []),
+    };
+
+    normalized.path = resolveMenuPath(normalized);
+    normalized.urlPath = normalized.path;
+    return normalized;
+  });
+}
+
+function menuMatches(menu, names) {
+  const source = normalizeText(`${menu.menuName || ''} ${menu.menuCode || ''}`);
+  return names.some((name) => source.includes(name));
+}
+
+function nextOrder(items) {
+  return Math.max(0, ...items.map((item) => Number(item.displayOrder || item.display_order || 0))) + 1;
+}
+
+function ensureMenu(parent, menu) {
+  const existing = parent.subMenus.find((item) => menuMatches(item, [normalizeText(menu.menuName), normalizeText(menu.menuCode)]));
+
+  if (existing) {
+    existing.path = menu.path;
+    existing.urlPath = menu.urlPath;
+    existing.icon = existing.icon || menu.icon;
+    return existing;
+  }
+
+  parent.subMenus.push({
+    ...menu,
+    displayOrder: menu.displayOrder ?? nextOrder(parent.subMenus),
+    subMenus: menu.subMenus || [],
+  });
+
+  parent.subMenus = sortMenus(parent.subMenus);
+  return parent.subMenus[parent.subMenus.length - 1];
+}
+
+function ensureActiveContractsMenu(menuTree) {
+  const credit = menuTree.find((menu) => menuMatches(menu, ['credit']));
+  if (!credit) return menuTree;
+
+  const transaction = credit.subMenus.find((menu) => menuMatches(menu, ['transaction']));
+  if (!transaction) return menuTree;
+
+  let contractManagement = transaction.subMenus.find((menu) => menuMatches(menu, ['contract management']));
+
+  if (!contractManagement) {
+    contractManagement = transaction.subMenus.find((menu) => menuMatches(menu, ['contract']));
+  }
+
+  if (contractManagement) {
+    contractManagement.menuName = 'Contract Management';
+    contractManagement.icon = contractManagement.icon || 'FileSpreadsheet';
+    contractManagement.path = '#';
+    contractManagement.urlPath = '#';
+    contractManagement.subMenus = contractManagement.subMenus || [];
+  } else {
+    contractManagement = ensureMenu(transaction, {
+      menuId: 'frontend-contract-management',
+      menuName: 'Contract Management',
+      menuCode: 'CONTRACT_MANAGEMENT',
+      icon: 'FileSpreadsheet',
+      path: '#',
+      urlPath: '#',
+      displayOrder: nextOrder(transaction.subMenus),
+      subMenus: [],
+    });
+  }
+
+  ensureMenu(contractManagement, {
+    menuId: 'frontend-active-contracts',
+    menuName: 'Active Contracts',
+    menuCode: 'ACTIVE_CONTRACTS',
+    icon: 'CheckCircle',
+    path: '/credit/trans/contract-management/active-contracts',
+    urlPath: '/credit/trans/contract-management/active-contracts',
+    displayOrder: nextOrder(contractManagement.subMenus),
+    subMenus: [],
+  });
+
+  ensureMenu(contractManagement, {
+    menuId: 'frontend-draft-contracts',
+    menuName: 'Draft Contracts',
+    menuCode: 'DRAFT_CONTRACTS',
+    icon: 'FileClock',
+    path: '/credit/trans/contract-management/draft-contracts',
+    urlPath: '/credit/trans/contract-management/draft-contracts',
+    displayOrder: nextOrder(contractManagement.subMenus),
+    subMenus: [],
+  });
+
+  return menuTree;
+}
+
+export function normalizeMenuTree(menus = []) {
+  const menuTree = normalizeMenuItems(menus);
+  const existingDashboard = menuTree.find((menu) => menuMatches(menu, ['dashboard']));
+
+  if (existingDashboard) {
+    existingDashboard.menuName = 'Dashboard';
+    existingDashboard.icon = existingDashboard.icon || 'LayoutDashboard';
+    existingDashboard.path = '/dashboard';
+    existingDashboard.urlPath = '/dashboard';
+    existingDashboard.displayOrder = 0;
+  } else {
+    menuTree.unshift({
+      menuId: 'frontend-dashboard',
+      menuName: 'Dashboard',
+      menuCode: 'DASHBOARD',
+      icon: 'LayoutDashboard',
+      path: '/dashboard',
+      urlPath: '/dashboard',
+      displayOrder: 0,
+      subMenus: [],
+    });
+  }
+
+  return sortMenus(ensureActiveContractsMenu(menuTree));
+}

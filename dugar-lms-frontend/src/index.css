@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+:root {
+  --dugar-ui-scale: 1;
+}
+
+.dugar-global-scale {
+  width: calc(100% / var(--dugar-ui-scale));
+  height: calc(100dvh / var(--dugar-ui-scale));
+  transform: scale(var(--dugar-ui-scale));
+  transform-origin: top left;
+}
