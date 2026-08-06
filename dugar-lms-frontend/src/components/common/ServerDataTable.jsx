@@ -40,6 +40,7 @@ const ServerDataTable = ({
     rows: Array.isArray(data?.content) ? data.content : [],
     totalElements: Number(data?.totalElements || 0),
   }),
+  onRowClick,
   onRowDoubleClick,
 }) => {
   const [rows, setRows] = useState([]);
@@ -295,7 +296,10 @@ const ServerDataTable = ({
               return (
                 <tr
                   key={rowId}
-                  onClick={() => setSelectedRowId(rowId)}
+                  onClick={() => {
+                    setSelectedRowId(rowId);
+                    onRowClick?.(row);
+                  }}
                   onDoubleClick={() => onRowDoubleClick?.(row)}
                   onContextMenu={(event) => {
                     if (!getContextMenuItems) return;

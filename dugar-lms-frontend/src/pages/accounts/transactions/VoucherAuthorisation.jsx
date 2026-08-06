@@ -124,6 +124,7 @@ export default function VoucherAuthorisation() {
         filterFields={filterFields}
         getRowId={(row) => row.voucherHeaderId}
         loadingLabel="Loading pending vouchers"
+        onRowClick={openReview}
         onRowDoubleClick={openReview}
         searchPlaceholder="Search voucher, party, contract..."
         title="Voucher Authorisation Queue"
