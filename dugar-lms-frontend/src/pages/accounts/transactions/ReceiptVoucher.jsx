@@ -651,15 +651,6 @@ const ReceiptVoucher = () => {
                       <button type="button" onClick={() => navigate(returnTo)} disabled={saving} className="rounded border border-gray-300 bg-white px-5 py-2 text-[13px] font-black uppercase text-gray-800">
                         Back
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSave()}
-                        disabled={saving || !editingVoucherId}
-                        className="inline-flex min-w-36 items-center justify-center gap-2 rounded bg-blue-800 px-5 py-2 text-[13px] font-black uppercase text-white shadow disabled:cursor-wait disabled:bg-blue-500"
-                      >
-                        {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                        Save Changes
-                      </button>
                       <button type="button" onClick={() => setReasonAction('cancel')} disabled={saving || !editingVoucherId} className="rounded bg-slate-700 px-5 py-2 text-[13px] font-black uppercase text-white disabled:bg-slate-400">
                         Cancel
                       </button>
