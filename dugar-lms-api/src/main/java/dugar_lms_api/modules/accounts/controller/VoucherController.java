@@ -1,6 +1,10 @@
 package dugar_lms_api.modules.accounts.controller;
 
+import dugar_lms_api.common.pagination.PageResponse;
+import dugar_lms_api.modules.accounts.dto.VoucherActionRequest;
+import dugar_lms_api.modules.accounts.dto.VoucherAuthorisationCriteria;
 import dugar_lms_api.modules.accounts.dto.VoucherDto;
+import dugar_lms_api.modules.accounts.dto.VoucherReviewDto;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveResponse;
 import dugar_lms_api.modules.accounts.dto.VoucherSummaryDto;
@@ -20,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +55,40 @@ public class VoucherController {
         return ResponseEntity.ok(service.search(voucherType, transactionType, voucherNumber, voucherDate, contractNumber));
     }
 
+    @GetMapping("/authorisation-queue")
+    public ResponseEntity<PageResponse<VoucherSummaryDto>> authorisationQueue(
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) String voucherType,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate voucherDateFrom,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate voucherDateTo,
+        @RequestParam(required = false) BigDecimal minimumAmount,
+        @RequestParam(required = false) BigDecimal maximumAmount,
+        @RequestParam(required = false) Long submittedBy,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer size,
+        @RequestParam(required = false) String sortColumn,
+        @RequestParam(required = false) String sortDirection
+    ) {
+        return ResponseEntity.ok(service.authorisationQueue(new VoucherAuthorisationCriteria(
+            keyword,
+            voucherType,
+            voucherDateFrom,
+            voucherDateTo,
+            minimumAmount,
+            maximumAmount,
+            submittedBy,
+            page,
+            size,
+            sortColumn,
+            sortDirection
+        )));
+    }
+
+    @GetMapping("/authorisation-queue/{voucherHeaderId}")
+    public ResponseEntity<VoucherReviewDto> review(@PathVariable Long voucherHeaderId) {
+        return ResponseEntity.ok(service.review(voucherHeaderId));
+    }
+
     @GetMapping("/{voucherHeaderId}")
     public ResponseEntity<VoucherDto> find(@PathVariable Long voucherHeaderId) {
         return ResponseEntity.ok(service.find(voucherHeaderId));
@@ -64,10 +103,54 @@ public class VoucherController {
         return ResponseEntity.ok(service.update(voucherHeaderId, request, userId(authentication)));
     }
 
+    @PostMapping("/{voucherHeaderId}/authorise")
+    public ResponseEntity<VoucherDto> authorise(@PathVariable Long voucherHeaderId, Authentication authentication) {
+        return ResponseEntity.ok(service.authorise(voucherHeaderId, userId(authentication)));
+    }
+
+    @PostMapping("/{voucherHeaderId}/reject")
+    public ResponseEntity<VoucherDto> reject(
+        @PathVariable Long voucherHeaderId,
+        @RequestBody(required = false) VoucherActionRequest request,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(service.reject(voucherHeaderId, userId(authentication), request == null ? null : request.reason()));
+    }
+
+    @PostMapping("/{voucherHeaderId}/cancel")
+    public ResponseEntity<VoucherDto> cancel(
+        @PathVariable Long voucherHeaderId,
+        @RequestBody(required = false) VoucherActionRequest request,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(service.cancel(voucherHeaderId, userId(authentication), request == null ? null : request.reason()));
+    }
+
+    @PostMapping("/{voucherHeaderId}/reopen")
+    public ResponseEntity<VoucherDto> reopen(
+        @PathVariable Long voucherHeaderId,
+        @RequestBody(required = false) VoucherActionRequest request,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(service.reopen(voucherHeaderId, userId(authentication), request == null ? null : request.reason()));
+    }
+
+    @PostMapping("/{voucherHeaderId}/resubmit")
+    public ResponseEntity<VoucherDto> resubmit(@PathVariable Long voucherHeaderId, Authentication authentication) {
+        return ResponseEntity.ok(service.resubmit(voucherHeaderId, userId(authentication)));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> validationError(IllegalArgumentException exception) {
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
+            .body(Map.of("message", exception.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> conflict(IllegalStateException exception) {
+        return ResponseEntity
+            .status(HttpStatus.CONFLICT)
             .body(Map.of("message", exception.getMessage()));
     }
 

@@ -42,7 +42,7 @@ class ContractListServiceTest {
         assertThat(criteria.page()).isEqualTo(0);
         assertThat(criteria.size()).isEqualTo(25);
         assertThat(criteria.keyword()).isNull();
-        assertThat(criteria.sortColumn()).isEqualTo("contractId");
+        assertThat(criteria.sortColumn()).isEqualTo("contractDate");
         assertThat(criteria.sortDirection()).isEqualTo("desc");
         assertThat(response.totalPages()).isZero();
         assertThat(response.first()).isTrue();
@@ -77,7 +77,7 @@ class ContractListServiceTest {
     }
 
     @Test
-    void invalidSortFieldFallsBackToContractIdDesc() {
+    void invalidSortFieldFallsBackToContractDateDesc() {
         when(contractListRepository.count(any())).thenReturn(0L);
         when(contractListRepository.find(any())).thenReturn(List.of());
 
@@ -85,7 +85,7 @@ class ContractListServiceTest {
 
         ArgumentCaptor<ContractListCriteria> criteriaCaptor = ArgumentCaptor.forClass(ContractListCriteria.class);
         verify(contractListRepository).find(criteriaCaptor.capture());
-        assertThat(criteriaCaptor.getValue().sortColumn()).isEqualTo("contractId");
+        assertThat(criteriaCaptor.getValue().sortColumn()).isEqualTo("contractDate");
         assertThat(criteriaCaptor.getValue().sortDirection()).isEqualTo("desc");
     }
 

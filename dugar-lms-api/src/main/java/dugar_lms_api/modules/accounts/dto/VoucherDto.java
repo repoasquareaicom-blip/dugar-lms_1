@@ -17,6 +17,9 @@ public record VoucherDto(
     Long contractId,
     String headerControlCode,
     String headerControlName,
+    String remarks,
+    String status,
+    Integer versionNumber,
     List<VoucherDetailDto> details
 ) {
 }

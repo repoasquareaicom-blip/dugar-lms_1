@@ -13,6 +13,10 @@ public record VoucherSummaryDto(
     String contractNumber,
     String headerControlCode,
     String headerControlName,
+    String status,
+    Integer versionNumber,
+    Long submittedBy,
+    java.time.LocalDateTime submittedAt,
     int detailCount
 ) {
 }
