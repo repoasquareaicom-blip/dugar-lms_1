@@ -322,8 +322,8 @@ public class VoucherRepository {
 
     public VoucherSaveResponse update(Long voucherHeaderId, VoucherSaveRequest request, Long userId) {
         StatusVersion current = lockStatus(voucherHeaderId);
-        if (!"REOPENED".equals(current.status()) && !"REJECTED".equals(current.status())) {
-            throw new IllegalStateException("Only REOPENED or REJECTED vouchers can be edited.");
+        if (!List.of("SUBMITTED", "REOPENED", "REJECTED").contains(current.status())) {
+            throw new IllegalStateException("Only SUBMITTED, REOPENED or REJECTED vouchers can be edited.");
         }
         String beforeSnapshot = snapshot(voucherHeaderId);
         jdbcTemplate.update(
