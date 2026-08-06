@@ -10,10 +10,20 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchContractsPage } from '../../../services/contractsService';
 import { fetchLedgerCodes } from '../../../services/ledgerCodeService';
-import { fetchVoucher, reopenVoucher, resubmitVoucher, saveVoucher, searchVouchers, updateVoucher } from '../../../services/voucherService';
+import {
+  authoriseVoucher,
+  cancelVoucher,
+  fetchVoucher,
+  rejectVoucher,
+  reopenVoucher,
+  resubmitVoucher,
+  saveVoucher,
+  searchVouchers,
+  updateVoucher,
+} from '../../../services/voucherService';
 import { getStoredAuthToken } from '../../../api/apiClient';
 
 const today = new Date().toISOString().slice(0, 10);
@@ -181,7 +191,12 @@ const VoucherDateInput = ({ value, onChange }) => {
 
 const ReceiptVoucher = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const searchParams = new URLSearchParams(location.search);
   const selectedContract = location.state?.contract || null;
+  const requestedVoucherId = location.state?.voucherHeaderId || searchParams.get('voucherHeaderId');
+  const authorisationMode = location.state?.authorisationMode || searchParams.get('authorisation') === 'true';
+  const returnTo = location.state?.returnTo || '/accounts/transaction/authorisation';
   const kind = voucherKind(location.pathname);
   const editMode = location.pathname.toLowerCase().includes('/edit/');
   const isReceipt = kind === 'receipt';
@@ -190,9 +205,10 @@ const ReceiptVoucher = () => {
   const voucherTitle = isJournal ? 'Journal Voucher' : isPayment ? 'Payment Voucher' : 'Receipt Voucher';
 
   const [category, setCategory] = useState(selectedContract ? 'LOAN' : 'GENERAL');
-  const [systemDate] = useState(today);
+  const [systemDate, setSystemDate] = useState(today);
   const [voucherDate, setVoucherDate] = useState(today);
   const [voucherNo, setVoucherNo] = useState('Auto');
+  const [voucherStatus, setVoucherStatus] = useState('');
   const [headerControlCode, setHeaderControlCode] = useState(null);
   const [voucherAmount, setVoucherAmount] = useState('');
   const [rows, setRows] = useState([
@@ -204,9 +220,11 @@ const ReceiptVoucher = () => {
   ]);
   const [message, setMessage] = useState(null);
   const [duplicateConfirm, setDuplicateConfirm] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(editMode);
+  const [searchOpen, setSearchOpen] = useState(editMode && !requestedVoucherId);
   const [editingVoucherId, setEditingVoucherId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [loadingVoucher, setLoadingVoucher] = useState(false);
+  const [reasonAction, setReasonAction] = useState(null);
 
   const isLoan = category === 'LOAN';
   const debitEditable = isPayment || isJournal;
@@ -321,6 +339,7 @@ const ReceiptVoucher = () => {
     request
       .then((saved) => {
         setVoucherNo(saved.voucherNumber || voucherNo);
+        setEditingVoucherId(saved.voucherHeaderId || editingVoucherId);
         setMessage({ type: 'success', text: `Voucher ${editingVoucherId ? 'updated' : 'submitted'} successfully: ${saved.voucherNumber || voucherNo}` });
       })
       .catch((error) => {
@@ -375,6 +394,8 @@ const ReceiptVoucher = () => {
     setEditingVoucherId(voucher.voucherHeaderId);
     setVoucherNo(voucher.voucherNumber || 'Auto');
     setVoucherDate(voucher.voucherDate || today);
+    setSystemDate(voucher.systemDate || today);
+    setVoucherStatus(voucher.status || '');
     setHeaderControlCode(voucher.headerControlCode ? {
       ledgerCode: voucher.headerControlCode,
       ledgerName: voucher.headerControlName || '',
@@ -382,7 +403,7 @@ const ReceiptVoucher = () => {
     setVoucherAmount(String(voucher.voucherAmount || ''));
     const nextCategory = voucher.details?.find((detail) => detail.category)?.category || category;
     setCategory(nextCategory);
-    setRows((voucher.details || []).map((detail) => ({
+    const loadedRows = (voucher.details || []).map((detail) => ({
       id: crypto.randomUUID(),
       detailsCode: {
         ledgerCode: detail.ledgerCode,
@@ -397,18 +418,80 @@ const ReceiptVoucher = () => {
       debit: detail.debitAmount ? String(detail.debitAmount) : '',
       credit: detail.creditAmount ? String(detail.creditAmount) : '',
       narration: detail.narration || '',
-    })));
+    }));
+    setRows(loadedRows.length > 0 ? loadedRows : [emptyRow()]);
     setSearchOpen(false);
+  };
+
+  useEffect(() => {
+    if (!requestedVoucherId) return;
+    setLoadingVoucher(true);
+    fetchVoucher(requestedVoucherId)
+      .then(loadVoucherForEdit)
+      .catch((error) => setMessage({ type: 'error', text: requestErrorMessage(error, 'load voucher') }))
+      .finally(() => setLoadingVoucher(false));
+  }, [requestedVoucherId]);
+
+  const saveBeforeAuthorisationAction = () => {
+    const error = validate();
+    if (error) {
+      setMessage({ type: 'error', text: error });
+      return Promise.reject(new Error(error));
+    }
+    if (duplicateDetailRows(enteredRows)) {
+      const duplicateError = 'Duplicate detail rows must be resolved before authorisation.';
+      setMessage({ type: 'error', text: duplicateError });
+      return Promise.reject(new Error(duplicateError));
+    }
+    return updateVoucher(editingVoucherId, payload(false));
+  };
+
+  const handleAuthorise = () => {
+    if (!editingVoucherId) return;
+    setSaving(true);
+    saveBeforeAuthorisationAction()
+      .then(() => authoriseVoucher(editingVoucherId))
+      .then((saved) => {
+        setVoucherStatus(saved.status || 'AUTHORISED');
+        setMessage({ type: 'success', text: `Voucher authorised successfully: ${saved.voucherNumber || voucherNo}` });
+      })
+      .catch((error) => {
+        if (error?.response || !error?.message) {
+          setMessage({ type: 'error', text: requestErrorMessage(error, 'authorise voucher') });
+        }
+      })
+      .finally(() => setSaving(false));
+  };
+
+  const handleReasonAction = (reason) => {
+    if (!editingVoucherId || !reasonAction) return;
+    const action = reasonAction;
+    setSaving(true);
+    const request = action === 'reject'
+      ? rejectVoucher(editingVoucherId, reason)
+      : cancelVoucher(editingVoucherId, reason);
+
+    request
+      .then((saved) => {
+        setReasonAction(null);
+        setVoucherStatus(saved.status || action.toUpperCase());
+        setMessage({ type: 'success', text: `Voucher ${action === 'reject' ? 'rejected' : 'cancelled'} successfully: ${saved.voucherNumber || voucherNo}` });
+      })
+      .catch((error) => setMessage({ type: 'error', text: requestErrorMessage(error, `${action} voucher`) }))
+      .finally(() => setSaving(false));
   };
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-gray-100 text-black" style={{ fontFamily: 'Calibri, "Segoe UI", sans-serif' }}>
+      {loadingVoucher && <div className="fixed inset-0 z-[260] grid place-items-center bg-white/50" />}
       <main className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col p-2">
         <section className="flex h-full min-h-0 flex-col border border-gray-300 bg-white shadow">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-300 bg-blue-50 px-4 py-2">
             <div>
               <h2 className="text-[22px] font-black uppercase tracking-tight text-black">{voucherTitle}</h2>
-              <p className="mt-1 text-[12px] font-bold uppercase text-gray-600">{editMode ? 'Edit voucher' : 'Accounts voucher entry'}</p>
+              <p className="mt-1 text-[12px] font-bold uppercase text-gray-600">
+                {authorisationMode ? `Authorisation process${voucherStatus ? ` | Status ${voucherStatus}` : ''}` : editMode ? 'Edit voucher' : 'Accounts voucher entry'}
+              </p>
             </div>
             <table className="min-w-[500px] border border-blue-900 bg-white text-[11px] font-black uppercase text-gray-700">
               <thead>
@@ -563,16 +646,42 @@ const ReceiptVoucher = () => {
 
               <div className="flex shrink-0 items-end justify-end">
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleSave()}
-                    disabled={saving}
-                    className="inline-flex min-w-32 items-center justify-center gap-2 rounded bg-blue-800 px-5 py-2 text-[13px] font-black uppercase text-white shadow disabled:cursor-wait disabled:bg-blue-500"
-                  >
-                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    {saving ? 'Checking' : editMode ? 'Save Changes' : 'Submit'}
-                  </button>
-                  {editMode && (
+                  {authorisationMode ? (
+                    <>
+                      <button type="button" onClick={() => navigate(returnTo)} disabled={saving} className="rounded border border-gray-300 bg-white px-5 py-2 text-[13px] font-black uppercase text-gray-800">
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSave()}
+                        disabled={saving || !editingVoucherId}
+                        className="inline-flex min-w-36 items-center justify-center gap-2 rounded bg-blue-800 px-5 py-2 text-[13px] font-black uppercase text-white shadow disabled:cursor-wait disabled:bg-blue-500"
+                      >
+                        {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        Save Changes
+                      </button>
+                      <button type="button" onClick={() => setReasonAction('cancel')} disabled={saving || !editingVoucherId} className="rounded bg-slate-700 px-5 py-2 text-[13px] font-black uppercase text-white disabled:bg-slate-400">
+                        Cancel
+                      </button>
+                      <button type="button" onClick={() => setReasonAction('reject')} disabled={saving || !editingVoucherId} className="rounded bg-rose-700 px-5 py-2 text-[13px] font-black uppercase text-white disabled:bg-rose-400">
+                        Reject
+                      </button>
+                      <button type="button" onClick={handleAuthorise} disabled={saving || !editingVoucherId} className="rounded bg-emerald-700 px-5 py-2 text-[13px] font-black uppercase text-white disabled:bg-emerald-400">
+                        Authorise
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleSave()}
+                      disabled={saving}
+                      className="inline-flex min-w-32 items-center justify-center gap-2 rounded bg-blue-800 px-5 py-2 text-[13px] font-black uppercase text-white shadow disabled:cursor-wait disabled:bg-blue-500"
+                    >
+                      {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                      {saving ? 'Checking' : editMode ? 'Save Changes' : 'Submit'}
+                    </button>
+                  )}
+                  {editMode && !authorisationMode && (
                     <button
                       type="button"
                       onClick={handleSubmitForAuthorisation}
@@ -600,6 +709,14 @@ const ReceiptVoucher = () => {
           confirmLabel="Proceed"
           onCancel={() => setDuplicateConfirm(false)}
           onConfirm={() => handleSave(true)}
+        />
+      )}
+
+      {reasonAction && (
+        <ReasonModal
+          title={reasonAction === 'reject' ? 'Reject Voucher' : 'Cancel Voucher'}
+          onClose={() => setReasonAction(null)}
+          onSubmit={handleReasonAction}
         />
       )}
 
@@ -705,6 +822,52 @@ const ConfirmModal = ({ title, text, confirmLabel, onCancel, onConfirm }) => (
     </div>
   </div>
 );
+
+const ReasonModal = ({ title, onClose, onSubmit }) => {
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  const submit = () => {
+    if (!reason.trim()) {
+      setError('Reason is mandatory.');
+      return;
+    }
+    onSubmit(reason.trim());
+  };
+
+  return (
+    <div className="fixed inset-0 z-[310] grid place-items-center bg-black/40 p-4">
+      <div className="w-full max-w-md overflow-hidden rounded-lg border-2 border-blue-900 bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50 px-4 py-3">
+          <div className="flex items-center gap-2 text-[13px] font-black uppercase tracking-widest text-blue-950">
+            <AlertTriangle size={18} />
+            {title}
+          </div>
+          <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded hover:bg-white">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="p-4">
+          <textarea
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            className="h-28 w-full resize-none border border-gray-300 p-2 text-[13px] font-bold outline-none focus:border-blue-700"
+            placeholder="Enter mandatory reason..."
+          />
+          {error && <p className="mt-2 text-[12px] font-black uppercase text-rose-700">{error}</p>}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-gray-200 bg-gray-50 px-4 py-3">
+          <button type="button" onClick={onClose} className="rounded border border-gray-300 bg-white px-5 py-2 text-[12px] font-black uppercase text-gray-800">
+            Back
+          </button>
+          <button type="button" onClick={submit} className="rounded bg-blue-800 px-5 py-2 text-[12px] font-black uppercase text-white">
+            Submit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const VoucherSearchModal = ({ kind, transactionType, onClose, onSelect }) => {
   const [filters, setFilters] = useState({ voucherNumber: '', voucherDate: '', contractNumber: '' });
