@@ -5,6 +5,23 @@ const NAME_ROUTE_MAP = [
   { keys: ['edit contract', 'modify contract', 'contract edit', 'contract list', 'contracts'], route: '/credit/trans/contract/edit' },
   { keys: ['contract form'], route: '/credit/trans/contract/form' },
   { keys: ['ledger code', 'ledger master'], route: '/accounts/masters/ledger-code' },
+  {
+    keys: [
+      'voucher request sent for authorization',
+      'voucher request sent for authorisation',
+      'voucher request sent for authorizateion',
+      'authorization request',
+      'authorisation request',
+      'authorizateion request',
+      'voucher authorization',
+      'voucher authorisation',
+      'voucher authorizateion',
+      'sent for authorization',
+      'sent for authorisation',
+      'sent for authorizateion',
+    ],
+    route: '/accounts/transaction/voucher-authorisation',
+  },
   { keys: ['edit payment voucher - cash', 'edit payment cash'], route: '/accounts/transaction/edit/payment/cash' },
   { keys: ['edit payment voucher - bank', 'edit payment bank'], route: '/accounts/transaction/edit/payment/bank' },
   { keys: ['edit receipt voucher - cash', 'edit receipt cash'], route: '/accounts/transaction/edit/receipt/cash' },
@@ -33,10 +50,6 @@ export function resolveMenuPath(item) {
     return '/credit/trans/contract-management/active-contracts';
   }
 
-  if (rawPath.startsWith('/') && !rawPath.startsWith('/menu/')) {
-    return rawPath;
-  }
-
   if (!lookupText) {
     return rawPath;
   }
@@ -45,6 +58,10 @@ export function resolveMenuPath(item) {
     if (entry.keys.some((key) => lookupText.includes(key))) {
       return entry.route;
     }
+  }
+
+  if (rawPath.startsWith('/') && !rawPath.startsWith('/menu/')) {
+    return rawPath;
   }
 
   return rawPath;

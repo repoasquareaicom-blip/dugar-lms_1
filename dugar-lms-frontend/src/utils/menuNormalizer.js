@@ -47,10 +47,29 @@ function sortMenus(items) {
   });
 }
 
+function isInactive(menu) {
+  return menu?.isActive === false
+    || menu?.is_active === false
+    || menu?.isVisible === false
+    || menu?.is_visible === false;
+}
+
+function dedupeMenus(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = item.path && item.path !== '#'
+      ? `path:${item.path}`
+      : `name:${normalizeText(`${item.menuName || ''} ${item.menuCode || ''}`)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function normalizeMenuItems(menus = []) {
   if (!Array.isArray(menus)) return [];
 
-  return sortMenus(menus).map((menu, index) => {
+  const normalizedItems = sortMenus(menus).filter((menu) => !isInactive(menu)).map((menu, index) => {
     const rawOrder = menu.displayOrder ?? menu.display_order;
     const normalized = {
       ...menu,
@@ -68,6 +87,8 @@ function normalizeMenuItems(menus = []) {
     normalized.urlPath = normalized.path;
     return normalized;
   });
+
+  return dedupeMenus(normalizedItems);
 }
 
 function menuMatches(menu, names) {

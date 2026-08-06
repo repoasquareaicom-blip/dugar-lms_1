@@ -22,6 +22,7 @@ import ContractGrid from './pages/credit/transaction/contract/ContractGrid';
 import ContractEditForm from './pages/credit/transaction/contract/ContractEditForm.jsx';
 import LedgerCodeMaster from './pages/accounts/masters/LedgerCodeMaster';
 import ReceiptVoucher from './pages/accounts/transactions/ReceiptVoucher';
+import VoucherAuthorisation from './pages/accounts/transactions/VoucherAuthorisation';
 import Ratios from './pages/accounts/reports/ratios.jsx';
 import { normalizeMenuTree } from './utils/menuNormalizer';
 import { fetchContractDashboard } from './services/dashboardService';
@@ -473,6 +474,13 @@ function App() {
           <Route path="/accounts/transaction/entry/receipt/cash" element={<ReceiptVoucher />} />
           <Route path="/accounts/transaction/entry/receipt/bank" element={<ReceiptVoucher />} />
           <Route path="/accounts/transaction/entry/journal" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/authorisation" element={<VoucherAuthorisation />} />
+          <Route path="/accounts/transaction/authorization" element={<VoucherAuthorisation />} />
+          <Route path="/accounts/transaction/voucher-authorisation" element={<VoucherAuthorisation />} />
+          <Route path="/accounts/transaction/voucher-authorization" element={<VoucherAuthorisation />} />
+          <Route path="/accounts/transaction/authorization-request" element={<VoucherAuthorisation />} />
+          <Route path="/accounts/transaction/authorisation-request" element={<VoucherAuthorisation />} />
+          <Route path="/accounts/transaction/authorizateion-request" element={<VoucherAuthorisation />} />
           <Route path="/accounts/transaction/edit/payment/cash" element={<ReceiptVoucher />} />
           <Route path="/accounts/transaction/edit/payment/bank" element={<ReceiptVoucher />} />
           <Route path="/accounts/transaction/edit/receipt/cash" element={<ReceiptVoucher />} />

@@ -13,7 +13,7 @@ import {
 import { useLocation } from 'react-router-dom';
 import { fetchContractsPage } from '../../../services/contractsService';
 import { fetchLedgerCodes } from '../../../services/ledgerCodeService';
-import { fetchVoucher, saveVoucher, searchVouchers, updateVoucher } from '../../../services/voucherService';
+import { fetchVoucher, reopenVoucher, resubmitVoucher, saveVoucher, searchVouchers, updateVoucher } from '../../../services/voucherService';
 import { getStoredAuthToken } from '../../../api/apiClient';
 
 const today = new Date().toISOString().slice(0, 10);
@@ -129,8 +129,8 @@ function rowHasEntry(row) {
 }
 
 function rowHasRequiredAmount(row, kind) {
-  if (kind === 'payment') return amount(row.credit) > 0;
-  if (kind === 'receipt') return amount(row.debit) > 0;
+  if (kind === 'payment') return amount(row.debit) > 0;
+  if (kind === 'receipt') return amount(row.credit) > 0;
   return amount(row.debit) > 0 || amount(row.credit) > 0;
 }
 
@@ -209,8 +209,8 @@ const ReceiptVoucher = () => {
   const [saving, setSaving] = useState(false);
 
   const isLoan = category === 'LOAN';
-  const debitEditable = isReceipt || isJournal;
-  const creditEditable = isPayment || isJournal;
+  const debitEditable = isPayment || isJournal;
+  const creditEditable = isReceipt || isJournal;
   const selectedLoan = rows.find((row) => row.loanReference)?.loanReference || selectedContract;
   const party = readParty(selectedLoan);
   const enteredRows = useMemo(() => rows.filter(rowHasEntry), [rows]);
@@ -224,8 +224,8 @@ const ReceiptVoucher = () => {
     [enteredRows],
   );
 
-  const footerDebitTotal = isPayment && !isJournal ? amount(voucherAmount) : detailDebitTotal;
-  const footerCreditTotal = isReceipt && !isJournal ? amount(voucherAmount) : detailCreditTotal;
+  const footerDebitTotal = isReceipt && !isJournal ? amount(voucherAmount) : detailDebitTotal;
+  const footerCreditTotal = isPayment && !isJournal ? amount(voucherAmount) : detailCreditTotal;
   const difference = footerDebitTotal - footerCreditTotal;
   const totalsMatch = Math.abs(difference) < 0.01 && footerDebitTotal > 0 && footerCreditTotal > 0;
 
@@ -302,8 +302,8 @@ const ReceiptVoucher = () => {
     if (enteredRows.some((row) => !row.detailsCode)) return 'Details code is required for every entered row.';
     if (isLoan && enteredRows.some((row) => !row.loanReference)) return 'Loan reference is required for loan category.';
     if (enteredRows.some((row) => !rowHasRequiredAmount(row, kind))) {
-      if (isPayment) return 'Credit amount is required for every entered row.';
-      if (isReceipt) return 'Debit amount is required for every entered row.';
+      if (isPayment) return 'Debit amount is required for every entered row.';
+      if (isReceipt) return 'Credit amount is required for every entered row.';
       return 'Debit or credit amount is required for every row.';
     }
     if (!totalsMatch) {
@@ -321,7 +321,7 @@ const ReceiptVoucher = () => {
     request
       .then((saved) => {
         setVoucherNo(saved.voucherNumber || voucherNo);
-        setMessage({ type: 'success', text: `Voucher ${editingVoucherId ? 'updated' : 'saved'} successfully: ${saved.voucherNumber || voucherNo}` });
+        setMessage({ type: 'success', text: `Voucher ${editingVoucherId ? 'updated' : 'submitted'} successfully: ${saved.voucherNumber || voucherNo}` });
       })
       .catch((error) => {
         setMessage({ type: 'error', text: saveErrorMessage(error) });
@@ -329,6 +329,32 @@ const ReceiptVoucher = () => {
       .finally(() => {
       setSaving(false);
       });
+  };
+
+  const handleSubmitForAuthorisation = () => {
+    if (!editingVoucherId) {
+      handleSave();
+      return;
+    }
+    const error = validate();
+    if (error) {
+      setMessage({ type: 'error', text: error });
+      return;
+    }
+    if (duplicateDetailRows(enteredRows)) {
+      setMessage({ type: 'error', text: 'Duplicate detail rows must be resolved before submitting for authorisation.' });
+      return;
+    }
+    setSaving(true);
+    updateVoucher(editingVoucherId, payload(false))
+      .then(() => resubmitVoucher(editingVoucherId))
+      .then((saved) => {
+        setMessage({ type: 'success', text: `Voucher submitted for authorisation: ${saved.voucherNumber || voucherNo}` });
+      })
+      .catch((error) => {
+        setMessage({ type: 'error', text: saveErrorMessage(error) });
+      })
+      .finally(() => setSaving(false));
   };
 
   const handleSave = (allowDuplicate = false) => {
@@ -536,15 +562,27 @@ const ReceiptVoucher = () => {
               </div>
 
               <div className="flex shrink-0 items-end justify-end">
-                <button
-                  type="button"
-                  onClick={() => handleSave()}
-                  disabled={saving}
-                  className="inline-flex min-w-32 items-center justify-center gap-2 rounded bg-blue-800 px-5 py-2 text-[13px] font-black uppercase text-white shadow disabled:cursor-wait disabled:bg-blue-500"
-                >
-                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  {saving ? 'Checking' : editMode ? 'Update' : 'Save'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSave()}
+                    disabled={saving}
+                    className="inline-flex min-w-32 items-center justify-center gap-2 rounded bg-blue-800 px-5 py-2 text-[13px] font-black uppercase text-white shadow disabled:cursor-wait disabled:bg-blue-500"
+                  >
+                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    {saving ? 'Checking' : editMode ? 'Save Changes' : 'Submit'}
+                  </button>
+                  {editMode && (
+                    <button
+                      type="button"
+                      onClick={handleSubmitForAuthorisation}
+                      disabled={saving || !editingVoucherId}
+                      className="inline-flex min-w-48 items-center justify-center gap-2 rounded bg-emerald-700 px-5 py-2 text-[13px] font-black uppercase text-white shadow disabled:cursor-not-allowed disabled:bg-emerald-400"
+                    >
+                      Submit for Authorisation
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -694,9 +732,12 @@ const VoucherSearchModal = ({ kind, transactionType, onClose, onSelect }) => {
   };
 
   const selectVoucher = (summary) => {
+    const confirmed = window.confirm('This voucher is already authorised. Editing will remove it from reports until it is authorised again. Continue?');
+    if (!confirmed) return;
     setLoading(true);
     setError('');
-    fetchVoucher(summary.voucherHeaderId)
+    reopenVoucher(summary.voucherHeaderId, 'Voucher reopened for correction')
+      .then(() => fetchVoucher(summary.voucherHeaderId))
       .then(onSelect)
       .catch((err) => setError(requestErrorMessage(err, 'load voucher')))
       .finally(() => setLoading(false));
