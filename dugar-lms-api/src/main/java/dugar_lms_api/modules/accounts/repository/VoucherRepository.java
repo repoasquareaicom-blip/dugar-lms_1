@@ -402,7 +402,7 @@ public class VoucherRepository {
                     OR UPPER(COALESCE(legacy_contract_number, '')) = UPPER(:contractNumber)
                 )
                   AND is_active = TRUE
-                  AND (is_draft IS NULL OR is_draft = FALSE)
+                  AND UPPER(TRIM(COALESCE(status, ''))) = 'Y'
             )
             """,
             new MapSqlParameterSource("contractNumber", clean(contractNumber)),

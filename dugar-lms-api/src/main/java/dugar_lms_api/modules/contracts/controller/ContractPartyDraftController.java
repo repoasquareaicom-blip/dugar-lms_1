@@ -7,6 +7,7 @@ import dugar_lms_api.modules.contracts.dto.ContractCoLendingDraftDto;
 import dugar_lms_api.modules.contracts.dto.ContractDocumentationDraftDto;
 import dugar_lms_api.modules.contracts.dto.ContractFinancialDraftDto;
 import dugar_lms_api.modules.contracts.dto.PartyDraftDto;
+import dugar_lms_api.modules.contracts.dto.ContractWorkflowStatusRequest;
 import dugar_lms_api.modules.contracts.service.ContractAssetDraftService;
 import dugar_lms_api.modules.contracts.service.ContractCoLendingDraftService;
 import dugar_lms_api.modules.contracts.service.ContractDocumentationDraftService;
@@ -133,6 +134,16 @@ public class ContractPartyDraftController {
     @PostMapping("/{contractId}/submit-to-active")
     public ResponseEntity<Void> submitToActive(@PathVariable Long contractId, Authentication authentication) {
         contractWorkflowService.submitToActive(contractId, authentication);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{contractId}/status")
+    public ResponseEntity<Void> updateStatus(
+        @PathVariable Long contractId,
+        @RequestBody ContractWorkflowStatusRequest request,
+        Authentication authentication
+    ) {
+        contractWorkflowService.updateStatus(contractId, request.status(), authentication);
         return ResponseEntity.noContent().build();
     }
 }

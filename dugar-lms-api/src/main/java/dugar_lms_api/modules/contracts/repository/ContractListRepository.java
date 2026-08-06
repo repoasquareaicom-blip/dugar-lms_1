@@ -20,6 +20,7 @@ public class ContractListRepository {
         COALESCE(NULLIF(TRIM(c.legacy_contract_number), ''), '-') AS legacy_contract_number,
         COALESCE(NULLIF(TRIM(c.contract_type), ''), '-') AS product,
         COALESCE(NULLIF(TRIM(c.area_code), ''), '-') AS branch,
+        COALESCE(NULLIF(TRIM(c.status), ''), '-') AS status,
         COALESCE(NULLIF(TRIM(c.category), ''), '-') AS category,
         COALESCE(NULLIF(TRIM(c.risk_level), ''), '-') AS risk_level,
         c.contract_date,
@@ -118,6 +119,7 @@ public class ContractListRepository {
         rs.getString("legacy_contract_number"),
         rs.getString("product"),
         rs.getString("branch"),
+        rs.getString("status"),
         rs.getString("category"),
         rs.getString("risk_level"),
         rs.getObject("contract_date", java.time.LocalDate.class),
@@ -188,14 +190,12 @@ public class ContractListRepository {
         MapSqlParameterSource params = new MapSqlParameterSource();
 
         if (Boolean.TRUE.equals(criteria.isDraft())) {
-            whereSql.append(" AND c.is_draft = TRUE\n");
             if (criteria.workflowStatus() == null || criteria.workflowStatus().isBlank()) {
-                whereSql.append(" AND UPPER(COALESCE(c.status, '')) = 'DRAFT'\n");
+                whereSql.append(" AND UPPER(TRIM(COALESCE(c.status, ''))) IN ('D', 'DRAFT')\n");
             }
         } else {
             whereSql.append("""
-                  AND (c.is_draft IS NULL OR c.is_draft = FALSE)
-                  AND UPPER(COALESCE(c.status, '')) = 'Y'
+                  AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
                   AND EXISTS (
                       SELECT 1
                       FROM contract_repayment_structures repayment_exists
@@ -204,10 +204,10 @@ public class ContractListRepository {
                 """);
         }
 
-        appendEqualsFilter(whereSql, params, "UPPER(c.status)", "workflowStatus", normalizeUpper(criteria.workflowStatus()));
+        appendStatusFilter(whereSql, params, "workflowStatus", criteria.workflowStatus());
         appendKeywordFilter(whereSql, params, criteria.keyword());
         appendEqualsFilter(whereSql, params, "c.area_code", "branch", criteria.branch());
-        appendEqualsFilter(whereSql, params, "c.status", "status", criteria.status());
+        appendStatusFilter(whereSql, params, "status", criteria.status());
         appendEqualsFilter(whereSql, params, "c.contract_type", "product", criteria.product());
         appendLikeFilter(whereSql, params, "LOWER(COALESCE(pm.full_name, ''))", "customerNamePattern", criteria.customerName());
         appendGreaterThanOrEqualFilter(whereSql, params, "c.contract_date", "contractDateFrom", criteria.contractDateFrom());
@@ -253,6 +253,30 @@ public class ContractListRepository {
 
     private void appendEqualsFilter(StringBuilder whereSql, MapSqlParameterSource params, String column, String paramName, Object value) {
         appendFilter(whereSql, params, column + " = :" + paramName, paramName, value);
+    }
+
+    private void appendStatusFilter(StringBuilder whereSql, MapSqlParameterSource params, String paramName, String value) {
+        String status = normalizeStatus(value);
+        if (status == null) {
+            return;
+        }
+
+        whereSql.append("AND UPPER(TRIM(COALESCE(c.status, ''))) = :").append(paramName).append("\n");
+        params.addValue(paramName, status);
+    }
+
+    private String normalizeStatus(String value) {
+        String normalized = normalizeUpper(value);
+        if (normalized == null) {
+            return null;
+        }
+        return switch (normalized) {
+            case "DRAFT" -> "D";
+            case "SEND_FOR_EDIT", "SEND FOR EDIT", "SUBMITTED_FOR_EDIT" -> "E";
+            case "ACTIVE" -> "Y";
+            case "INACTIVE", "IN ACTIVE" -> "N";
+            default -> normalized;
+        };
     }
 
     private String normalizeUpper(String value) {

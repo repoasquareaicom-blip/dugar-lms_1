@@ -54,7 +54,7 @@ public class LosContractReceiveService {
             losContractReceiveRepository.findContractNumber(contractId),
             request.id(),
             created,
-            "DRAFT",
+            "D",
             true
         );
     }

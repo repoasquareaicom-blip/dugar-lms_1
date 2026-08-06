@@ -12,6 +12,7 @@ public class ContractWorkflowRepository {
         SET
             status = :status,
             is_draft = :isDraft,
+            is_active = TRUE,
             updated_by = :updatedBy,
             updated_at = CURRENT_TIMESTAMP
         WHERE contract_id = :contractId

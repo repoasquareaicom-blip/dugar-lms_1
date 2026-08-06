@@ -79,13 +79,33 @@ const FALLBACK_MENU = [
   },
   {
     menuId: 14,
-    menuName: 'Collections',
-    icon: 'HandHelping',
+    menuName: 'Committee',
+    icon: 'UsersRound',
     path: '#',
     displayOrder: 4,
     subMenus: [
-      { menuId: 15, menuName: 'Daily Collection', icon: 'CalendarCheck2', path: '#', displayOrder: 1, subMenus: [] },
-      { menuId: 16, menuName: 'Arrear Followup', icon: 'AlarmClockCheck', path: '#', displayOrder: 2, subMenus: [] },
+      {
+        menuId: 141,
+        menuName: 'Reports',
+        icon: 'FileBarChart2',
+        path: '#',
+        displayOrder: 1,
+        subMenus: [
+          { menuId: 142, menuName: 'Demand List', icon: 'FileSpreadsheet', path: '/committee/reports/demand-list', displayOrder: 1, subMenus: [] },
+          { menuId: 143, menuName: 'AFC Report', icon: 'FileText', path: '/committee/reports/afc', displayOrder: 2, subMenus: [] },
+        ],
+      },
+    ],
+  },
+  {
+    menuId: 15,
+    menuName: 'Collections',
+    icon: 'HandHelping',
+    path: '#',
+    displayOrder: 5,
+    subMenus: [
+      { menuId: 151, menuName: 'Daily Collection', icon: 'CalendarCheck2', path: '#', displayOrder: 1, subMenus: [] },
+      { menuId: 152, menuName: 'Arrear Followup', icon: 'AlarmClockCheck', path: '#', displayOrder: 2, subMenus: [] },
     ],
   },
   {
@@ -93,7 +113,7 @@ const FALLBACK_MENU = [
     menuName: 'Legal',
     icon: 'Scale',
     path: '#',
-    displayOrder: 5,
+    displayOrder: 6,
     subMenus: [
       { menuId: 18, menuName: 'Notices', icon: 'FileWarning', path: '#', displayOrder: 1, subMenus: [] },
       { menuId: 19, menuName: 'Case Tracker', icon: 'Gavel', path: '#', displayOrder: 2, subMenus: [] },

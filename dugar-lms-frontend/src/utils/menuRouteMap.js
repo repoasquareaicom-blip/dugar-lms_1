@@ -2,8 +2,12 @@ const NAME_ROUTE_MAP = [
   { keys: ['dashboard'], route: '/dashboard' },
   { keys: ['party code modify', 'party code', 'party master'], route: '/credit/masters/party-code' },
   { keys: ['active contracts'], route: '/credit/trans/contract-management/active-contracts' },
+  { keys: ['draft contracts', 'draft contract'], route: '/credit/trans/contract-management/draft-contracts' },
+  { keys: ['edit contracts'], route: '/credit/trans/contract-management/edit-contracts' },
   { keys: ['edit contract', 'modify contract', 'contract edit', 'contract list', 'contracts'], route: '/credit/trans/contract/edit' },
   { keys: ['contract form'], route: '/credit/trans/contract/form' },
+  { keys: ['demand list'], route: '/committee/reports/demand-list' },
+  { keys: ['afc report', 'afc'], route: '/committee/reports/afc' },
   { keys: ['ledger code', 'ledger master'], route: '/accounts/masters/ledger-code' },
   {
     keys: [

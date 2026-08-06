@@ -158,6 +158,7 @@ class ContractListServiceTest {
             "OLD-14507",
             "HP",
             "BR-01",
+            "Y",
             "STANDARD",
             "LOW",
             LocalDate.of(2026, 1, 1),

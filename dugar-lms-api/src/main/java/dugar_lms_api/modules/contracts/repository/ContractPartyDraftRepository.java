@@ -142,7 +142,7 @@ public class ContractPartyDraftRepository {
             :coApplicantCode,
             :guarantorCode,
             :guarantor2Code,
-            'DRAFT',
+            'D',
             TRUE,
             :updatedBy,
             TRUE
@@ -157,11 +157,12 @@ public class ContractPartyDraftRepository {
             guarantor_code = :guarantorCode,
             guarantor_2_code = :guarantor2Code,
             status = CASE
-                WHEN UPPER(COALESCE(status, '')) IN ('Y', 'SUBMITTED_FOR_EDIT') THEN status
-                ELSE 'DRAFT'
+                WHEN UPPER(TRIM(COALESCE(status, ''))) IN ('Y', 'E', 'N') THEN TRIM(status)
+                WHEN UPPER(TRIM(COALESCE(status, ''))) = 'SUBMITTED_FOR_EDIT' THEN 'E'
+                ELSE 'D'
             END,
             is_draft = CASE
-                WHEN UPPER(COALESCE(status, '')) = 'Y' THEN FALSE
+                WHEN UPPER(TRIM(COALESCE(status, ''))) IN ('Y', 'N') THEN FALSE
                 ELSE TRUE
             END,
             updated_by = :updatedBy,

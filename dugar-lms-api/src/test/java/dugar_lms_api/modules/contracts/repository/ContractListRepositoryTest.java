@@ -167,7 +167,7 @@ class ContractListRepositoryTest {
 
         String sql = sqlCaptor.getValue();
         assertThat(sql).contains("c.area_code = :branch");
-        assertThat(sql).contains("c.status = :status");
+        assertThat(sql).contains("UPPER(TRIM(COALESCE(c.status, ''))) = :status");
         assertThat(sql).contains("c.contract_type = :product");
         assertThat(sql).contains("LOWER(COALESCE(pm.full_name, '')) LIKE :customerNamePattern");
         assertThat(sql).contains("c.contract_date >= :contractDateFrom");
@@ -177,7 +177,7 @@ class ContractListRepositoryTest {
 
         MapSqlParameterSource params = (MapSqlParameterSource) paramsCaptor.getValue();
         assertThat(params.getValue("branch")).isEqualTo("BR-01");
-        assertThat(params.getValue("status")).isEqualTo("ACTIVE");
+        assertThat(params.getValue("status")).isEqualTo("Y");
         assertThat(params.getValue("product")).isEqualTo("HP");
         assertThat(params.getValue("customerNamePattern")).isEqualTo("%ravi%");
         assertThat(params.getValue("contractDateFrom")).isEqualTo(LocalDate.of(2026, 1, 1));

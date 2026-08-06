@@ -88,6 +88,7 @@ public class LosContractReceiveRepository {
             contract_number,
             legacy_contract_number,
             contract_date,
+            first_emi_date,
             loan_amount,
             tenure_months,
             flat_interest_rate,
@@ -117,6 +118,7 @@ public class LosContractReceiveRepository {
             :contractNumber,
             :legacyContractNumber,
             :contractDate,
+            :firstEmiDate,
             :loanAmount,
             :tenureMonths,
             :flatInterestRate,
@@ -131,7 +133,7 @@ public class LosContractReceiveRepository {
             :equipmentModel,
             :category,
             :riskLevel,
-            'DRAFT',
+            'D',
             TRUE,
             TRUE,
             :losProposalId,
@@ -151,6 +153,7 @@ public class LosContractReceiveRepository {
             contract_number = :contractNumber,
             legacy_contract_number = NULL,
             contract_date = :contractDate,
+            first_emi_date = :firstEmiDate,
             loan_amount = :loanAmount,
             tenure_months = :tenureMonths,
             flat_interest_rate = :flatInterestRate,
@@ -166,11 +169,12 @@ public class LosContractReceiveRepository {
             category = :category,
             risk_level = :riskLevel,
             status = CASE
-                WHEN UPPER(COALESCE(status, '')) = 'Y' THEN status
-                ELSE 'DRAFT'
+                WHEN UPPER(TRIM(COALESCE(status, ''))) IN ('Y', 'N') THEN TRIM(status)
+                WHEN UPPER(TRIM(COALESCE(status, ''))) IN ('E', 'SUBMITTED_FOR_EDIT') THEN 'E'
+                ELSE 'D'
             END,
             is_draft = CASE
-                WHEN UPPER(COALESCE(status, '')) = 'Y' THEN FALSE
+                WHEN UPPER(TRIM(COALESCE(status, ''))) IN ('Y', 'N') THEN FALSE
                 ELSE TRUE
             END,
             los_received = TRUE,
@@ -258,6 +262,7 @@ public class LosContractReceiveRepository {
             vehicle_type_code,
             registration_number,
             vehicle_make,
+            owner_serial_no,
             version,
             manufacture_year,
             fuel_type,
@@ -274,6 +279,7 @@ public class LosContractReceiveRepository {
             :vehicleTypeCode,
             :registrationNumber,
             :vehicleMake,
+            :ownerSerialNo,
             :version,
             :manufactureYear,
             :fuelType,
@@ -293,6 +299,7 @@ public class LosContractReceiveRepository {
             vehicle_type_code = :vehicleTypeCode,
             registration_number = :registrationNumber,
             vehicle_make = :vehicleMake,
+            owner_serial_no = :ownerSerialNo,
             version = :version,
             manufacture_year = :manufactureYear,
             fuel_type = :fuelType,
@@ -464,6 +471,7 @@ public class LosContractReceiveRepository {
             .addValue("vehicleTypeCode", clean(request.vehicleType()))
             .addValue("registrationNumber", clean(request.rcNumber()))
             .addValue("vehicleMake", clean(request.vehicleName()))
+            .addValue("ownerSerialNo", clean(request.ownerNumber()))
             .addValue("version", clean(request.model()))
             .addValue("manufactureYear", clean(request.model()))
             .addValue("fuelType", clean(request.fuelType()))
@@ -547,12 +555,14 @@ public class LosContractReceiveRepository {
         String contractNumber = contractNumber(request);
         BigDecimal loanAmount = firstNonNull(request.sanctionAmount(), request.approvedAmount(), request.loanAmount());
         BigDecimal totalContractValue = totalEmiAmount(request);
+        LocalDate contractDate = firstNonNull(request.disbursedDate(), localDate(request.createdAt()));
         return new MapSqlParameterSource()
             .addValue("contractId", contractId)
             .addValue("contractType", fallback(normalizeProductType(request), "HP"))
             .addValue("contractNumber", contractNumber)
             .addValue("legacyContractNumber", null)
-            .addValue("contractDate", firstNonNull(request.disbursedDate(), localDate(request.createdAt())))
+            .addValue("contractDate", contractDate)
+            .addValue("firstEmiDate", firstEmiDate(contractDate, request.firstEmi()))
             .addValue("loanAmount", loanAmount)
             .addValue("tenureMonths", tenureMonths(request))
             .addValue("flatInterestRate", request.interestRate())
@@ -582,6 +592,16 @@ public class LosContractReceiveRepository {
             case "LOW" -> "Low";
             default -> cleaned;
         };
+    }
+
+    private LocalDate firstEmiDate(LocalDate contractDate, BigDecimal firstEmi) {
+        if (contractDate == null) {
+            return null;
+        }
+        if (firstEmi != null && firstEmi.signum() > 0) {
+            return contractDate;
+        }
+        return contractDate.plusMonths(1);
     }
 
     private String contractNumber(LosContractReceiveRequest request) {
@@ -632,6 +652,7 @@ public class LosContractReceiveRepository {
         return clean(request.vehicleName()) != null
             || clean(request.rcNumber()) != null
             || clean(request.vehicleType()) != null
+            || clean(request.ownerNumber()) != null
             || request.kilometersDriven() != null;
     }
 

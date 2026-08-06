@@ -225,6 +225,7 @@ const ReceiptVoucher = () => {
   const [saving, setSaving] = useState(false);
   const [loadingVoucher, setLoadingVoucher] = useState(false);
   const [reasonAction, setReasonAction] = useState(null);
+  const [redirectAfterMessage, setRedirectAfterMessage] = useState('');
 
   const isLoan = category === 'LOAN';
   const debitEditable = isPayment || isJournal;
@@ -330,17 +331,42 @@ const ReceiptVoucher = () => {
     return '';
   };
 
+  const resetNewVoucherForm = () => {
+    setCategory('GENERAL');
+    setSystemDate(today);
+    setVoucherDate(today);
+    setVoucherNo('Auto');
+    setVoucherStatus('');
+    setHeaderControlCode(null);
+    setVoucherAmount('');
+    setRows([emptyRow()]);
+    setEditingVoucherId(null);
+    setDuplicateConfirm(false);
+    setSearchOpen(false);
+    setReasonAction(null);
+  };
+
+  const showSuccessAndReturn = (text) => {
+    setRedirectAfterMessage(returnTo);
+    setMessage({ type: 'success', text });
+  };
+
   const performSave = (allowDuplicateDetails = false) => {
     setDuplicateConfirm(false);
     setSaving(true);
+    const wasEditing = Boolean(editingVoucherId);
     const request = editingVoucherId
       ? updateVoucher(editingVoucherId, payload(allowDuplicateDetails))
       : saveVoucher(payload(allowDuplicateDetails));
     request
       .then((saved) => {
-        setVoucherNo(saved.voucherNumber || voucherNo);
-        setEditingVoucherId(saved.voucherHeaderId || editingVoucherId);
-        setMessage({ type: 'success', text: `Voucher ${editingVoucherId ? 'updated' : 'submitted'} successfully: ${saved.voucherNumber || voucherNo}` });
+        const savedVoucherNumber = saved.voucherNumber || voucherNo;
+        if (wasEditing) {
+          showSuccessAndReturn(`Voucher updated successfully: ${savedVoucherNumber}`);
+          return;
+        }
+        resetNewVoucherForm();
+        setMessage({ type: 'success', text: `Voucher submitted successfully: ${savedVoucherNumber}` });
       })
       .catch((error) => {
         setMessage({ type: 'error', text: saveErrorMessage(error) });
@@ -368,7 +394,7 @@ const ReceiptVoucher = () => {
     updateVoucher(editingVoucherId, payload(false))
       .then(() => resubmitVoucher(editingVoucherId))
       .then((saved) => {
-        setMessage({ type: 'success', text: `Voucher submitted for authorisation: ${saved.voucherNumber || voucherNo}` });
+        showSuccessAndReturn(`Voucher submitted for authorisation: ${saved.voucherNumber || voucherNo}`);
       })
       .catch((error) => {
         setMessage({ type: 'error', text: saveErrorMessage(error) });
@@ -453,7 +479,7 @@ const ReceiptVoucher = () => {
       .then(() => authoriseVoucher(editingVoucherId))
       .then((saved) => {
         setVoucherStatus(saved.status || 'AUTHORISED');
-        setMessage({ type: 'success', text: `Voucher authorised successfully: ${saved.voucherNumber || voucherNo}` });
+        showSuccessAndReturn(`Voucher authorised successfully: ${saved.voucherNumber || voucherNo}`);
       })
       .catch((error) => {
         if (error?.response || !error?.message) {
@@ -475,7 +501,7 @@ const ReceiptVoucher = () => {
       .then((saved) => {
         setReasonAction(null);
         setVoucherStatus(saved.status || action.toUpperCase());
-        setMessage({ type: 'success', text: `Voucher ${action === 'reject' ? 'rejected' : 'cancelled'} successfully: ${saved.voucherNumber || voucherNo}` });
+        showSuccessAndReturn(`Voucher ${action === 'reject' ? 'rejected' : 'cancelled'} successfully: ${saved.voucherNumber || voucherNo}`);
       })
       .catch((error) => setMessage({ type: 'error', text: requestErrorMessage(error, `${action} voucher`) }))
       .finally(() => setSaving(false));
@@ -690,7 +716,17 @@ const ReceiptVoucher = () => {
       </main>
 
       {message && (
-        <MessageModal message={message} onClose={() => setMessage(null)} />
+        <MessageModal
+          message={message}
+          onClose={() => {
+            const nextRoute = redirectAfterMessage;
+            setMessage(null);
+            setRedirectAfterMessage('');
+            if (nextRoute && message.type === 'success') {
+              navigate(nextRoute);
+            }
+          }}
+        />
       )}
 
       {duplicateConfirm && (

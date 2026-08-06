@@ -15,8 +15,7 @@ public class ContractDashboardRepository {
 
     private static final String ACTIVE_FILTER = """
         WHERE c.is_active = TRUE
-          AND (c.is_draft IS NULL OR c.is_draft = FALSE)
-          AND UPPER(COALESCE(c.status, '')) = 'Y'
+          AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
           AND EXISTS (
               SELECT 1
               FROM contract_repayment_structures repayment_exists

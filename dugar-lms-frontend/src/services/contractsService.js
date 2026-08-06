@@ -96,3 +96,7 @@ export async function submitContractForEdit(contractId) {
 export async function submitContractToActive(contractId) {
   await apiClient.post(`/contracts/draft/${contractId}/submit-to-active`);
 }
+
+export async function updateContractStatus(contractId, status) {
+  await apiClient.post(`/contracts/draft/${contractId}/status`, { status });
+}

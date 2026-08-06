@@ -43,7 +43,7 @@ public class ContractListService {
         return new ContractListCriteria(
             normalize(criteria.keyword()),
             normalize(criteria.branch()),
-            normalize(criteria.status()),
+            normalizeStatus(criteria.status()),
             normalize(criteria.product()),
             normalize(criteria.customerName()),
             criteria.contractDateFrom(),
@@ -51,7 +51,7 @@ public class ContractListService {
             criteria.minimumLoanAmount(),
             criteria.maximumLoanAmount(),
             criteria.isDraft(),
-            normalize(criteria.workflowStatus()),
+            normalizeStatus(criteria.workflowStatus()),
             resolvePage(criteria.page()),
             resolveSize(criteria.size()),
             ContractListSortField.fromApiName(criteria.sortColumn()).apiName(),
@@ -78,5 +78,20 @@ public class ContractListService {
             return null;
         }
         return value.trim();
+    }
+
+    private String normalizeStatus(String value) {
+        String normalized = normalize(value);
+        if (normalized == null) {
+            return null;
+        }
+
+        return switch (normalized.toUpperCase()) {
+            case "DRAFT" -> "D";
+            case "SEND_FOR_EDIT", "SEND FOR EDIT", "SUBMITTED_FOR_EDIT" -> "E";
+            case "ACTIVE" -> "Y";
+            case "INACTIVE", "IN ACTIVE" -> "N";
+            default -> normalized;
+        };
     }
 }

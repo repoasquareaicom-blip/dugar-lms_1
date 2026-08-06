@@ -428,6 +428,7 @@ public class ContractAssetDraftRepository {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return value.trim();
+        String cleaned = value.trim();
+        return "-".equals(cleaned) ? null : cleaned;
     }
 }

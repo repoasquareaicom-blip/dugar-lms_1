@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { 
-  ArrowLeft, Save, Send, RotateCcw, User, 
+  ArrowLeft, RotateCcw, User, 
   Car, IndianRupee, FileText, Share2, Users, ShieldCheck, Copy, CheckCircle,
   ChevronRight, ChevronLeft, RotateCcw as ResetIcon, Plus, Trash2, X
 } from 'lucide-react';
@@ -16,8 +16,7 @@ import {
   saveContractDocumentationDraft,
   saveContractFinancialDraft,
   saveContractPartyDraft,
-  submitContractForEdit,
-  submitContractToActive,
+  updateContractStatus,
 } from '../../../../services/contractsService';
 
 // --- SUB-COMPONENTS ---
@@ -126,6 +125,64 @@ const pendingDocumentNames = [
   'NOC Certificate',
   'Permit Copy',
 ];
+
+const STATUS_OPTIONS = {
+  create: [
+    { value: 'D', label: 'DRAFT' },
+    { value: 'E', label: 'SEND FOR EDIT' },
+  ],
+  edit: [
+    { value: 'E', label: 'SEND FOR EDIT' },
+    { value: 'Y', label: 'ACTIVE' },
+    { value: 'N', label: 'INACTIVE' },
+  ],
+};
+
+function normalizeContractStatus(value, fallback = 'D') {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'DRAFT') return 'D';
+  if (normalized === 'SEND_FOR_EDIT' || normalized === 'SEND FOR EDIT' || normalized === 'SUBMITTED_FOR_EDIT') return 'E';
+  if (normalized === 'ACTIVE') return 'Y';
+  if (normalized === 'INACTIVE' || normalized === 'IN ACTIVE') return 'N';
+  return ['D', 'E', 'Y', 'N'].includes(normalized) ? normalized : fallback;
+}
+
+function fieldLabel(field) {
+  const label = field?.closest('div')?.querySelector('label')?.textContent?.replace('*', '').trim();
+  return label || field?.name || 'Field';
+}
+
+function fieldErrorMessage(field) {
+  const label = fieldLabel(field);
+  if (field.validity?.valueMissing) return `${label} is required.`;
+  if (field.validity?.patternMismatch && field.title) return `${label}: ${field.title}`;
+  if (field.validationMessage) return `${label}: ${field.validationMessage}`;
+  return `${label} is invalid.`;
+}
+
+function validationMessageFor(container, fallbackMessage) {
+  const invalidFields = Array.from(container?.querySelectorAll(':invalid') || []);
+  if (invalidFields.length === 0) {
+    return fallbackMessage;
+  }
+
+  const messages = invalidFields.slice(0, 5).map(fieldErrorMessage);
+  const remaining = invalidFields.length - messages.length;
+  return remaining > 0
+    ? `${messages.join(' ')} ${remaining} more field(s) need attention.`
+    : messages.join(' ');
+}
+
+function errorMessage(error, fallbackMessage) {
+  if (typeof error?.response?.data === 'string') {
+    return error.response.data;
+  }
+
+  return error?.response?.data?.message
+    || error?.response?.data?.error
+    || error?.message
+    || fallbackMessage;
+}
 
 function pendingDocumentsFrom(documentation) {
   const saved = new Map(
@@ -243,6 +300,7 @@ const FormField = ({
   pattern,
   step,
   title,
+  required = false,
   onChange,
 }) => {
   const inputValueProps = onChange
@@ -254,6 +312,7 @@ const FormField = ({
       {/* Changed from text-[11px] and slate to text-[14px] and black/90 */}
       <label className="text-[14px] text-black/90 font-normal uppercase tracking-tight leading-tight">
         {label}
+        {required && <span className="ml-1 font-black text-red-600">*</span>}
       </label>
       <input
         type={type}
@@ -264,6 +323,7 @@ const FormField = ({
         maxLength={maxLength}
         min={min}
         pattern={pattern}
+        required={required}
         readOnly={readOnly}
         step={step}
         title={title}
@@ -274,7 +334,7 @@ const FormField = ({
   );
 };
 
-const FormSelect = ({ label, name, options, value, onChange, className = "", readOnly = false }) => {
+const FormSelect = ({ label, name, options, value, onChange, className = "", readOnly = false, required = false }) => {
   const selectProps = onChange
     ? { value: value || '', onChange }
     : { defaultValue: value || '' };
@@ -284,11 +344,13 @@ const FormSelect = ({ label, name, options, value, onChange, className = "", rea
       {/* Changed from text-[11px] and slate to text-[14px] and black/90 */}
       <label className="text-[14px] text-black/90 font-normal uppercase tracking-tight leading-tight">
         {label}
+        {required && <span className="ml-1 font-black text-red-600">*</span>}
       </label>
       <select
         {...selectProps}
         name={name}
         disabled={readOnly}
+        required={required}
         /* Standardized font size and border opacity */
         className={`border border-black/60 px-2 py-1 text-[16px] font-black text-black/90 focus:border-blue-600 outline-none rounded-sm w-full h-[36px] transition-all ${readOnly ? 'bg-slate-100 cursor-not-allowed' : 'bg-white cursor-pointer'}`}
       >
@@ -326,18 +388,19 @@ const EntityBlock = ({ title, icon: Icon, typeKey, customerType, onTypeChange, i
           value={customerType} 
           onChange={(e) => onTypeChange(typeKey, e.target.value)} 
           readOnly={readOnly}
+          required={typeKey === 'primary'}
         />
         {customerType === 'Individual' ? (
           <>
             <div className="flex gap-2 md:col-span-2">
               <FormSelect label="Salutation" name={`${typeKey}.salutation`} options={["Mr", "Mrs", "M/S"]} value={data.salutation || ''} className="w-1/4" readOnly={readOnly} />
-              <FormField label="Full Name" name={`${typeKey}.fullName`} className="w-3/4" value={data.name} readOnly={readOnly} />
+              <FormField label="Full Name" name={`${typeKey}.fullName`} className="w-3/4" value={data.name} readOnly={readOnly} required={typeKey === 'primary'} />
             </div>
             <FormField label="DOB" name={`${typeKey}.dateOfBirth`} type="date" value={data.dateOfBirth} readOnly={readOnly} />
           </>
         ) : (
           <>
-            <FormField label="Firm Name" name={`${typeKey}.firmName`} value={data.firmName || data.name} readOnly={readOnly} />
+            <FormField label="Firm Name" name={`${typeKey}.firmName`} value={data.firmName || data.name} readOnly={readOnly} required={typeKey === 'primary'} />
             <FormField label="Partner 1" name={`${typeKey}.partner1Name`} value={data.partner1Name} readOnly={readOnly} />
             <FormField label="Partner 2" name={`${typeKey}.partner2Name`} value={data.partner2Name} readOnly={readOnly} />
           </>
@@ -456,15 +519,15 @@ const ContractEditForm = () => {
   const location = useLocation();
   const selectedContract = location.state?.contract || {};
   const formMode = location.state?.mode || 'edit';
-  const sourceWorkflow = location.state?.sourceWorkflow || (selectedContract.status === 'SUBMITTED_FOR_EDIT' ? 'SUBMITTED_FOR_EDIT' : 'DRAFT');
+  const sourceWorkflow = normalizeContractStatus(location.state?.sourceWorkflow || selectedContract.status, 'D');
   const isCreateMode = formMode === 'create';
   const isViewMode = formMode === 'view';
-  const isEditTray = sourceWorkflow === 'SUBMITTED_FOR_EDIT';
-  const submitKeepsActive = sourceWorkflow === 'ACTIVE' || sourceWorkflow === 'SUBMITTED_FOR_EDIT';
+  const isEditableWorkflow = sourceWorkflow !== 'D' || (!isCreateMode && normalizeContractStatus(selectedContract.status, 'D') !== 'D');
   const shouldPrint = Boolean(location.state?.print);
   const [activeTab, setActiveTab] = useState('Borrower Details');
   const [proposalCat, setProposalCat] = useState(selectedContract.category || '-');
   const [riskLevel, setRiskLevel] = useState(selectedContract.riskLevel || '-');
+  const [contractStatus, setContractStatus] = useState(isEditableWorkflow ? normalizeContractStatus(selectedContract.status, 'E') : 'D');
   const [partyCodes, setPartyCodes] = useState({
     primary: selectedContract.customerCode || null,
     coApp: selectedContract.coApplicantCode || null,
@@ -707,7 +770,7 @@ const ContractEditForm = () => {
     if (invalidField) {
       invalidField.reportValidity();
       invalidField.focus();
-      throw new Error('Borrower details validation failed.');
+      throw new Error(validationMessageFor(formContainer, 'Borrower details validation failed.'));
     }
 
     const formData = formValuesFrom(formContainer);
@@ -735,6 +798,7 @@ const ContractEditForm = () => {
       contractNumber: response.contractNumber || draftContract.contractNumber,
     });
     setDraftMessage(`Draft contract ${response.contractNumber || draftContract.contractNumber || ''} saved: ${results.map((result) => result.partyCode).join(', ')}`);
+    return response.contractId || draftContract.contractId;
   };
 
   const buildAssetDraft = (formData) => ({
@@ -780,7 +844,7 @@ const ContractEditForm = () => {
     if (invalidField) {
       invalidField.reportValidity();
       invalidField.focus();
-      throw new Error('Contract form validation failed.');
+      throw new Error(validationMessageFor(formContainer, 'Contract form validation failed.'));
     }
     return formContainer;
   };
@@ -801,6 +865,7 @@ const ContractEditForm = () => {
     setProductType(response?.productType || productType);
     setAssetLoadVersion((value) => value + 1);
     setDraftMessage(`Asset details saved for draft contract ${draftContract.contractNumber || draftContract.contractId}.`);
+    return draftContract.contractId;
   };
 
   const buildFinancialDraft = (formData) => ({
@@ -849,6 +914,7 @@ const ContractEditForm = () => {
     setRepaymentRows(repaymentRowsFrom(response || {}, []));
     setFinancialLoadVersion((value) => value + 1);
     setDraftMessage(`Financial terms saved for draft contract ${draftContract.contractNumber || draftContract.contractId}.`);
+    return draftContract.contractId;
   };
 
   const addRepaymentRow = () => {
@@ -908,6 +974,7 @@ const ContractEditForm = () => {
     setDocumentUploads(uploadsFrom(response || {}));
     setDocumentationLoadVersion((value) => value + 1);
     setDraftMessage(`Documentation details saved for draft contract ${draftContract.contractNumber || draftContract.contractId}.`);
+    return draftContract.contractId;
   };
 
   const buildCoLendingDraft = (formData) => ({
@@ -934,6 +1001,7 @@ const ContractEditForm = () => {
     setCoLendingDetails(response || {});
     setCoLendingLoadVersion((value) => value + 1);
     setDraftMessage(`Co lending details saved for draft contract ${draftContract.contractNumber || draftContract.contractId}.`);
+    return draftContract.contractId;
   };
 
   const togglePendingDocument = (documentName) => {
@@ -1009,24 +1077,21 @@ const ContractEditForm = () => {
 
   const saveCurrentTabDraft = async () => {
     if (activeTab === 'Borrower Details') {
-      await saveBorrowerDraft();
-      return;
+      return saveBorrowerDraft();
     }
     if (activeTab === 'Asset Details') {
-      await saveAssetDraft();
-      return;
+      return saveAssetDraft();
     }
     if (activeTab === 'Financial Terms') {
-      await saveFinancialDraft();
-      return;
+      return saveFinancialDraft();
     }
     if (activeTab === 'Documentation Details') {
-      await saveDocumentationDraft();
-      return;
+      return saveDocumentationDraft();
     }
     if (activeTab === 'Co Lending Details') {
-      await saveCoLendingDraft();
+      return saveCoLendingDraft();
     }
+    return draftContract.contractId;
   };
 
   const handleSubmitWorkflow = async () => {
@@ -1035,21 +1100,16 @@ const ContractEditForm = () => {
     try {
       setSavingDraft(true);
       setDraftMessage('');
-      await saveCurrentTabDraft();
+      const submittedContractId = await saveCurrentTabDraft();
 
-      if (!draftContract.contractId) {
+      if (!submittedContractId) {
         throw new Error('Contract draft was not created.');
       }
 
-      if (submitKeepsActive) {
-        await submitContractToActive(draftContract.contractId);
-        setDraftMessage('Contract submitted to active.');
-      } else {
-        await submitContractForEdit(draftContract.contractId);
-        setDraftMessage('Contract submitted for edit.');
-      }
-    } catch {
-      setDraftMessage('Unable to submit contract. Please check the entered values and try again.');
+      await updateContractStatus(submittedContractId, contractStatus);
+      setDraftMessage('Contract status updated.');
+    } catch (error) {
+      setDraftMessage(errorMessage(error, 'Unable to submit contract. Please check the entered values and try again.'));
     } finally {
       setSavingDraft(false);
     }
@@ -1066,8 +1126,8 @@ const ContractEditForm = () => {
         }
         setActiveTab(tabs[currentIndex + 1].name);
         document.querySelector('[data-contract-form-scroll]')?.scrollTo({ top: 0, behavior: 'smooth' });
-      } catch {
-        setDraftMessage('Unable to save draft. Please check the entered values and try again.');
+      } catch (error) {
+        setDraftMessage(errorMessage(error, 'Unable to save draft. Please check the entered values and try again.'));
       } finally {
         setSavingDraft(false);
       }
@@ -1283,27 +1343,24 @@ const ContractEditForm = () => {
           <button disabled={isViewMode} className="px-4 py-1.5 bg-blue-50 text-blue-700 border-2 border-blue-500 text-[14px] font-black uppercase flex items-center gap-1.5 hover:bg-blue-100 rounded-sm transition-all disabled:opacity-40">
             <RotateCcw size={15} /> MOVE TO LOS
           </button>
-          
-          {!isEditTray && (
-            <button
-              type="button"
+
+          <div className="flex items-center overflow-hidden border-2 border-slate-500 rounded-sm bg-white shadow-sm">
+            <span className="bg-slate-700 text-white px-3 h-9 flex items-center text-[14px] font-black uppercase">
+              Status
+              <span className="ml-1 text-red-300">*</span>
+            </span>
+            <select
+              value={contractStatus}
+              onChange={(event) => setContractStatus(event.target.value)}
               disabled={isViewMode || savingDraft}
-              onClick={async () => {
-                try {
-                  setSavingDraft(true);
-                  setDraftMessage('');
-                  await saveCurrentTabDraft();
-                } catch {
-                  setDraftMessage('Unable to save draft. Please check the entered values and try again.');
-                } finally {
-                  setSavingDraft(false);
-                }
-              }}
-              className="px-4 py-1.5 bg-yellow-50 text-yellow-700 border-2 border-yellow-500 text-[14px] font-black uppercase flex items-center gap-1.5 hover:bg-yellow-100 rounded-sm transition-all disabled:opacity-40"
+              required
+              className="h-9 min-w-[150px] bg-white px-3 text-[14px] font-black uppercase text-slate-900 outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
             >
-              <Save size={15} /> {savingDraft ? 'SAVING...' : 'SAVE DRAFT'}
-            </button>
-          )}
+              {(isEditableWorkflow ? STATUS_OPTIONS.edit : STATUS_OPTIONS.create).map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
           
           {/* Submit - Light Green and Larger Size */}
           <button
@@ -1312,7 +1369,7 @@ const ContractEditForm = () => {
             onClick={handleSubmitWorkflow}
             className="px-8 py-1.5 bg-green-100 text-green-700 border-2 border-green-500 text-[15px] font-black uppercase flex items-center gap-2 hover:bg-green-200 rounded-sm shadow-md transition-all disabled:opacity-40"
           >
-            <CheckCircle size={18} /> {submitKeepsActive ? 'SUBMIT TO ACTIVE' : 'SUBMIT FOR EDIT'}
+            <CheckCircle size={18} /> {savingDraft ? 'SAVING...' : 'SUBMIT'}
           </button>
         </div>
       </div>

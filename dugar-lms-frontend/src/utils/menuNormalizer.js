@@ -11,6 +11,8 @@ const ICON_BY_NAME = [
   { keys: ['voucher', 'receipt'], icon: 'ReceiptIndianRupee' },
   { keys: ['report', 'ratio'], icon: 'FileBarChart2' },
   { keys: ['collection'], icon: 'HandHelping' },
+  { keys: ['committee'], icon: 'UsersRound' },
+  { keys: ['demand'], icon: 'FileSpreadsheet' },
   { keys: ['legal'], icon: 'Scale' },
   { keys: ['analytics'], icon: 'ChartNoAxesCombined' },
   { keys: ['admin'], icon: 'Settings2' },
@@ -177,6 +179,63 @@ function ensureActiveContractsMenu(menuTree) {
   return menuTree;
 }
 
+function ensureCommitteeDemandListMenu(menuTree) {
+  let committee = menuTree.find((menu) => menuMatches(menu, ['committee']));
+  if (!committee) {
+    committee = {
+      menuId: 'frontend-committee',
+      menuName: 'Committee',
+      menuCode: 'COMMITTEE',
+      icon: 'UsersRound',
+      path: '#',
+      urlPath: '#',
+      displayOrder: nextOrder(menuTree),
+      subMenus: [],
+    };
+    menuTree.push(committee);
+  }
+
+  committee.path = '#';
+  committee.urlPath = '#';
+  committee.icon = committee.icon || 'UsersRound';
+  committee.subMenus = committee.subMenus || [];
+
+  const reports = ensureMenu(committee, {
+    menuId: 'frontend-committee-reports',
+    menuName: 'Reports',
+    menuCode: 'COMMITTEE_REPORTS',
+    icon: 'FileBarChart2',
+    path: '#',
+    urlPath: '#',
+    displayOrder: nextOrder(committee.subMenus),
+    subMenus: [],
+  });
+
+  ensureMenu(reports, {
+    menuId: 'frontend-demand-list',
+    menuName: 'Demand List',
+    menuCode: 'COMMITTEE_DEMAND_LIST',
+    icon: 'FileSpreadsheet',
+    path: '/committee/reports/demand-list',
+    urlPath: '/committee/reports/demand-list',
+    displayOrder: nextOrder(reports.subMenus),
+    subMenus: [],
+  });
+
+  ensureMenu(reports, {
+    menuId: 'frontend-afc-report',
+    menuName: 'AFC Report',
+    menuCode: 'COMMITTEE_AFC_REPORT',
+    icon: 'FileText',
+    path: '/committee/reports/afc',
+    urlPath: '/committee/reports/afc',
+    displayOrder: nextOrder(reports.subMenus),
+    subMenus: [],
+  });
+
+  return menuTree;
+}
+
 export function normalizeMenuTree(menus = []) {
   const menuTree = normalizeMenuItems(menus);
   const existingDashboard = menuTree.find((menu) => menuMatches(menu, ['dashboard']));
@@ -200,5 +259,5 @@ export function normalizeMenuTree(menus = []) {
     });
   }
 
-  return sortMenus(ensureActiveContractsMenu(menuTree));
+  return sortMenus(ensureCommitteeDemandListMenu(ensureActiveContractsMenu(menuTree)));
 }

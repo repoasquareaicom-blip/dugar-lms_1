@@ -37,7 +37,7 @@ public record LosContractReceiveRequest(
     String panNumber,
     @JsonAlias("vehicle_name")
     String vehicleName,
-    @JsonAlias("rc_number")
+    @JsonAlias({"rc_number", "registration_number", "reg_no", "regn_no", "vehicle_number"})
     String rcNumber,
     String model,
     @JsonAlias("loan_amount")
@@ -115,6 +115,8 @@ public record LosContractReceiveRequest(
     BigDecimal idv,
     @JsonAlias("vehicle_type")
     String vehicleType,
+    @JsonAlias({"owner_number", "owner_no", "owner_serial_number", "owner_serial_no"})
+    String ownerNumber,
     @JsonAlias("fuel_type")
     String fuelType,
     @JsonAlias("interest_rate")

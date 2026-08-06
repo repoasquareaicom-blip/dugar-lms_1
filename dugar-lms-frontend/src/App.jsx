@@ -24,6 +24,8 @@ import LedgerCodeMaster from './pages/accounts/masters/LedgerCodeMaster';
 import ReceiptVoucher from './pages/accounts/transactions/ReceiptVoucher';
 import VoucherAuthorisation from './pages/accounts/transactions/VoucherAuthorisation';
 import Ratios from './pages/accounts/reports/ratios.jsx';
+import DemandListPage from './pages/committee/reports/DemandListPage.jsx';
+import AfcReportPage from './pages/committee/reports/AfcReportPage.jsx';
 import { normalizeMenuTree } from './utils/menuNormalizer';
 import { fetchContractDashboard } from './services/dashboardService';
 
@@ -461,10 +463,10 @@ function App() {
         <Route element={<ProtectedRoute><MainDashboardLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<WelcomeDashboard />} />
           <Route path="/credit/masters/party-code" element={<PartyCodeModify />} />
-          <Route path="/credit/trans/contract/edit" element={<ContractGrid isDraft workflowStatus="SUBMITTED_FOR_EDIT" title="Edit Contracts" showCreate={false} />} />
+          <Route path="/credit/trans/contract/edit" element={<ContractGrid isDraft workflowStatus="E" title="Edit Contracts" showCreate={false} />} />
           <Route path="/credit/trans/contract-management/active-contracts" element={<ContractGrid />} />
           <Route path="/credit/trans/contract-management/draft-contracts" element={<ContractGrid isDraft title="Draft Contracts" />} />
-          <Route path="/credit/trans/contract-management/edit-contracts" element={<ContractGrid isDraft workflowStatus="SUBMITTED_FOR_EDIT" title="Edit Contracts" showCreate={false} />} />
+          <Route path="/credit/trans/contract-management/edit-contracts" element={<ContractGrid isDraft workflowStatus="E" title="Edit Contracts" showCreate={false} />} />
           <Route path="/credit/trans/contract/form" element={<ContractEditForm />} />
           <Route path="/accounts/masters/ledger-code" element={<LedgerCodeMaster />} />
           <Route path="/accounts/masters/ledger" element={<LedgerCodeMaster />} />
@@ -487,6 +489,8 @@ function App() {
           <Route path="/accounts/transaction/edit/receipt/bank" element={<ReceiptVoucher />} />
           <Route path="/accounts/transaction/edit/journal" element={<ReceiptVoucher />} />
           <Route path="/accounts/reports/ratios" element={<Ratios />} />
+          <Route path="/committee/reports/demand-list" element={<DemandListPage />} />
+          <Route path="/committee/reports/afc" element={<AfcReportPage />} />
           <Route 
   path="*" 
   element={
