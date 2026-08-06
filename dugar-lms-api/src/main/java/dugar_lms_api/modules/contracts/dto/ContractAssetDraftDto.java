@@ -38,6 +38,8 @@ public record ContractAssetDraftDto(
     BigDecimal guidelineValue,
     String natureOfBusiness,
     LocalDate dateOfIncorporation,
-    String isSecured
+    String isSecured,
+    String proposalCategory,
+    String riskLevel
 ) {
 }

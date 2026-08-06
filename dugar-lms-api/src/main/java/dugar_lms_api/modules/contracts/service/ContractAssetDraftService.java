@@ -85,7 +85,9 @@ public class ContractAssetDraftService {
             asset.guidelineValue(),
             asset.natureOfBusiness(),
             asset.dateOfIncorporation(),
-            asset.isSecured()
+            asset.isSecured(),
+            asset.proposalCategory(),
+            asset.riskLevel()
         );
     }
 

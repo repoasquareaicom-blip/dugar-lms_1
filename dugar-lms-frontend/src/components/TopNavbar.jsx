@@ -153,7 +153,7 @@ const TopNavbar = ({ menuTree, userData, notificationsCount = 5 }) => {
 
   return (
     <>
-      <nav className="w-full h-[72px] shrink-0 bg-gradient-to-b from-white to-blue-100 border-b-2 border-blue-300 px-3 md:px-6 flex items-center justify-between z-[100] shadow-md">
+      <nav className="relative z-[1000] w-full h-[72px] shrink-0 bg-gradient-to-b from-white to-blue-100 border-b-2 border-blue-300 px-3 md:px-6 flex items-center justify-between shadow-md">
         
         {/* LEFT: Mobile Toggle & Brand */}
         <div className="flex items-center h-full gap-3 md:gap-8">

@@ -48,7 +48,9 @@ public class ContractAssetDraftRepository {
             a.guideline_value,
             a.nature_of_business,
             a.date_of_incorporation,
-            a.is_secured
+            a.is_secured,
+            COALESCE(NULLIF(TRIM(c.category), ''), '-') AS proposal_category,
+            COALESCE(NULLIF(TRIM(c.risk_level), ''), '-') AS risk_level
         FROM assets a
         JOIN contracts c
           ON c.contract_id = a.contract_id
@@ -183,6 +185,8 @@ public class ContractAssetDraftRepository {
             registration_number = :registrationNumber,
             vehicle_make = :vehicleMake,
             equipment_model = :version,
+            category = :proposalCategory,
+            risk_level = :riskLevel,
             updated_at = CURRENT_TIMESTAMP,
             updated_by = :updatedBy
         WHERE contract_id = :contractId
@@ -301,7 +305,9 @@ public class ContractAssetDraftRepository {
         rs.getBigDecimal("guideline_value"),
         rs.getString("nature_of_business"),
         rs.getObject("date_of_incorporation", java.time.LocalDate.class),
-        rs.getString("is_secured")
+        rs.getString("is_secured"),
+        rs.getString("proposal_category"),
+        rs.getString("risk_level")
     );
 
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
@@ -413,7 +419,9 @@ public class ContractAssetDraftRepository {
             .addValue("guidelineValue", asset.guidelineValue())
             .addValue("natureOfBusiness", clean(asset.natureOfBusiness()))
             .addValue("dateOfIncorporation", asset.dateOfIncorporation())
-            .addValue("isSecured", clean(asset.isSecured()));
+            .addValue("isSecured", clean(asset.isSecured()))
+            .addValue("proposalCategory", clean(asset.proposalCategory()))
+            .addValue("riskLevel", clean(asset.riskLevel()));
     }
 
     private String clean(String value) {

@@ -42,6 +42,8 @@ class ContractListRepositoryTest {
             null,
             null,
             null,
+            null,
+            null,
             0,
             25,
             "loanAmount",
@@ -68,6 +70,8 @@ class ContractListRepositoryTest {
             .thenReturn(List.of());
 
         repository.find(new ContractListCriteria(
+            null,
+            null,
             null,
             null,
             null,
@@ -110,6 +114,8 @@ class ContractListRepositoryTest {
             null,
             null,
             null,
+            null,
+            null,
             0,
             25,
             "contractId",
@@ -143,6 +149,8 @@ class ContractListRepositoryTest {
             LocalDate.of(2026, 12, 31),
             new BigDecimal("100000"),
             new BigDecimal("500000"),
+            null,
+            null,
             1,
             25,
             "createdDate",

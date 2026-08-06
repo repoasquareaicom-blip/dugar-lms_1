@@ -31,6 +31,7 @@ const ServerDataTable = ({
   filterFields = [],
   getRowId = (row) => row?.id,
   getContextMenuItems,
+  loadingLabel = 'Loading records',
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   searchPlaceholder = 'Quick Search...',
   title,
@@ -256,7 +257,7 @@ const ServerDataTable = ({
           <div className="absolute inset-0 z-30 bg-white/70 backdrop-blur-[1px] grid place-items-center">
             <div className="bg-white border-2 border-blue-200 rounded-xl px-5 py-4 shadow-xl flex items-center gap-3 text-[#0052CC]">
               <Loader2 size={20} className="animate-spin" />
-              <span className="text-[12px] font-black uppercase tracking-widest">Loading contracts</span>
+              <span className="text-[12px] font-black uppercase tracking-widest">{loadingLabel}</span>
             </div>
           </div>
         )}

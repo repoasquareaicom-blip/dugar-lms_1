@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User, Eye, EyeOff, Loader2, ShieldCheck, ChevronRight, Activity, UserCheck, Fingerprint, Database, Cpu, Terminal } from 'lucide-react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
-import apiClient from '../api/apiClient';
+import apiClient, { saveCleanAuthToken } from '../api/apiClient';
 import { normalizeMenuTree } from '../utils/menuNormalizer';
 import logoWhite from '../assets/images/logo-white.png';
 import logoIcon from '../assets/images/logo-icon.png';
@@ -40,10 +40,10 @@ const Login = () => {
             const response = await apiClient.post('/auth/login', { username, password });
             if (response.data?.token) {
                 const menuTree = normalizeMenuTree(response.data.menus || []);
-                localStorage.setItem('token', response.data.token);
+                const token = saveCleanAuthToken(response.data.token);
                 localStorage.setItem('user', JSON.stringify({
                     ...response.data.user,
-                    token: response.data.token,
+                    token,
                     menus: response.data.menus || [],
                     menuTree,
                 }));

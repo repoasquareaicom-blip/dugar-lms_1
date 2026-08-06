@@ -17,6 +17,11 @@ public class ContractDashboardRepository {
         WHERE c.is_active = TRUE
           AND (c.is_draft IS NULL OR c.is_draft = FALSE)
           AND UPPER(COALESCE(c.status, '')) = 'Y'
+          AND EXISTS (
+              SELECT 1
+              FROM contract_repayment_structures repayment_exists
+              WHERE repayment_exists.contract_id = c.contract_id
+          )
         """;
 
     private static final String BRANCH_DATA_SQL = """

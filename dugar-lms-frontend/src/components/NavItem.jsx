@@ -86,7 +86,7 @@ const NavItem = ({ item, depth = 0 }) => {
       {/* Dropdown Section */}
       {hasSubMenu && (
         <div className={`
-          absolute z-[110] transition-all duration-300 ease-out
+          absolute z-[1100] transition-all duration-300 ease-out
           ${isHovered ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible translate-y-1'}
           ${depth === 0 ? 'top-[100%] left-0 pt-1 w-max' : 'left-[100%] top-0 pl-1 w-max'}
         `}>

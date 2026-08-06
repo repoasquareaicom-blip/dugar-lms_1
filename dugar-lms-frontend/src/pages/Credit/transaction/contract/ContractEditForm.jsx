@@ -150,13 +150,6 @@ function uploadsFrom(documentation) {
   }));
 }
 
-function formatFileSize(bytes) {
-  const size = Number(bytes || 0);
-  if (!size) return '-';
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / 1024 / 1024).toFixed(2)} MB`;
-}
-
 function isPdfUpload(upload) {
   return upload.contentType === 'application/pdf' || /\.pdf$/i.test(upload.fileName || '');
 }
@@ -470,8 +463,8 @@ const ContractEditForm = () => {
   const submitKeepsActive = sourceWorkflow === 'ACTIVE' || sourceWorkflow === 'SUBMITTED_FOR_EDIT';
   const shouldPrint = Boolean(location.state?.print);
   const [activeTab, setActiveTab] = useState('Borrower Details');
-  const [proposalCat, setProposalCat] = useState('A');
-  const [riskLevel, setRiskLevel] = useState('Low');
+  const [proposalCat, setProposalCat] = useState(selectedContract.category || '-');
+  const [riskLevel, setRiskLevel] = useState(selectedContract.riskLevel || '-');
   const [partyCodes, setPartyCodes] = useState({
     primary: selectedContract.customerCode || null,
     coApp: selectedContract.coApplicantCode || null,
@@ -515,7 +508,7 @@ const ContractEditForm = () => {
     g2: 'Individual'
   });
 
-  const [productType, setProductType] = useState('Vehicles');
+  const [productType, setProductType] = useState('');
   const [assetSecured, setAssetSecured] = useState('Secured');
 
   useEffect(() => {
@@ -633,7 +626,9 @@ const ContractEditForm = () => {
         const nextAsset = asset || {};
         setAssetDetails(nextAsset);
         setAssetSecured(nextAsset.assetSecured || 'Secured');
-        setProductType(nextAsset.productType || 'Vehicles');
+        setProductType(nextAsset.productType || '');
+        setProposalCat(nextAsset.proposalCategory || '-');
+        setRiskLevel(nextAsset.riskLevel || '-');
         setAssetLoadVersion((value) => value + 1);
       })
       .catch(() => {
@@ -775,6 +770,8 @@ const ContractEditForm = () => {
     natureOfBusiness: formValue(formData, 'asset.natureOfBusiness'),
     dateOfIncorporation: formValue(formData, 'asset.dateOfIncorporation'),
     isSecured: formValue(formData, 'asset.isSecured'),
+    proposalCategory: proposalCat,
+    riskLevel,
   });
 
   const validateVisibleFields = () => {
@@ -1135,7 +1132,7 @@ const ContractEditForm = () => {
   const repaymentSchedule = parseRepaymentSchedule(selectedContract.repaymentSchedule);
   const assetData = {
     assetSecured: assetDetails.assetSecured || selectedContract.vehicleSecurityOffered || 'Secured',
-    productType: assetDetails.productType || 'Vehicles',
+    productType: assetDetails.productType || productType,
     vehicleTypeCode: assetDetails.vehicleTypeCode || selectedContract.vehicleTypeCode,
     dealOfAssets: assetDetails.dealOfAssets || selectedContract.vehicleFinanceType,
     vehicleMake: assetDetails.vehicleMake || selectedContract.vehicleMake,
@@ -1254,6 +1251,7 @@ const ContractEditForm = () => {
       disabled={isViewMode}
       className="text-[24px] font-black px-4 outline-none bg-white h-9 min-w-[65px] text-emerald-900 cursor-pointer hover:bg-emerald-50 transition-colors disabled:cursor-not-allowed disabled:bg-slate-100"
     >
+      <option>-</option>
       <option>A</option>
       <option>B</option>
       <option>C</option>
@@ -1271,9 +1269,10 @@ const ContractEditForm = () => {
       disabled={isViewMode}
       className="text-[24px] font-black px-4 outline-none bg-white h-9 text-amber-900 cursor-pointer hover:bg-amber-50 transition-colors disabled:cursor-not-allowed disabled:bg-slate-100"
     >
-      <option>LOW</option>
-      <option>MEDIUM</option>
-      <option>HIGH</option>
+      <option>-</option>
+      <option>Low</option>
+      <option>Medium</option>
+      <option>High</option>
     </select>
   </div>
 </div>
@@ -1433,11 +1432,11 @@ const ContractEditForm = () => {
             {/* Top Asset/Product Type Selector */}
             <div className="bg-white border border-black/60 rounded-sm p-4 grid grid-cols-1 md:grid-cols-2 gap-4 shadow-sm">
               <FormSelect label="Type of Assets" name="asset.assetSecured" options={["Secured", "UnSecured"]} value={assetSecured} onChange={(e) => setAssetSecured(e.target.value)} readOnly={isViewMode} />
-              <FormSelect label="Product Type" name="asset.productType" options={["Vehicles", "MSME", "LAP", "Business Loans", "Collateral"]} value={productType} onChange={(e) => setProductType(e.target.value)} readOnly={isViewMode} />
+              <FormSelect label="Product Type" name="asset.productType" options={["Vehicles", "MSME", "LAP", "Business Loans", "Collateral"]} value={productType || assetData.productType || ''} onChange={(e) => setProductType(e.target.value)} readOnly={isViewMode} />
             </div>
 
             {/* VEHICLES SECTION */}
-            {productType === 'Vehicles' && (
+            {(productType || assetData.productType) === 'Vehicles' && (
               <div className="space-y-4">
                 {/* Brand Blue Gradient Header */}
                 <div className="bg-gradient-to-r from-[#E1EFFF] to-[#D6E4FF] text-black/90 border border-black/60 px-3 py-1.5 rounded-t-lg shadow-sm flex items-center gap-2">
@@ -1819,9 +1818,6 @@ const ContractEditForm = () => {
                       <th className="px-4 py-3 text-[16px] font-black text-black/90 uppercase tracking-wider">
                         File Name
                       </th>
-                      <th className="px-4 py-3 text-[16px] font-black text-black/90 uppercase tracking-wider">
-                        Size
-                      </th>
                       <th className="px-4 py-3 text-[16px] font-black text-black/90 uppercase tracking-wider text-right">
                         Actions
                       </th>
@@ -1830,7 +1826,7 @@ const ContractEditForm = () => {
                   <tbody className="divide-y divide-black/10 bg-white">
                     {documentUploads.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-5 text-center text-[13px] uppercase text-black/50">No files linked</td>
+                        <td colSpan={4} className="px-4 py-5 text-center text-[13px] uppercase text-black/50">No files linked</td>
                       </tr>
                     ) : documentUploads.map((upload) => (
                       <tr key={upload.id} className="hover:bg-blue-50/40 transition-colors group text-black/90">
@@ -1853,14 +1849,6 @@ const ContractEditForm = () => {
                           <span className="px-2 py-0.5 rounded-sm bg-blue-50 text-blue-900 border border-blue-100">{upload.documentCategory}</span>
                         </td>
                         <td className="px-4 py-3 text-[14px]">{upload.fileName}</td>
-                        <td className="px-4 py-3 text-[14px] text-black/40">
-                          <div>{formatFileSize(upload.fileSize)}</div>
-                          {upload.uploadProgress < 100 && (
-                            <div className="mt-1 h-1.5 w-24 overflow-hidden rounded-sm bg-slate-200">
-                              <div className="h-full bg-blue-700 transition-all" style={{ width: `${upload.uploadProgress}%` }} />
-                            </div>
-                          )}
-                        </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end items-center gap-4">
                             <button

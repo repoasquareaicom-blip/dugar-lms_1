@@ -20,6 +20,7 @@ import Footer from './components/Footer';
 import PartyCodeModify from './pages/Credit/Masters/PartyCodeModify';
 import ContractGrid from './pages/credit/transaction/contract/ContractGrid';
 import ContractEditForm from './pages/credit/transaction/contract/ContractEditForm.jsx';
+import LedgerCodeMaster from './pages/accounts/masters/LedgerCodeMaster';
 import ReceiptVoucher from './pages/accounts/transactions/ReceiptVoucher';
 import Ratios from './pages/accounts/reports/ratios.jsx';
 import { normalizeMenuTree } from './utils/menuNormalizer';
@@ -27,7 +28,8 @@ import { fetchContractDashboard } from './services/dashboardService';
 
 const ProtectedRoute = ({ children }) => {
   const user = localStorage.getItem('user');
-  if (!user) return <Navigate to="/login" replace />;
+  const token = localStorage.getItem('token');
+  if (!user || !token) return <Navigate to="/login" replace />;
   return children;
 };
 
@@ -40,8 +42,7 @@ const MainDashboardLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const isFullScreenForm = location.pathname.includes('/contract/form') || 
-                           location.pathname.includes('/receipt');
+  const isFullScreenForm = location.pathname.includes('/contract/form');
 
   const calibriBlackStyle = { 
     fontFamily: 'Calibri, Candara, Segoe, "Segoe UI", Optima, Arial, sans-serif',
@@ -49,7 +50,7 @@ const MainDashboardLayout = () => {
   };
 
   return (
-    <div style={calibriBlackStyle} className="dugar-global-scale bg-[#F0F2F5] flex flex-col overflow-hidden">
+    <div style={calibriBlackStyle} className="dugar-global-scale h-full min-h-0 bg-[#F0F2F5] flex flex-col overflow-hidden">
       {!isFullScreenForm && (
           <TopNavbar menuTree={menuTree} userData={userData} />
       )}
@@ -277,8 +278,8 @@ const metrics = [
 ];
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
-      <div className="flex justify-between items-center border-b border-gray-200 pb-4">
+    <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden space-y-4 2xl:space-y-8 pr-1 animate-in fade-in duration-700 custom-scrollbar">
+      <div className="flex flex-col gap-3 lg:flex-row lg:justify-between lg:items-center border-b border-gray-200 pb-3 2xl:pb-4">
         <div>
           <div className="flex items-center gap-4">
             <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Enterprise</h2>
@@ -298,28 +299,28 @@ const metrics = [
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 2xl:gap-6">
         {metrics.map((m, i) => (
-          <div key={i} className={`relative overflow-hidden p-6 rounded-3xl transition-all duration-500 hover:-translate-y-1 group shadow-xl ${m.bg}`}>
+          <div key={i} className={`relative overflow-hidden p-4 2xl:p-6 rounded-2xl 2xl:rounded-3xl transition-all duration-500 hover:-translate-y-1 group shadow-xl ${m.bg}`}>
             <div className="relative z-10">
-              <div className="flex justify-between items-start mb-6">
-                <div className="bg-white/20 backdrop-blur-md text-white p-3 rounded-2xl shadow-lg">{m.icon}</div>
-                <span className="text-[24px] font-bold px-2.5 py-1 rounded bg-black/20 text-white border border-white/10">{m.trend}</span>
+              <div className="flex justify-between items-start mb-3 2xl:mb-6">
+                <div className="bg-white/20 backdrop-blur-md text-white p-2.5 2xl:p-3 rounded-xl 2xl:rounded-2xl shadow-lg">{m.icon}</div>
+                <span className="text-[18px] 2xl:text-[24px] font-bold px-2.5 py-1 rounded bg-black/20 text-white border border-white/10">{m.trend}</span>
               </div>
-              <p className="text-[24px] font-bold text-white mb-1 tracking-tight">{m.count}</p>
-              <p className="text-[24px] font-bold text-white uppercase tracking-[0.1em]">{m.label}</p>
+              <p className="text-[18px] 2xl:text-[24px] font-bold text-white mb-1 tracking-tight">{m.count}</p>
+              <p className="text-[18px] 2xl:text-[24px] font-bold text-white uppercase tracking-[0.1em]">{m.label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="bg-white border border-gray-300 rounded-3xl p-6 shadow-md">
-          <h3 className="text-[24px] font-bold text-[#0052CC] uppercase tracking-widest mb-6 flex items-center gap-2">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 2xl:gap-6">
+        <div className="bg-white border border-gray-300 rounded-2xl 2xl:rounded-3xl p-4 2xl:p-6 shadow-md">
+          <h3 className="text-[16px] 2xl:text-[24px] font-bold text-[#0052CC] uppercase tracking-widest mb-3 2xl:mb-6 flex items-center gap-2">
             <LayoutDashboard size={24} className="text-[#0052CC]" /> 
             <div className="min-w-0 flex-1">
               ACTIVE LOANS 
-              <span className="block normal-case font-medium text-[24px] ">
+              <span className="block normal-case font-medium text-[16px] 2xl:text-[24px]">
                 ({activeLoanCount.toLocaleString('en-IN')})
               </span>
             </div>
@@ -334,7 +335,7 @@ const metrics = [
               <option value="ALL">All</option>
             </select>
           </h3>
-          <div className="h-64">
+          <div className="h-52 2xl:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={activeLoansChartData}>
                 <XAxis dataKey="name" fontSize={11} fontWeight="900" axisLine={false} tickLine={false} tick={{ fill: '#000' }} interval={0} />
@@ -351,12 +352,12 @@ const metrics = [
           </div>
         </div>
 
-        <div className="bg-white border border-gray-300 rounded-3xl p-6 shadow-md">
-          <h3 className="text-[24px] font-bold text-[#0052CC] uppercase tracking-widest mb-6 flex items-center gap-2">
+        <div className="bg-white border border-gray-300 rounded-2xl 2xl:rounded-3xl p-4 2xl:p-6 shadow-md">
+          <h3 className="text-[16px] 2xl:text-[24px] font-bold text-[#0052CC] uppercase tracking-widest mb-3 2xl:mb-6 flex items-center gap-2">
             <LayoutDashboard size={24} className="text-[#0052CC]" /> 
             <div className="min-w-0 flex-1">
               AUM
-              <span className="block normal-case font-medium text-[24px]">
+              <span className="block normal-case font-medium text-[16px] 2xl:text-[24px]">
                 ({formatCrores(totalAumLakhs)} Cr)
               </span>
             </div>
@@ -371,7 +372,7 @@ const metrics = [
               <option value="ALL">All</option>
             </select>
           </h3>
-          <div className="h-64">
+          <div className="h-52 2xl:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={aumChartData} layout="vertical" margin={{ top: 4, right: 18, bottom: 4, left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
@@ -390,18 +391,18 @@ const metrics = [
           </div>
         </div>
 
-        <div className="bg-white border border-gray-300 rounded-3xl p-6 shadow-md">
+        <div className="bg-white border border-gray-300 rounded-2xl 2xl:rounded-3xl p-4 2xl:p-6 shadow-md">
           
-          <h3 className="text-[24px] font-bold text-[#0052CC] uppercase tracking-widest mb-6 flex items-center gap-2">
+          <h3 className="text-[16px] 2xl:text-[24px] font-bold text-[#0052CC] uppercase tracking-widest mb-3 2xl:mb-6 flex items-center gap-2">
             <LayoutDashboard size={24} className="text-[#0052CC]" /> 
             <div className="min-w-0 flex-1">
               {disbursementLabel}
-              <span className="block normal-case font-medium text-[24px] ">
+              <span className="block normal-case font-medium text-[16px] 2xl:text-[24px]">
                 ({formatCrores(disbursementLakhs)} Cr)
               </span>
             </div>
           </h3>
-          <div className="mb-3 flex items-center justify-end gap-2">
+          <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
             <select
               value={accountYear || ''}
               onChange={(event) => setAccountYear(Number(event.target.value))}
@@ -426,7 +427,7 @@ const metrics = [
               </button>
             ))}
           </div>
-          <div className="h-64">
+          <div className="h-52 2xl:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={disbursementData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -464,7 +465,19 @@ function App() {
           <Route path="/credit/trans/contract-management/draft-contracts" element={<ContractGrid isDraft title="Draft Contracts" />} />
           <Route path="/credit/trans/contract-management/edit-contracts" element={<ContractGrid isDraft workflowStatus="SUBMITTED_FOR_EDIT" title="Edit Contracts" showCreate={false} />} />
           <Route path="/credit/trans/contract/form" element={<ContractEditForm />} />
+          <Route path="/accounts/masters/ledger-code" element={<LedgerCodeMaster />} />
+          <Route path="/accounts/masters/ledger" element={<LedgerCodeMaster />} />
           <Route path="/accounts/trans/voucher/receipt" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/entry/payment/cash" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/entry/payment/bank" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/entry/receipt/cash" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/entry/receipt/bank" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/entry/journal" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/edit/payment/cash" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/edit/payment/bank" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/edit/receipt/cash" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/edit/receipt/bank" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/edit/journal" element={<ReceiptVoucher />} />
           <Route path="/accounts/reports/ratios" element={<Ratios />} />
           <Route 
   path="*" 

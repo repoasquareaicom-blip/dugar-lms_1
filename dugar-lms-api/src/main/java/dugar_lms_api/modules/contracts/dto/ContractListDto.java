@@ -9,6 +9,8 @@ public record ContractListDto(
     String legacyContractNumber,
     String product,
     String branch,
+    String category,
+    String riskLevel,
     LocalDate contractDate,
     BigDecimal loanAmount,
     BigDecimal totalContractValue,
