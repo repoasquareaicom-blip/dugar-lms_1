@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 public record AfcReportRequest(
     String loanNumber,
-    LocalDate asOnDate
+    LocalDate asOnDate,
+    String areaCode
 ) {
 }

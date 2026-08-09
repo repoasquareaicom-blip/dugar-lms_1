@@ -42,6 +42,34 @@ class DemandListCalculationServiceTest {
     }
 
     @Test
+    void demandListUsesFirstEmiDateForOverdueSchedule() {
+        DemandListRowDto row = service.calculate(
+            source("150000", "20220", "170220", "16000", LocalDate.of(2026, 7, 2)),
+            List.of(slab(1, 12, "14185")),
+            LocalDate.of(2026, 8, 8)
+        );
+
+        assertThat(row.overdueInstallmentCount()).isEqualTo(1);
+        assertThat(row.overdueAmount()).isEqualByComparingTo("12370.00");
+        assertThat(row.overdueFromDate()).isEqualTo(LocalDate.of(2026, 8, 2));
+        assertThat(row.overdueEndDate()).isEqualTo(LocalDate.of(2026, 8, 2));
+    }
+
+    @Test
+    void demandListReflectsAprilFirstEmiDateForContract16850Case() {
+        DemandListRowDto row = service.calculate(
+            source("150000", "20220", "170220", "16000", LocalDate.of(2026, 4, 1)),
+            List.of(slab(1, 12, "14185")),
+            LocalDate.of(2026, 8, 8)
+        );
+
+        assertThat(row.overdueInstallmentCount()).isEqualTo(4);
+        assertThat(row.overdueAmount()).isEqualByComparingTo("54925.00");
+        assertThat(row.overdueFromDate()).isEqualTo(LocalDate.of(2026, 5, 1));
+        assertThat(row.overdueEndDate()).isEqualTo(LocalDate.of(2026, 8, 1));
+    }
+
+    @Test
     void fullyPaidContractShowsZeroOutstandingAndNoDemand() {
         DemandListRowDto row = service.calculate(source("1000", "200", "1200", "1200"), List.of(slab(1, 3, "400")), LocalDate.of(2026, 3, 15));
 

@@ -39,8 +39,32 @@ export async function fetchContractsPage({
   return response.data;
 }
 
-export async function saveContractPartyDraft({ contractId, parties }) {
-  const response = await apiClient.post('/contracts/draft/parties', { contractId, parties });
+export async function saveContractPartyDraft({ contractId, contractNumber, contractDate, parties }) {
+  const response = await apiClient.post('/contracts/draft/parties', { contractId, contractNumber, contractDate, parties });
+  return response.data;
+}
+
+export async function fetchContractAreas({ keyword = '', limit = 20 } = {}) {
+  const params = {
+    asOnDate: new Date().toISOString().slice(0, 10),
+    page: 0,
+    size: 250,
+  };
+  addParam(params, 'keyword', keyword);
+  const response = await apiClient.get('/reports/demand-list', { params });
+  const rows = response.data?.rows?.content || [];
+  const normalizedKeyword = String(keyword || '').trim().toLowerCase();
+  const areas = rows
+    .map((row) => row.area)
+    .filter(Boolean)
+    .filter((area, index, list) => list.indexOf(area) === index)
+    .filter((area) => !normalizedKeyword || String(area).toLowerCase().includes(normalizedKeyword))
+    .sort((left, right) => String(left).localeCompare(String(right)));
+  return areas.slice(0, Math.max(1, Math.min(limit, 50)));
+}
+
+export async function saveContractHeaderDraft(contractId, header) {
+  const response = await apiClient.post(`/contracts/draft/${contractId}/header`, header);
   return response.data;
 }
 

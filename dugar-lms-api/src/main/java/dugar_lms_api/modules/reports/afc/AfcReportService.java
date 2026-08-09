@@ -20,7 +20,7 @@ public class AfcReportService {
 
     public AfcReportResponse getReport(AfcReportRequest request, Authentication authentication) {
         AfcReportRequest validated = validate(request);
-        AfcReportSource source = repository.findSource(validated.loanNumber())
+        AfcReportSource source = repository.findSource(validated.loanNumber(), validated.areaCode())
             .orElseThrow(() -> new IllegalArgumentException("Loan Number not found"));
         List<AfcRepaymentSlab> slabs = repository.findRepaymentSlabs(source.contractId());
         List<AfcReceipt> receipts = repository.findReceipts(source, validated.asOnDate());
@@ -40,7 +40,11 @@ public class AfcReportService {
         if (request.asOnDate() == null) {
             throw new IllegalArgumentException("As On Date is required");
         }
-        return new AfcReportRequest(request.loanNumber().trim(), request.asOnDate());
+        return new AfcReportRequest(request.loanNumber().trim(), request.asOnDate(), clean(request.areaCode()));
+    }
+
+    private String clean(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private String auditUser(Authentication authentication) {

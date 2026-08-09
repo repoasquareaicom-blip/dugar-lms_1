@@ -2,6 +2,7 @@ package dugar_lms_api.modules.contracts.controller;
 
 import dugar_lms_api.modules.contracts.dto.ContractPartyDraftRequest;
 import dugar_lms_api.modules.contracts.dto.ContractPartyDraftResponse;
+import dugar_lms_api.modules.contracts.dto.ContractHeaderDraftDto;
 import dugar_lms_api.modules.contracts.dto.ContractAssetDraftDto;
 import dugar_lms_api.modules.contracts.dto.ContractCoLendingDraftDto;
 import dugar_lms_api.modules.contracts.dto.ContractDocumentationDraftDto;
@@ -16,14 +17,17 @@ import dugar_lms_api.modules.contracts.service.ContractPartyDraftService;
 import dugar_lms_api.modules.contracts.service.ContractWorkflowService;
 import org.springframework.security.core.Authentication;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/contracts/draft")
@@ -63,6 +67,15 @@ public class ContractPartyDraftController {
     @GetMapping("/{contractId}/parties")
     public ResponseEntity<List<PartyDraftDto>> getParties(@PathVariable Long contractId) {
         return ResponseEntity.ok(contractPartyDraftService.getPartyDetails(contractId));
+    }
+
+    @PostMapping("/{contractId}/header")
+    public ResponseEntity<ContractHeaderDraftDto> saveHeader(
+        @PathVariable Long contractId,
+        @RequestBody ContractHeaderDraftDto request,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(contractPartyDraftService.saveHeader(contractId, request, authentication));
     }
 
     @GetMapping("/{contractId}/asset")
@@ -145,5 +158,10 @@ public class ContractPartyDraftController {
     ) {
         contractWorkflowService.updateStatus(contractId, request.status(), authentication);
         return ResponseEntity.noContent().build();
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> validationError(IllegalArgumentException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", exception.getMessage()));
     }
 }

@@ -23,6 +23,7 @@ public class ContractFinancialDraftRepository {
             c.insurance_deposit,
             c.total_contract_value,
             c.repayment_terms,
+            c.first_emi_date,
             c.moratorium_months,
             c.repayment_type,
             cd.emi_advance,
@@ -55,6 +56,12 @@ public class ContractFinancialDraftRepository {
         ORDER BY sequence_no
         """;
 
+    private static final String FIND_CONTRACT_DATE_SQL = """
+        SELECT contract_date
+        FROM contracts
+        WHERE contract_id = :contractId
+        """;
+
     private static final String UPDATE_CONTRACT_SQL = """
         UPDATE contracts
         SET
@@ -65,6 +72,7 @@ public class ContractFinancialDraftRepository {
             insurance_deposit = :insuranceDeposit,
             total_contract_value = :totalContractValue,
             repayment_terms = :repaymentTerms,
+            first_emi_date = :firstEmiDate,
             moratorium_months = :moratoriumMonths,
             repayment_type = :repaymentType,
             mode_of_payment = :modeOfPayment,
@@ -167,6 +175,7 @@ public class ContractFinancialDraftRepository {
         rs.getBigDecimal("insurance_deposit"),
         rs.getBigDecimal("total_contract_value"),
         rs.getString("repayment_terms"),
+        rs.getObject("first_emi_date", java.time.LocalDate.class),
         rs.getObject("moratorium_months", Integer.class),
         rs.getString("repayment_type"),
         rs.getBigDecimal("emi_advance"),
@@ -207,6 +216,14 @@ public class ContractFinancialDraftRepository {
             FIND_REPAYMENTS_SQL,
             new MapSqlParameterSource().addValue("contractId", contractId),
             REPAYMENT_ROW_MAPPER
+        );
+    }
+
+    public java.time.LocalDate findContractDate(Long contractId) {
+        return namedParameterJdbcTemplate.queryForObject(
+            FIND_CONTRACT_DATE_SQL,
+            new MapSqlParameterSource().addValue("contractId", contractId),
+            java.time.LocalDate.class
         );
     }
 
@@ -274,6 +291,7 @@ public class ContractFinancialDraftRepository {
             financial.insuranceDeposit(),
             financial.totalContractValue(),
             financial.repaymentTerms(),
+            financial.firstEmiDate(),
             financial.moratoriumMonths(),
             financial.repaymentType(),
             financial.emiAdvance(),
@@ -302,6 +320,7 @@ public class ContractFinancialDraftRepository {
             .addValue("insuranceDeposit", financial.insuranceDeposit())
             .addValue("totalContractValue", financial.totalContractValue())
             .addValue("repaymentTerms", clean(financial.repaymentTerms()))
+            .addValue("firstEmiDate", financial.firstEmiDate())
             .addValue("moratoriumMonths", financial.moratoriumMonths())
             .addValue("repaymentType", clean(financial.repaymentType()))
             .addValue("emiAdvance", financial.emiAdvance())

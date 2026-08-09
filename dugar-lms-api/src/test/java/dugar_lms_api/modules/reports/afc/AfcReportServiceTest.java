@@ -16,10 +16,10 @@ class AfcReportServiceTest {
     void validatesLoanNumberAndAsOnDate() {
         AfcReportService service = service(source(), List.of(), List.of());
 
-        assertThatThrownBy(() -> service.getReport(new AfcReportRequest("", LocalDate.now()), null))
+        assertThatThrownBy(() -> service.getReport(new AfcReportRequest("", LocalDate.now(), null), null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Loan Number is required");
-        assertThatThrownBy(() -> service.getReport(new AfcReportRequest("L1", null), null))
+        assertThatThrownBy(() -> service.getReport(new AfcReportRequest("L1", null, null), null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("As On Date is required");
     }
@@ -28,7 +28,7 @@ class AfcReportServiceTest {
     void reportReturnsHeaderAndRowsForPrintEndpointShape() {
         AfcReportService service = service(source(), List.of(new AfcRepaymentSlab(1L, 1, 1, new BigDecimal("400"))), List.of());
 
-        AfcReportResponse response = service.getReport(new AfcReportRequest("L1", LocalDate.of(2026, 1, 1)), null);
+        AfcReportResponse response = service.getReport(new AfcReportRequest("L1", LocalDate.of(2026, 1, 1), null), null);
 
         assertThat(response.header().loanNumber()).isEqualTo("L1");
         assertThat(response.rows()).hasSize(1);
@@ -55,7 +55,7 @@ class AfcReportServiceTest {
         }
 
         @Override
-        public Optional<AfcReportSource> findSource(String loanNumber) {
+        public Optional<AfcReportSource> findSource(String loanNumber, String areaCode) {
             return Optional.ofNullable(source);
         }
 

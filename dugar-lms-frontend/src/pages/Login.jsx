@@ -4,8 +4,6 @@ import { Lock, User, Eye, EyeOff, Loader2, ShieldCheck, ChevronRight, Activity, 
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import apiClient, { saveCleanAuthToken } from '../api/apiClient';
 import { normalizeMenuTree } from '../utils/menuNormalizer';
-import logoWhite from '../assets/images/logo-white.png';
-import logoIcon from '../assets/images/logo-icon.png';
 
 const Login = () => {
     const [isSplash, setIsSplash] = useState(true);
@@ -89,8 +87,10 @@ const Login = () => {
                                 transition={{ duration: 1 }}
                                 className="mb-16"
                             >
-                                <img src={logoWhite} alt="Dugar Loan Edge" className="mx-auto h-20 w-auto object-contain" />
-                                <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent mt-4" />
+                                <div className="text-5xl font-black tracking-[0.18em] uppercase text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-white to-emerald-300 drop-shadow-[0_0_24px_rgba(34,211,238,0.45)]">
+                                    ProLMS
+                                </div>
+                                <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-emerald-400/60 to-transparent mt-4" />
                             </Motion.div>
 
                             {/* Technical Status Bullets - Cyan & Bold */}
@@ -145,24 +145,25 @@ const Login = () => {
                             <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-600/10 blur-[80px] -mr-32 -mt-32" />
                             
                             <div className="relative z-10">
-                                <img src={logoIcon} alt="Dugar Loan Edge" className="mb-8 h-20 w-auto object-contain" />
+                                <div className="mb-8 text-3xl font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-white to-emerald-300">
+                                    ProLMS
+                                </div>
                                 <p className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.3em] mb-8">Access Portal</p>
                                 <h2 className="text-4xl font-light text-white leading-tight">
                                     System<br /><span className="font-bold text-cyan-400">Authorization</span>
                                 </h2>
                             </div>
 
-                            <div className="relative z-10 space-y-4">
-                                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-md">
-                                    <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1">Active Environment</p>
-                                    <p className="text-[11px] text-cyan-200 font-mono">React Front-End + PHP + MySQL</p>
-                                </div>
-                                <p className="text-[9px] text-slate-500 font-medium uppercase tracking-[0.2em] ml-1">© 2026 asquareai.com</p>
+                            <div className="relative z-10">
+                                <p className="text-[9px] text-slate-500 font-medium uppercase tracking-[0.2em] ml-1">Copyright 2026 asquareai.com</p>
                             </div>
                         </div>
 
                         {/* Login Form Section */}
                         <div className="flex-1 p-10 lg:p-14 flex flex-col justify-center bg-white">
+                            <div className="mb-8 self-start text-2xl font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-slate-900 via-cyan-700 to-emerald-600 md:hidden">
+                                ProLMS
+                            </div>
                             <div className="mb-10 flex items-center justify-between">
                                 <div>
                                     <h3 className="text-2xl font-black text-slate-900 tracking-tight">Login</h3>

@@ -28,6 +28,9 @@ dugar-lms-api/.mvn/wrapper/maven-wrapper.jar
 dugar-lms-api/.idea/
 dugar-lms-api/.vscode/
 dugar-lms-api/*.iml
+dugar-lms-api/cred
+dugar-lms-api/docs/*.pem
+dugar-lms-api/docs/*.ppk
 
 .DS_Store
 Thumbs.db

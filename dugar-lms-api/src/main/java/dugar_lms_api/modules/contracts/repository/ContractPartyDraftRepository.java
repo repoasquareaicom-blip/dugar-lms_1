@@ -123,6 +123,7 @@ public class ContractPartyDraftRepository {
             contract_type,
             contract_number,
             legacy_contract_number,
+            contract_date,
             borrower_code,
             co_applicant_code,
             guarantor_code,
@@ -138,6 +139,7 @@ public class ContractPartyDraftRepository {
             'HP',
             :contractNumber,
             :contractNumber,
+            :contractDate,
             :borrowerCode,
             :coApplicantCode,
             :guarantorCode,
@@ -152,6 +154,8 @@ public class ContractPartyDraftRepository {
     private static final String UPDATE_CONTRACT_DRAFT_SQL = """
         UPDATE contracts
         SET
+            contract_number = :contractNumber,
+            contract_date = :contractDate,
             borrower_code = :borrowerCode,
             co_applicant_code = :coApplicantCode,
             guarantor_code = :guarantorCode,
@@ -170,10 +174,33 @@ public class ContractPartyDraftRepository {
         WHERE contract_id = :contractId
         """;
 
+    private static final String UPDATE_CONTRACT_HEADER_SQL = """
+        UPDATE contracts
+        SET
+            contract_number = :contractNumber,
+            contract_date = :contractDate,
+            updated_by = :updatedBy,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE contract_id = :contractId
+        """;
+
     private static final String FIND_CONTRACT_NUMBER_SQL = """
         SELECT contract_number
         FROM contracts
         WHERE contract_id = :contractId
+        """;
+
+    private static final String FIND_CONTRACT_DATE_SQL = """
+        SELECT contract_date
+        FROM contracts
+        WHERE contract_id = :contractId
+        """;
+
+    private static final String CONTRACT_NUMBER_EXISTS_SQL = """
+        SELECT COUNT(*)
+        FROM contracts
+        WHERE UPPER(TRIM(COALESCE(contract_number, ''))) = UPPER(TRIM(:contractNumber))
+          AND (:contractId IS NULL OR contract_id <> :contractId)
         """;
 
     private static final String FIND_CONTRACT_PARTIES_SQL = """
@@ -307,6 +334,7 @@ public class ContractPartyDraftRepository {
         Long contractId,
         Long auditId,
         String contractNumber,
+        java.time.LocalDate contractDate,
         String borrowerCode,
         String coApplicantCode,
         String guarantorCode,
@@ -316,11 +344,14 @@ public class ContractPartyDraftRepository {
         namedParameterJdbcTemplate.update(
             INSERT_CONTRACT_DRAFT_SQL,
             contractParams(contractId, auditId, contractNumber, borrowerCode, coApplicantCode, guarantorCode, guarantor2Code, updatedBy)
+                .addValue("contractDate", contractDate)
         );
     }
 
     public void updateContractDraft(
         Long contractId,
+        String contractNumber,
+        java.time.LocalDate contractDate,
         String borrowerCode,
         String coApplicantCode,
         String guarantorCode,
@@ -329,7 +360,24 @@ public class ContractPartyDraftRepository {
     ) {
         namedParameterJdbcTemplate.update(
             UPDATE_CONTRACT_DRAFT_SQL,
-            contractParams(contractId, null, null, borrowerCode, coApplicantCode, guarantorCode, guarantor2Code, updatedBy)
+            contractParams(contractId, null, contractNumber, borrowerCode, coApplicantCode, guarantorCode, guarantor2Code, updatedBy)
+                .addValue("contractDate", contractDate)
+        );
+    }
+
+    public void updateContractHeader(
+        Long contractId,
+        String contractNumber,
+        java.time.LocalDate contractDate,
+        String updatedBy
+    ) {
+        namedParameterJdbcTemplate.update(
+            UPDATE_CONTRACT_HEADER_SQL,
+            new MapSqlParameterSource()
+                .addValue("contractId", contractId)
+                .addValue("contractNumber", contractNumber)
+                .addValue("contractDate", contractDate)
+                .addValue("updatedBy", updatedBy)
         );
     }
 
@@ -339,6 +387,25 @@ public class ContractPartyDraftRepository {
             new MapSqlParameterSource().addValue("contractId", contractId),
             String.class
         );
+    }
+
+    public java.time.LocalDate findContractDate(Long contractId) {
+        return namedParameterJdbcTemplate.queryForObject(
+            FIND_CONTRACT_DATE_SQL,
+            new MapSqlParameterSource().addValue("contractId", contractId),
+            java.time.LocalDate.class
+        );
+    }
+
+    public boolean contractNumberExistsForOtherContract(String contractNumber, Long contractId) {
+        Integer count = namedParameterJdbcTemplate.queryForObject(
+            CONTRACT_NUMBER_EXISTS_SQL,
+            new MapSqlParameterSource()
+                .addValue("contractNumber", contractNumber)
+                .addValue("contractId", contractId),
+            Integer.class
+        );
+        return count != null && count > 0;
     }
 
     public List<PartyDraftDto> findContractParties(Long contractId) {

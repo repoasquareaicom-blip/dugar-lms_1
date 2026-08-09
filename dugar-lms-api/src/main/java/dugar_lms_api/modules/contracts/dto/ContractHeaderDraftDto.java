@@ -1,12 +1,10 @@
 package dugar_lms_api.modules.contracts.dto;
 
 import java.time.LocalDate;
-import java.util.List;
 
-public record ContractPartyDraftRequest(
+public record ContractHeaderDraftDto(
     Long contractId,
     String contractNumber,
-    LocalDate contractDate,
-    List<PartyDraftDto> parties
+    LocalDate contractDate
 ) {
 }

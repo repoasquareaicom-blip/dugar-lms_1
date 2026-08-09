@@ -1,6 +1,7 @@
 package dugar_lms_api.modules.contracts.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 public record ContractFinancialDraftDto(
@@ -12,6 +13,7 @@ public record ContractFinancialDraftDto(
     BigDecimal insuranceDeposit,
     BigDecimal totalContractValue,
     String repaymentTerms,
+    LocalDate firstEmiDate,
     Integer moratoriumMonths,
     String repaymentType,
     BigDecimal emiAdvance,

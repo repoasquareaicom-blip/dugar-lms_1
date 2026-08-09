@@ -2,6 +2,7 @@ package dugar_lms_api.modules.contracts.service;
 
 import dugar_lms_api.modules.contracts.dto.ContractPartyDraftRequest;
 import dugar_lms_api.modules.contracts.dto.ContractPartyDraftResponse;
+import dugar_lms_api.modules.contracts.dto.ContractHeaderDraftDto;
 import dugar_lms_api.modules.contracts.dto.PartyDraftDto;
 import dugar_lms_api.modules.contracts.dto.PartyDraftSaveResult;
 import dugar_lms_api.modules.contracts.repository.ContractPartyDraftRepository;
@@ -28,7 +29,7 @@ public class ContractPartyDraftService {
         String updatedBy = auditUser(authentication);
         List<PartyDraftSaveResult> results = new ArrayList<>();
         if (request == null || request.parties() == null) {
-            return new ContractPartyDraftResponse(null, null, false, results);
+            return new ContractPartyDraftResponse(null, null, null, false, results);
         }
 
         for (PartyDraftDto party : request.parties()) {
@@ -55,16 +56,21 @@ public class ContractPartyDraftService {
         ContractDraftLink link = linkFrom(results);
         Long contractId = request.contractId();
         boolean contractCreated = false;
-        String contractNumber;
+        String contractNumber = clean(request.contractNumber());
+        java.time.LocalDate contractDate = request.contractDate();
 
         if (contractId == null) {
             contractId = contractPartyDraftRepository.nextContractId();
             Long auditId = contractPartyDraftRepository.nextContractAuditId();
-            contractNumber = "ND" + String.format("%06d", contractId);
+            if (contractNumber == null) {
+                throw new IllegalArgumentException("Contract number is required.");
+            }
+            validateUniqueContractNumber(contractNumber, contractId);
             contractPartyDraftRepository.insertContractDraft(
                 contractId,
                 auditId,
                 contractNumber,
+                contractDate,
                 link.borrowerCode(),
                 link.coApplicantCode(),
                 link.guarantorCode(),
@@ -73,32 +79,53 @@ public class ContractPartyDraftService {
             );
             contractCreated = true;
         } else {
+            if (contractNumber == null) {
+                contractNumber = contractPartyDraftRepository.findContractNumber(contractId);
+            }
+            validateUniqueContractNumber(contractNumber, contractId);
             contractPartyDraftRepository.updateContractDraft(
                 contractId,
+                contractNumber,
+                contractDate,
                 link.borrowerCode(),
                 link.coApplicantCode(),
                 link.guarantorCode(),
                 link.guarantor2Code(),
                 updatedBy
             );
-            contractNumber = contractPartyDraftRepository.findContractNumber(contractId);
         }
 
-        return new ContractPartyDraftResponse(contractId, contractNumber, contractCreated, results);
+        return new ContractPartyDraftResponse(contractId, contractNumber, contractDate, contractCreated, results);
     }
 
     public ContractPartyDraftResponse getParties(Long contractId) {
         String contractNumber = contractPartyDraftRepository.findContractNumber(contractId);
+        java.time.LocalDate contractDate = contractPartyDraftRepository.findContractDate(contractId);
         List<PartyDraftSaveResult> parties = contractPartyDraftRepository.findContractParties(contractId)
             .stream()
             .map((party) -> new PartyDraftSaveResult(party.role(), party.partyCode(), partyTypeForRole(party.role()), false))
             .toList();
 
-        return new ContractPartyDraftResponse(contractId, contractNumber, false, parties);
+        return new ContractPartyDraftResponse(contractId, contractNumber, contractDate, false, parties);
     }
 
     public List<PartyDraftDto> getPartyDetails(Long contractId) {
         return contractPartyDraftRepository.findContractParties(contractId);
+    }
+
+    @Transactional
+    public ContractHeaderDraftDto saveHeader(Long contractId, ContractHeaderDraftDto request, Authentication authentication) {
+        if (contractId == null) {
+            throw new IllegalArgumentException("Save borrower details before contract header.");
+        }
+        String contractNumber = clean(request == null ? null : request.contractNumber());
+        if (contractNumber == null) {
+            throw new IllegalArgumentException("Contract number is required.");
+        }
+        validateUniqueContractNumber(contractNumber, contractId);
+        java.time.LocalDate contractDate = request.contractDate();
+        contractPartyDraftRepository.updateContractHeader(contractId, contractNumber, contractDate, auditUser(authentication));
+        return new ContractHeaderDraftDto(contractId, contractNumber, contractDate);
     }
 
     private String partyTypeForRole(String role) {
@@ -144,6 +171,15 @@ public class ContractPartyDraftService {
             return null;
         }
         return value.trim();
+    }
+
+    private void validateUniqueContractNumber(String contractNumber, Long contractId) {
+        if (contractNumber == null) {
+            throw new IllegalArgumentException("Contract number is required.");
+        }
+        if (contractPartyDraftRepository.contractNumberExistsForOtherContract(contractNumber, contractId)) {
+            throw new IllegalArgumentException("Contract number already exists.");
+        }
     }
 
     private boolean isBlank(String value) {

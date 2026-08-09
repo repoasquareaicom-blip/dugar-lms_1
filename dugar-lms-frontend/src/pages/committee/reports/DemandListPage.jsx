@@ -10,6 +10,7 @@ const today = new Date().toISOString().slice(0, 10);
 
 const defaultFilters = {
   asOnDate: today,
+  areaCode: '',
   contractNumber: '',
   overdueInstallmentCount: '',
 };
@@ -27,6 +28,13 @@ function excelCell(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function firstValue(row, keys) {
+  for (const key of keys) {
+    if (row[key] !== null && row[key] !== undefined && row[key] !== '') return row[key];
+  }
+  return '';
 }
 
 const pageSizes = [25, 50, 100, 250];
@@ -178,7 +186,7 @@ export default function DemandListPage() {
                 <td>${excelCell(row.borrowerName)}<br/>${excelCell(row.guarantorName)}</td>
                 <td>${excelCell(row.productType)}<br/>${excelCell(row.assetDescription)}<br/>${excelCell(row.registrationOrLocation)}<br/>${excelCell(row.ownerNumber)}<br/>${excelCell(row.vehicleTypeCode || row.usage)}</td>
                 <td style="text-align:right">${excelCell(row.contractValue)}<br/>${excelCell(row.principalOutstanding)}<br/>${excelCell(row.interestOutstanding)}<br/>${excelCell(row.totalOutstanding)}</td>
-                <td style="text-align:right">${excelCell(row.overdueInstallmentCount)}<br/>${excelCell(row.overdueAmount)}<br/>${excelCell(row.overdueFromDate)}<br/>${excelCell(row.overdueEndDate)}</td>
+                <td style="text-align:right">${excelCell(firstValue(row, ['overdueInstallmentCount', 'noOfOverdues', 'numberOfOverdues', 'overdue_count']))}<br/>${excelCell(firstValue(row, ['overdueAmount', 'odAmount', 'overdue_amount']))}<br/>${excelCell(firstValue(row, ['overdueFromDate', 'fromDate', 'overdue_from_date']))}<br/>${excelCell(firstValue(row, ['overdueEndDate', 'endDate', 'overdue_end_date']))}</td>
                 <td style="text-align:right">${excelCell(row.currentDueAmount)}</td>
                 <td>${excelCell(row.currentDueDate)}</td>
               </tr>

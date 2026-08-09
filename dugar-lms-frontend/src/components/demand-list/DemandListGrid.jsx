@@ -38,6 +38,13 @@ function formatMoney(value) {
   return Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function firstValue(row, keys) {
+  for (const key of keys) {
+    if (row[key] !== null && row[key] !== undefined && row[key] !== '') return row[key];
+  }
+  return '';
+}
+
 function lineValues(row, key) {
   switch (key) {
     case 'serialNumber':
@@ -63,10 +70,10 @@ function lineValues(row, key) {
       ];
     case 'overdue':
       return [
-        row.overdueInstallmentCount ?? '',
-        formatMoney(row.overdueAmount),
-        formatDate(row.overdueFromDate),
-        formatDate(row.overdueEndDate),
+        firstValue(row, ['overdueInstallmentCount', 'noOfOverdues', 'numberOfOverdues', 'overdue_count']),
+        formatMoney(firstValue(row, ['overdueAmount', 'odAmount', 'overdue_amount'])),
+        formatDate(firstValue(row, ['overdueFromDate', 'fromDate', 'overdue_from_date'])),
+        formatDate(firstValue(row, ['overdueEndDate', 'endDate', 'overdue_end_date'])),
       ];
     case 'currentDue':
       return [formatMoney(row.currentDueAmount)];

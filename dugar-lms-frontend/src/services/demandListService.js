@@ -9,6 +9,7 @@ function addParam(params, key, value) {
 function paramsFrom(filters = {}, options = {}) {
   const params = {};
   addParam(params, 'asOnDate', filters.asOnDate);
+  addParam(params, 'areaCode', filters.areaCode);
   addParam(params, 'contractNumber', filters.contractNumber);
   addParam(params, 'overdueInstallmentCount', filters.overdueInstallmentCount);
   addParam(params, 'page', options.page);

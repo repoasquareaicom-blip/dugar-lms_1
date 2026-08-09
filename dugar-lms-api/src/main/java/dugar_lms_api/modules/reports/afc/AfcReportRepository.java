@@ -5,6 +5,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Types;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,6 +39,7 @@ public class AfcReportRepository {
               UPPER(TRIM(COALESCE(c.contract_number, ''))) = UPPER(TRIM(:loanNumber))
               OR UPPER(TRIM(COALESCE(c.legacy_contract_number, ''))) = UPPER(TRIM(:loanNumber))
           )
+          AND (:areaCode IS NULL OR UPPER(TRIM(COALESCE(c.area_code, ''))) = UPPER(TRIM(:areaCode)))
         ORDER BY c.contract_id DESC
         LIMIT 1
         """;
@@ -110,10 +112,12 @@ public class AfcReportRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public Optional<AfcReportSource> findSource(String loanNumber) {
+    public Optional<AfcReportSource> findSource(String loanNumber, String areaCode) {
         List<AfcReportSource> rows = jdbcTemplate.query(
             SOURCE_SQL,
-            new MapSqlParameterSource("loanNumber", loanNumber),
+            new MapSqlParameterSource()
+                .addValue("loanNumber", loanNumber, Types.VARCHAR)
+                .addValue("areaCode", areaCode, Types.VARCHAR),
             SOURCE_MAPPER
         );
         return rows.stream().findFirst();
@@ -132,8 +136,8 @@ public class AfcReportRepository {
             RECEIPTS_SQL,
             new MapSqlParameterSource()
                 .addValue("contractId", source.contractId())
-                .addValue("loanNumber", source.loanNumber())
-                .addValue("legacyLoanNumber", source.loanNumber())
+                .addValue("loanNumber", source.loanNumber(), Types.VARCHAR)
+                .addValue("legacyLoanNumber", source.loanNumber(), Types.VARCHAR)
                 .addValue("asOnDate", asOnDate),
             RECEIPT_MAPPER
         );

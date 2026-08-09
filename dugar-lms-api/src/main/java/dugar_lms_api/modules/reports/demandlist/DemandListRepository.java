@@ -181,6 +181,7 @@ public class DemandListRepository {
                 OR LOWER(COALESCE(gm.full_name, '')) LIKE :keyword
                 OR LOWER(COALESCE(c.borrower_code, '')) LIKE :keyword
                 OR LOWER(COALESCE(c.guarantor_code, '')) LIKE :keyword
+                OR LOWER(COALESCE(c.area_code, '')) LIKE :keyword
                 OR LOWER(COALESCE(a.registration_number, '')) LIKE :keyword
                 OR LOWER(COALESCE(c.registration_number, '')) LIKE :keyword
             )

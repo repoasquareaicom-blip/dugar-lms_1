@@ -113,6 +113,16 @@ public class ContractListRepository {
         SELECT COUNT(*)
         """ + FROM_SQL;
 
+    private static final String FIND_AREAS_SQL = """
+        SELECT DISTINCT NULLIF(TRIM(area_code), '') AS area_code
+        FROM contracts
+        WHERE is_active = TRUE
+          AND NULLIF(TRIM(area_code), '') IS NOT NULL
+          AND (:keyword IS NULL OR LOWER(TRIM(area_code)) LIKE :keyword)
+        ORDER BY area_code
+        LIMIT :limit
+        """;
+
     private static final RowMapper<ContractListDto> CONTRACT_LIST_ROW_MAPPER = (rs, rowNum) -> new ContractListDto(
         rs.getLong("contract_id"),
         rs.getString("contract_number"),
@@ -181,6 +191,17 @@ public class ContractListRepository {
         QueryParts queryParts = queryParts(criteria);
         Long total = namedParameterJdbcTemplate.queryForObject(COUNT_SQL + queryParts.whereSql(), queryParts.params(), Long.class);
         return total == null ? 0 : total;
+    }
+
+    public List<String> findAreas(String keyword, int limit) {
+        String cleanedKeyword = normalizeLower(keyword);
+        return namedParameterJdbcTemplate.queryForList(
+            FIND_AREAS_SQL,
+            new MapSqlParameterSource()
+                .addValue("keyword", cleanedKeyword == null ? null : "%" + cleanedKeyword + "%")
+                .addValue("limit", Math.max(1, Math.min(limit, 50))),
+            String.class
+        );
     }
 
     private QueryParts queryParts(ContractListCriteria criteria) {
@@ -284,6 +305,13 @@ public class ContractListRepository {
             return null;
         }
         return value.trim().toUpperCase();
+    }
+
+    private String normalizeLower(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim().toLowerCase();
     }
 
     private void appendGreaterThanOrEqualFilter(StringBuilder whereSql, MapSqlParameterSource params, String column, String paramName, Object value) {

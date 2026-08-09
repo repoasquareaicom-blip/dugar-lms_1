@@ -17,6 +17,8 @@ const DEFAULT_FILTERS = {
   maximumLoanAmount: '',
 };
 const DEFAULT_HIDDEN_COLUMNS = {
+  contractId: false,
+  legacyContractNumber: false,
   vehicleMake: false,
   engineNumber: false,
   chassisNumber: false,
@@ -372,6 +374,7 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
     () => [
       { field: 'serialNumber', headerName: 'S.No', minWidth: 70, align: 'center', headerAlign: 'center' },
       { field: 'contractId', headerName: 'Contract ID', minWidth: 110, align: 'right', headerAlign: 'right', sortable: true },
+      { field: 'contractNumber', headerName: 'Contract No', minWidth: 135, sortable: true },
       { field: 'legacyContractNumber', headerName: 'Legacy Contract No', minWidth: 165, sortable: true },
       { field: 'product', headerName: 'Product', minWidth: 120, sortable: true },
       { field: 'branch', headerName: 'Branch', minWidth: 115, sortable: true },

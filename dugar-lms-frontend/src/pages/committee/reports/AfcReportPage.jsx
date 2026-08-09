@@ -6,7 +6,7 @@ import AfcReportPrintView from '../../../components/afc/AfcReportPrintView';
 import { fetchAfcReport, fetchAfcReportPrint } from '../../../services/afcReportService';
 
 const today = new Date().toISOString().slice(0, 10);
-const defaultFilters = { loanNumber: '', asOnDate: today };
+const defaultFilters = { loanNumber: '', asOnDate: today, areaCode: '' };
 
 function errorMessage(error, fallback) {
   return error?.response?.data?.message || error?.message || fallback;

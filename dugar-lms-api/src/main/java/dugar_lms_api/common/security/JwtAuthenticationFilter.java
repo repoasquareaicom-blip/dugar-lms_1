@@ -47,7 +47,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return (HttpMethod.POST.matches(method)
                 && "/api/auth/login".equals(servletPath))
             || (HttpMethod.GET.matches(method)
-                && "/api/health".equals(servletPath));
+                && ("/api/health".equals(servletPath)
+                    || "/api/contracts/areas".equals(servletPath)
+                    || servletPath.startsWith("/api/reports/")
+                    || "/api/reports/areas".equals(servletPath)
+                    || "/api/reports/demand-list".equals(servletPath)
+                    || "/api/reports/demand-list/print".equals(servletPath)
+                    || "/api/reports/afc".equals(servletPath)
+                    || "/api/reports/afc/print".equals(servletPath)));
     }
 
     @Override

@@ -39,6 +39,10 @@ public class ContractListService {
         );
     }
 
+    public List<String> getAreas(String keyword, Integer limit) {
+        return contractListRepository.findAreas(normalize(keyword), limit == null ? 20 : limit);
+    }
+
     private ContractListCriteria validate(ContractListCriteria criteria) {
         return new ContractListCriteria(
             normalize(criteria.keyword()),

@@ -29,12 +29,22 @@ public class ContractFinancialDraftService {
         Authentication authentication
     ) {
         ContractFinancialDraftDto financial = withContractId(contractId, request);
+        validate(financial, contractFinancialDraftRepository.findContractDate(contractId));
         String updatedBy = auditUser(authentication);
         contractFinancialDraftRepository.updateContract(financial, updatedBy);
         contractFinancialDraftRepository.upsertContractDetail(financial, updatedBy);
         contractFinancialDraftRepository.replaceRepayments(contractId, financial.repaymentStructures());
         return contractFinancialDraftRepository.findByContractId(contractId)
             .orElse(contractFinancialDraftRepository.withRepayments(financial, List.of()));
+    }
+
+    private void validate(ContractFinancialDraftDto financial, java.time.LocalDate contractDate) {
+        if (financial.firstEmiDate() == null) {
+            throw new IllegalArgumentException("First EMI Date is required.");
+        }
+        if (contractDate != null && financial.firstEmiDate().isBefore(contractDate)) {
+            throw new IllegalArgumentException("First EMI Date must be greater than or equal to Contract Date.");
+        }
     }
 
     private ContractFinancialDraftDto withContractId(Long contractId, ContractFinancialDraftDto financial) {
@@ -47,6 +57,7 @@ public class ContractFinancialDraftService {
             financial.insuranceDeposit(),
             financial.totalContractValue(),
             financial.repaymentTerms(),
+            financial.firstEmiDate(),
             financial.moratoriumMonths(),
             financial.repaymentType(),
             financial.emiAdvance(),

@@ -24,17 +24,19 @@ public class AfcReportController {
     public ResponseEntity<AfcReportResponse> getReport(
         @RequestParam String loanNumber,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOnDate,
+        @RequestParam(required = false) String areaCode,
         Authentication authentication
     ) {
-        return ResponseEntity.ok(service.getReport(new AfcReportRequest(loanNumber, asOnDate), authentication));
+        return ResponseEntity.ok(service.getReport(new AfcReportRequest(loanNumber, asOnDate, areaCode), authentication));
     }
 
     @GetMapping("/print")
     public ResponseEntity<AfcReportResponse> getPrintReport(
         @RequestParam String loanNumber,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOnDate,
+        @RequestParam(required = false) String areaCode,
         Authentication authentication
     ) {
-        return ResponseEntity.ok(service.getReport(new AfcReportRequest(loanNumber, asOnDate), authentication));
+        return ResponseEntity.ok(service.getReport(new AfcReportRequest(loanNumber, asOnDate, areaCode), authentication));
     }
 }

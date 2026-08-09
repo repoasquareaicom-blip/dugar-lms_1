@@ -4,6 +4,7 @@ function paramsFrom(filters = {}) {
   return {
     loanNumber: filters.loanNumber,
     asOnDate: filters.asOnDate,
+    areaCode: filters.areaCode,
   };
 }
 

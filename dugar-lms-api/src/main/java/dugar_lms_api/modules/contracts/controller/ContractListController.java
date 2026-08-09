@@ -63,4 +63,12 @@ public class ContractListController {
         );
         return ResponseEntity.ok(contractListService.getContracts(criteria));
     }
+
+    @GetMapping("/areas")
+    public ResponseEntity<java.util.List<String>> listAreas(
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) Integer limit
+    ) {
+        return ResponseEntity.ok(contractListService.getAreas(keyword, limit));
+    }
 }

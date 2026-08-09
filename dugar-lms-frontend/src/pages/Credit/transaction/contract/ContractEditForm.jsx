@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { 
   ArrowLeft, RotateCcw, User, 
   Car, IndianRupee, FileText, Share2, Users, ShieldCheck, Copy, CheckCircle,
-  ChevronRight, ChevronLeft, RotateCcw as ResetIcon, Plus, Trash2, X
+  ChevronRight, ChevronLeft, RotateCcw as ResetIcon, Plus, Trash2, X, Send, Loader2,
+  CalendarDays, AlertCircle
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -15,6 +17,7 @@ import {
   saveContractCoLendingDraft,
   saveContractDocumentationDraft,
   saveContractFinancialDraft,
+  saveContractHeaderDraft,
   saveContractPartyDraft,
   updateContractStatus,
 } from '../../../../services/contractsService';
@@ -26,11 +29,68 @@ function displayValue(value) {
   return String(value);
 }
 
+function displayContractNumber(contract) {
+  return contract?.contractNumber || contract?.legacyContractNumber || contract?.contractId || 'New';
+}
+
 function formatDateInput(value) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return date.toISOString().slice(0, 10);
+}
+
+function formatDateDisplay(value) {
+  if (/^\d{2}-\d{2}-\d{4}$/.test(String(value || '').trim())) {
+    return String(value).trim();
+  }
+  const isoValue = formatDateInput(value);
+  if (!isoValue) return '';
+  const [year, month, day] = isoValue.split('-');
+  return `${day}-${month}-${year}`;
+}
+
+function parseDateDisplay(value, label) {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const displayMatch = trimmed.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  const [, year, month, day] = isoMatch || [];
+  const [, displayDay, displayMonth, displayYear] = displayMatch || [];
+  const nextYear = year || displayYear;
+  const nextMonth = month || displayMonth;
+  const nextDay = day || displayDay;
+
+  if (!nextYear || !nextMonth || !nextDay) {
+    throw new Error(`${label} must be in dd-mm-yyyy format.`);
+  }
+
+  const isoValue = `${nextYear}-${nextMonth}-${nextDay}`;
+  const date = new Date(`${isoValue}T00:00:00`);
+  if (
+    Number.isNaN(date.getTime())
+    || date.getFullYear() !== Number(nextYear)
+    || date.getMonth() + 1 !== Number(nextMonth)
+    || date.getDate() !== Number(nextDay)
+  ) {
+    throw new Error(`${label} must be a valid date.`);
+  }
+  return isoValue;
+}
+
+function dateInputValue(value) {
+  if (!value) return '';
+  try {
+    return parseDateDisplay(value, 'Date') || '';
+  } catch {
+    return '';
+  }
+}
+
+function displayDateFromInput(value) {
+  if (!value) return '';
+  const [year, month, day] = value.split('-');
+  return year && month && day ? `${day}-${month}-${year}` : '';
 }
 
 function parseRepaymentSchedule(value) {
@@ -334,6 +394,148 @@ const FormField = ({
   );
 };
 
+const DatePickerField = ({
+  label,
+  name,
+  value,
+  onChange,
+  className = '',
+  readOnly = false,
+  required = false,
+  compact = false,
+}) => {
+  const pickerRef = useRef(null);
+  const [localValue, setLocalValue] = useState(displayValue(value));
+  const isControlled = typeof onChange === 'function';
+  const displayValueForInput = isControlled ? displayValue(value) : localValue;
+
+  useEffect(() => {
+    if (!isControlled) setLocalValue(displayValue(value));
+  }, [isControlled, value]);
+
+  const setDateValue = (nextValue) => {
+    if (isControlled) {
+      onChange({ target: { name, value: nextValue } });
+    } else {
+      setLocalValue(nextValue);
+    }
+  };
+
+  const openPicker = () => {
+    if (readOnly) return;
+    const picker = pickerRef.current;
+    if (typeof picker?.showPicker === 'function') {
+      picker.showPicker();
+    } else {
+      picker?.click();
+    }
+  };
+
+  const inputClass = compact
+    ? 'h-8 w-36 bg-white px-2 pr-9 text-[13px] font-black text-slate-900 outline-none read-only:bg-slate-100'
+    : `border border-black/60 px-2 py-1 pr-10 text-[16px] font-black text-black/90 focus:border-blue-600 outline-none rounded-sm w-full transition-all ${readOnly ? 'bg-slate-100 cursor-not-allowed' : 'bg-white'}`;
+
+  const field = (
+    <div className="relative">
+      <input
+        type="text"
+        name={name}
+        value={displayValueForInput}
+        onChange={(event) => setDateValue(event.target.value)}
+        placeholder="dd-mm-yyyy"
+        pattern="[0-9]{2}-[0-9]{2}-[0-9]{4}"
+        required={required}
+        readOnly={readOnly}
+        title={`${label} must be in dd-mm-yyyy format.`}
+        className={inputClass}
+      />
+      <input
+        ref={pickerRef}
+        type="date"
+        tabIndex={-1}
+        value={dateInputValue(displayValueForInput)}
+        onChange={(event) => setDateValue(displayDateFromInput(event.target.value))}
+        className="pointer-events-none absolute right-0 top-0 h-px w-px opacity-0"
+        aria-hidden="true"
+      />
+      <button
+        type="button"
+        onClick={openPicker}
+        disabled={readOnly}
+        className="absolute right-1 top-1/2 flex h-6 w-7 -translate-y-1/2 items-center justify-center rounded-sm border border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
+        title={`Pick ${label}`}
+      >
+        <CalendarDays size={14} />
+      </button>
+    </div>
+  );
+
+  if (compact) return field;
+
+  return (
+    <div className={`flex flex-col gap-1 ${className}`} style={{ fontFamily: 'Calibri, sans-serif' }}>
+      <label className="text-[14px] text-black/90 font-normal uppercase tracking-tight leading-tight">
+        {label}
+        {required && <span className="ml-1 font-black text-red-600">*</span>}
+      </label>
+      {field}
+    </div>
+  );
+};
+
+const MessageModal = ({ message, onClose }) => {
+  const isError = /^unable|required|save|first|contract|borrower|asset|financial|documentation|co lending/i.test(message || '')
+    && !/saved|updated/i.test(message || '');
+  const Icon = isError ? AlertCircle : CheckCircle;
+
+  return (
+    <AnimatePresence>
+      {message && (
+        <motion.div
+          className="fixed inset-0 z-[350] flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-[2px]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 28, scale: 0.92, rotateX: -10 }}
+            animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
+            exit={{ opacity: 0, y: 18, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 26 }}
+            className="relative w-full max-w-md overflow-hidden rounded-lg border border-white/70 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.35)]"
+          >
+            <div className={`h-1.5 ${isError ? 'bg-red-600' : 'bg-emerald-600'}`} />
+            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-blue-50 to-transparent" />
+            <div className="relative p-6 text-center">
+              <motion.div
+                initial={{ scale: 0.7, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 0.08, type: 'spring', stiffness: 420, damping: 18 }}
+                className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border ${isError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
+              >
+                <Icon size={30} strokeWidth={2.5} />
+              </motion.div>
+              <div className={`mb-2 text-[15px] font-black uppercase tracking-wide ${isError ? 'text-red-800' : 'text-emerald-800'}`}>
+                {isError ? 'Attention Required' : 'Success'}
+              </div>
+              <p className="mx-auto max-w-sm text-[14px] font-bold leading-relaxed text-slate-800">
+                {message}
+              </p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-5 inline-flex h-9 min-w-24 items-center justify-center rounded-md border border-blue-700 bg-blue-700 px-5 text-[12px] font-black uppercase tracking-wide text-white shadow-md transition-all hover:bg-blue-900 active:scale-95"
+              >
+                OK
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
 const FormSelect = ({ label, name, options, value, onChange, className = "", readOnly = false, required = false }) => {
   const selectProps = onChange
     ? { value: value || '', onChange }
@@ -537,8 +739,10 @@ const ContractEditForm = () => {
   const [draftContract, setDraftContract] = useState({
     contractId: selectedContract.contractId || null,
     contractNumber: selectedContract.contractNumber || selectedContract.legacyContractNumber || null,
+    contractDate: formatDateDisplay(selectedContract.contractDate),
   });
   const [savingDraft, setSavingDraft] = useState(false);
+  const [loadingDraftCount, setLoadingDraftCount] = useState(0);
   const [draftMessage, setDraftMessage] = useState('');
   const [partyDetails, setPartyDetails] = useState([]);
   const [partyLoadVersion, setPartyLoadVersion] = useState(0);
@@ -574,6 +778,16 @@ const ContractEditForm = () => {
   const [productType, setProductType] = useState('');
   const [assetSecured, setAssetSecured] = useState('Secured');
 
+  const startDraftLoad = () => {
+    let completed = false;
+    setLoadingDraftCount((count) => count + 1);
+    return () => {
+      if (completed) return;
+      completed = true;
+      setLoadingDraftCount((count) => Math.max(0, count - 1));
+    };
+  };
+
   useEffect(() => {
     if (!shouldPrint) return undefined;
 
@@ -593,6 +807,7 @@ const ContractEditForm = () => {
     if (!draftContract.contractId) return undefined;
 
     let active = true;
+    const finishDraftLoad = startDraftLoad();
     fetchContractPartyDraft(draftContract.contractId)
       .then((parties) => {
         if (!active) return;
@@ -613,10 +828,14 @@ const ContractEditForm = () => {
       })
       .catch(() => {
         if (active) setDraftMessage('Unable to load saved party details.');
+      })
+      .finally(() => {
+        finishDraftLoad();
       });
 
     return () => {
       active = false;
+      finishDraftLoad();
     };
   }, [draftContract.contractId]);
 
@@ -624,6 +843,7 @@ const ContractEditForm = () => {
     if (!draftContract.contractId) return undefined;
 
     let active = true;
+    const finishDraftLoad = startDraftLoad();
     fetchContractFinancialDraft(draftContract.contractId)
       .then((financial) => {
         if (!active) return;
@@ -639,10 +859,14 @@ const ContractEditForm = () => {
       })
       .catch(() => {
         if (active) setDraftMessage('Unable to load saved financial terms.');
+      })
+      .finally(() => {
+        finishDraftLoad();
       });
 
     return () => {
       active = false;
+      finishDraftLoad();
     };
   }, [draftContract.contractId, selectedContract.repaymentSchedule]);
 
@@ -661,6 +885,7 @@ const ContractEditForm = () => {
     if (!draftContract.contractId) return undefined;
 
     let active = true;
+    const finishDraftLoad = startDraftLoad();
     fetchContractDocumentationDraft(draftContract.contractId)
       .then((documentation) => {
         if (!active) return;
@@ -672,10 +897,14 @@ const ContractEditForm = () => {
       })
       .catch(() => {
         if (active) setDraftMessage('Unable to load saved documentation details.');
+      })
+      .finally(() => {
+        finishDraftLoad();
       });
 
     return () => {
       active = false;
+      finishDraftLoad();
     };
   }, [draftContract.contractId]);
 
@@ -683,6 +912,7 @@ const ContractEditForm = () => {
     if (!draftContract.contractId) return undefined;
 
     let active = true;
+    const finishDraftLoad = startDraftLoad();
     fetchContractAssetDraft(draftContract.contractId)
       .then((asset) => {
         if (!active) return;
@@ -696,10 +926,14 @@ const ContractEditForm = () => {
       })
       .catch(() => {
         if (active) setDraftMessage('Unable to load saved asset details.');
+      })
+      .finally(() => {
+        finishDraftLoad();
       });
 
     return () => {
       active = false;
+      finishDraftLoad();
     };
   }, [draftContract.contractId]);
 
@@ -707,6 +941,7 @@ const ContractEditForm = () => {
     if (!draftContract.contractId) return undefined;
 
     let active = true;
+    const finishDraftLoad = startDraftLoad();
     fetchContractCoLendingDraft(draftContract.contractId)
       .then((coLending) => {
         if (!active) return;
@@ -715,10 +950,14 @@ const ContractEditForm = () => {
       })
       .catch(() => {
         if (active) setDraftMessage('Unable to load saved co lending details.');
+      })
+      .finally(() => {
+        finishDraftLoad();
       });
 
     return () => {
       active = false;
+      finishDraftLoad();
     };
   }, [draftContract.contractId]);
 
@@ -764,6 +1003,7 @@ const ContractEditForm = () => {
 
   const saveBorrowerDraft = async () => {
     if (isViewMode) return;
+    validateContractHeader();
 
     const formContainer = document.querySelector('[data-contract-form-scroll]');
     const invalidField = formContainer?.querySelector(':invalid');
@@ -776,6 +1016,8 @@ const ContractEditForm = () => {
     const formData = formValuesFrom(formContainer);
     const response = await saveContractPartyDraft({
       contractId: draftContract.contractId,
+      contractNumber: draftContract.contractNumber,
+      contractDate: parseDateDisplay(draftContract.contractDate, 'Contract Date'),
       parties: [
         buildPartyDraft(formData, 'primary', 'applicant'),
         buildPartyDraft(formData, 'coApp', 'coApplicant'),
@@ -796,9 +1038,26 @@ const ContractEditForm = () => {
     setDraftContract({
       contractId: response.contractId || draftContract.contractId,
       contractNumber: response.contractNumber || draftContract.contractNumber,
+      contractDate: formatDateDisplay(response.contractDate || draftContract.contractDate),
     });
     setDraftMessage(`Draft contract ${response.contractNumber || draftContract.contractNumber || ''} saved: ${results.map((result) => result.partyCode).join(', ')}`);
     return response.contractId || draftContract.contractId;
+  };
+
+  const saveHeaderDraft = async () => {
+    if (isViewMode || !draftContract.contractId) return draftContract.contractId;
+    validateContractHeader();
+    const response = await saveContractHeaderDraft(draftContract.contractId, {
+      contractId: draftContract.contractId,
+      contractNumber: draftContract.contractNumber,
+      contractDate: parseDateDisplay(draftContract.contractDate, 'Contract Date'),
+    });
+    setDraftContract((current) => ({
+      ...current,
+      contractNumber: response.contractNumber || current.contractNumber,
+      contractDate: formatDateDisplay(response.contractDate || current.contractDate),
+    }));
+    return draftContract.contractId;
   };
 
   const buildAssetDraft = (formData) => ({
@@ -876,6 +1135,7 @@ const ContractEditForm = () => {
     insuranceDeposit: numberFormValue(formData, 'financial.insuranceDeposit'),
     totalContractValue: numberStateValue(financialInputs.totalContractValue) || numberFormValue(formData, 'financial.totalContractValue'),
     repaymentTerms: formValue(formData, 'financial.repaymentTerms'),
+    firstEmiDate: parseDateDisplay(formValue(formData, 'financial.firstEmiDate'), 'First EMI Date'),
     moratoriumMonths: moratoriumMonths(formValue(formData, 'financial.moratorium')),
     repaymentType: formValue(formData, 'financial.repaymentType'),
     emiAdvance: numberFormValue(formData, 'financial.emiAdvance'),
@@ -901,11 +1161,16 @@ const ContractEditForm = () => {
 
   const saveFinancialDraft = async () => {
     if (isViewMode) return;
+    validateContractHeader();
     if (!draftContract.contractId) {
       throw new Error('Save borrower details before financial terms.');
     }
 
     const formContainer = validateVisibleFields();
+    if (!formValue(formValuesFrom(formContainer), 'financial.firstEmiDate')) {
+      throw new Error('First EMI Date is required.');
+    }
+    validateFirstEmiDate(formValuesFrom(formContainer));
     const response = await saveContractFinancialDraft(
       draftContract.contractId,
       buildFinancialDraft(formValuesFrom(formContainer))
@@ -915,6 +1180,23 @@ const ContractEditForm = () => {
     setFinancialLoadVersion((value) => value + 1);
     setDraftMessage(`Financial terms saved for draft contract ${draftContract.contractNumber || draftContract.contractId}.`);
     return draftContract.contractId;
+  };
+
+  const validateContractHeader = () => {
+    if (!draftContract.contractNumber || !draftContract.contractNumber.trim()) {
+      throw new Error('Contract number is required.');
+    }
+    if (draftContract.contractDate) {
+      parseDateDisplay(draftContract.contractDate, 'Contract Date');
+    }
+  };
+
+  const validateFirstEmiDate = (formData) => {
+    const firstEmiDate = parseDateDisplay(formValue(formData, 'financial.firstEmiDate'), 'First EMI Date');
+    const contractDate = parseDateDisplay(draftContract.contractDate, 'Contract Date');
+    if (contractDate && firstEmiDate < contractDate) {
+      throw new Error('First EMI Date must be greater than or equal to Contract Date.');
+    }
   };
 
   const addRepaymentRow = () => {
@@ -1079,6 +1361,7 @@ const ContractEditForm = () => {
     if (activeTab === 'Borrower Details') {
       return saveBorrowerDraft();
     }
+    await saveHeaderDraft();
     if (activeTab === 'Asset Details') {
       return saveAssetDraft();
     }
@@ -1240,6 +1523,7 @@ const ContractEditForm = () => {
     processingCharges: financialDetails.processingCharges,
     rcHoldingAmount: financialDetails.rcHoldingAmount,
     repaymentTerms: financialDetails.repaymentTerms,
+    firstEmiDate: formatDateDisplay(financialDetails.firstEmiDate || selectedContract.firstEmiDate),
     repaymentType: financialDetails.repaymentType,
     rtoCharges: financialDetails.rtoCharges,
     stampDuty: financialDetails.stampDuty,
@@ -1272,44 +1556,84 @@ const ContractEditForm = () => {
   };
   const activePreview = activePreviewIndex === null ? null : documentUploads[activePreviewIndex];
   const activePreviewSrc = activePreview?.previewUrl || activePreview?.storagePath;
+  const visibleContractNumber = draftContract.contractNumber || displayContractNumber(selectedContract);
+  const showBusyOverlay = savingDraft || loadingDraftCount > 0;
+  const busyOverlayLabel = savingDraft ? 'Saving contract...' : 'Loading contract...';
 
   return (
     <div key={`${selectedContract.contractId || 'new'}-${formMode}`} className="h-full min-h-0 w-full bg-[#F0F2F5] text-black font-sans flex flex-col relative overflow-hidden">
+      {showBusyOverlay && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/25 backdrop-blur-[1px]">
+          <div className="flex min-w-[220px] flex-col items-center gap-3 rounded-md border border-blue-200 bg-white px-8 py-6 shadow-2xl">
+            <Loader2 size={38} className="animate-spin text-blue-800" strokeWidth={2.5} />
+            <div className="text-[13px] font-black uppercase tracking-wide text-blue-900">
+              {busyOverlayLabel}
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* 1. TOP ACTION BAR (Sticky) */}
       <div 
-        className="shrink-0 bg-white border-b border-black/60 px-4 py-2 flex items-center justify-between shadow-md z-[100]"
+        className="shrink-0 bg-white border-b border-black/60 px-3 py-1.5 flex items-center justify-between gap-2 shadow-md z-[100]"
         style={{ fontFamily: 'Calibri, Candara, Segoe UI, Optima, Arial, sans-serif' }}
       >
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 items-center gap-2">
           <button 
             onClick={() => navigate(-1)} 
-            className="hover:bg-blue-50 p-1.5 rounded-full transition-colors border border-transparent hover:border-black/10"
+            className="hover:bg-blue-50 p-1 rounded-full transition-colors border border-transparent hover:border-black/10"
           >
-            <ArrowLeft size={18} className="text-black/90" />
+            <ArrowLeft size={17} className="text-black/90" />
           </button>
           
-          <h1 className="text-[24px] font-bold text-blue-900 whitespace-nowrap">
-            {isCreateMode ? 'Create Contract' : isViewMode ? 'View Contract' : 'Edit Contract'} - #{draftContract.contractNumber || selectedContract.contractId || selectedContract.legacyContractNumber || 'New'}
+          <h1 className="text-[16px] font-bold text-blue-900 whitespace-nowrap">
+            {isCreateMode ? 'Create Contract' : isViewMode ? 'View Contract' : 'Edit Contract'}
           </h1>
+
+          <div className="flex items-center overflow-hidden border border-blue-900 rounded shadow-sm">
+            <span className="bg-blue-900 text-white px-2 h-8 flex items-center text-[11px] font-black uppercase tracking-tight">
+              Contract No
+            </span>
+            <input
+              value={draftContract.contractNumber || ''}
+              onChange={(event) => setDraftContract((current) => ({ ...current, contractNumber: event.target.value }))}
+              placeholder={visibleContractNumber === 'New' ? 'Auto' : visibleContractNumber}
+              readOnly={isViewMode}
+              required
+              className="h-8 w-32 bg-white px-2 text-[15px] font-black text-blue-900 outline-none read-only:bg-slate-100"
+            />
+          </div>
+
+          <div className="flex items-center overflow-hidden border border-slate-500 rounded shadow-sm">
+            <span className="bg-slate-700 text-white px-2 h-8 flex items-center text-[11px] font-black uppercase tracking-tight">
+              Contract Date
+            </span>
+            <DatePickerField
+              label="Contract Date"
+              value={draftContract.contractDate || ''}
+              onChange={(event) => setDraftContract((current) => ({ ...current, contractDate: event.target.value }))}
+              readOnly={isViewMode}
+              compact
+            />
+          </div>
 
           <h1 className="hidden">
             Application Number — #100254
           </h1>
           
-          <div className="h-6 w-[1px] bg-black/20 mx-2"></div>
+          <div className="h-6 w-[1px] bg-black/20 mx-1"></div>
           
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
   {/* Proposal Category - High Impact Green */}
-  <div className="flex items-center overflow-hidden border-2 border-emerald-600 rounded shadow-sm">
-    <span className="bg-emerald-600 text-white px-3 h-9 flex items-center text-[24px] font-black uppercase tracking-tighter">
+  <div className="flex items-center overflow-hidden border border-emerald-600 rounded shadow-sm">
+    <span className="bg-emerald-600 text-white px-2 h-8 flex items-center text-[13px] font-black uppercase tracking-tight">
       Category
     </span>
     <select 
       value={proposalCat} 
       onChange={(e) => setProposalCat(e.target.value)} 
       disabled={isViewMode}
-      className="text-[24px] font-black px-4 outline-none bg-white h-9 min-w-[65px] text-emerald-900 cursor-pointer hover:bg-emerald-50 transition-colors disabled:cursor-not-allowed disabled:bg-slate-100"
+      className="text-[16px] font-black px-2 outline-none bg-white h-8 min-w-[52px] text-emerald-900 cursor-pointer hover:bg-emerald-50 transition-colors disabled:cursor-not-allowed disabled:bg-slate-100"
     >
       <option>-</option>
       <option>A</option>
@@ -1319,15 +1643,15 @@ const ContractEditForm = () => {
   </div>
   
   {/* Risk Level - High Impact Orange/Amber */}
-  <div className="flex items-center overflow-hidden border-2 border-amber-500 rounded shadow-sm">
-    <span className="bg-amber-500 text-black px-3 h-9 flex items-center text-[24px] font-black uppercase tracking-tighter">
+  <div className="flex items-center overflow-hidden border border-amber-500 rounded shadow-sm">
+    <span className="bg-amber-500 text-black px-2 h-8 flex items-center text-[13px] font-black uppercase tracking-tight">
       Risk Level
     </span>
     <select 
       value={riskLevel} 
       onChange={(e) => setRiskLevel(e.target.value)} 
       disabled={isViewMode}
-      className="text-[24px] font-black px-4 outline-none bg-white h-9 text-amber-900 cursor-pointer hover:bg-amber-50 transition-colors disabled:cursor-not-allowed disabled:bg-slate-100"
+      className="text-[16px] font-black px-2 outline-none bg-white h-8 w-[112px] text-amber-900 cursor-pointer hover:bg-amber-50 transition-colors disabled:cursor-not-allowed disabled:bg-slate-100"
     >
       <option>-</option>
       <option>Low</option>
@@ -1338,14 +1662,14 @@ const ContractEditForm = () => {
 </div>
         </div>
 
-        <div className="flex gap-2 items-center">
+        <div className="flex shrink-0 gap-2 items-center">
           {/* Move to LOS - Light Blue */}
-          <button disabled={isViewMode} className="px-4 py-1.5 bg-blue-50 text-blue-700 border-2 border-blue-500 text-[14px] font-black uppercase flex items-center gap-1.5 hover:bg-blue-100 rounded-sm transition-all disabled:opacity-40">
-            <RotateCcw size={15} /> MOVE TO LOS
+          <button disabled={isViewMode} className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-500 text-[12px] font-black uppercase flex items-center gap-1.5 hover:bg-blue-100 rounded-sm transition-all disabled:opacity-40">
+            <RotateCcw size={14} /> MOVE TO LOS
           </button>
 
-          <div className="flex items-center overflow-hidden border-2 border-slate-500 rounded-sm bg-white shadow-sm">
-            <span className="bg-slate-700 text-white px-3 h-9 flex items-center text-[14px] font-black uppercase">
+          <div className="flex items-center overflow-hidden border border-slate-500 rounded-sm bg-white shadow-sm">
+            <span className="bg-slate-700 text-white px-2 h-8 flex items-center text-[12px] font-black uppercase">
               Status
               <span className="ml-1 text-red-300">*</span>
             </span>
@@ -1354,7 +1678,7 @@ const ContractEditForm = () => {
               onChange={(event) => setContractStatus(event.target.value)}
               disabled={isViewMode || savingDraft}
               required
-              className="h-9 min-w-[150px] bg-white px-3 text-[14px] font-black uppercase text-slate-900 outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
+              className="h-8 min-w-[120px] bg-white px-2 text-[12px] font-black uppercase text-slate-900 outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
             >
               {(isEditableWorkflow ? STATUS_OPTIONS.edit : STATUS_OPTIONS.create).map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -1367,18 +1691,14 @@ const ContractEditForm = () => {
             type="button"
             disabled={isViewMode || savingDraft}
             onClick={handleSubmitWorkflow}
-            className="px-8 py-1.5 bg-green-100 text-green-700 border-2 border-green-500 text-[15px] font-black uppercase flex items-center gap-2 hover:bg-green-200 rounded-sm shadow-md transition-all disabled:opacity-40"
+            className="px-5 py-1 bg-green-100 text-green-700 border border-green-500 text-[13px] font-black uppercase flex items-center gap-1.5 hover:bg-green-200 rounded-sm shadow-md transition-all disabled:opacity-40"
           >
-            <CheckCircle size={18} /> {savingDraft ? 'SAVING...' : 'SUBMIT'}
+            <CheckCircle size={16} /> {savingDraft ? 'SAVING...' : 'SUBMIT'}
           </button>
         </div>
       </div>
 
-      {draftMessage && (
-        <div className={`shrink-0 px-4 py-1 text-[12px] font-black uppercase ${draftMessage.startsWith('Unable') ? 'bg-red-50 text-red-700 border-b border-red-200' : 'bg-emerald-50 text-emerald-700 border-b border-emerald-200'}`}>
-          {draftMessage}
-        </div>
-      )}
+      <MessageModal message={draftMessage} onClose={() => setDraftMessage('')} />
 
       {/* 2. TAB ROW (Sticky - Offset by Top Bar height) */}
     <div className="shrink-0 bg-white border-b border-black/60 px-2 pt-2 flex items-end gap-1.5 shadow-sm z-[90]">
@@ -1676,6 +1996,15 @@ const ContractEditForm = () => {
                 >
                   <Plus size={14} /> Add Row
                 </button>
+                <div className="border-t border-black/30 pt-3">
+                  <DatePickerField
+                    label="First EMI Date"
+                    name="financial.firstEmiDate"
+                    value={financialData.firstEmiDate}
+                    readOnly={isViewMode}
+                    required
+                  />
+                </div>
               </div>
             </div>
 
