@@ -98,6 +98,9 @@ public class DemandListService {
         if (request == null || request.asOnDate() == null) {
             throw new IllegalArgumentException("As On Date is required");
         }
+        if (clean(request.areaCode()) == null && clean(request.contractNumber()) == null) {
+            throw new IllegalArgumentException("Area or Contract No is required");
+        }
         return new DemandListRequest(
             request.asOnDate(),
             clean(request.areaCode()),

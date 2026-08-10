@@ -2,6 +2,9 @@ HELP.md
 target/
 *.log
 migration_data/
+cred
+docs/*.pem
+docs/*.ppk
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

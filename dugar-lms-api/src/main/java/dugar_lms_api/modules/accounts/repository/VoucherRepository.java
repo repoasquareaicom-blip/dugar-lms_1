@@ -97,7 +97,7 @@ public class VoucherRepository {
             new MapSqlParameterSource(),
             Long.class
         );
-        String voucherType = clean(request.voucherType()).toUpperCase(Locale.ROOT);
+        String voucherType = voucherCode(request.voucherType(), request.transactionType());
         String voucherNumber = voucherNumber(request.voucherNumber(), voucherType, headerId);
 
         jdbcTemplate.update(
@@ -154,11 +154,11 @@ public class VoucherRepository {
             new MapSqlParameterSource()
                 .addValue("headerId", headerId)
                 .addValue("voucherType", voucherType)
-                .addValue("voucherTypeDescription", clean(request.voucherTypeDescription()))
+                .addValue("voucherTypeDescription", null)
                 .addValue("voucherNumber", voucherNumber)
                 .addValue("voucherDate", request.voucherDate())
                 .addValue("systemDate", request.systemDate())
-                .addValue("transactionType", clean(request.transactionType()))
+                .addValue("transactionType", null)
                 .addValue("voucherAmount", request.voucherAmount())
                 .addValue("contractNumber", clean(request.contractNumber()))
                 .addValue("contractType", clean(request.contractType()))
@@ -171,7 +171,7 @@ public class VoucherRepository {
         );
 
         for (VoucherDetailRequest detail : request.details()) {
-            insertDetail(headerId, request.category(), detail, userId);
+            insertDetail(headerId, request.category(), voucherType, detail, userId);
         }
 
         return new VoucherSaveResponse(
@@ -326,10 +326,13 @@ public class VoucherRepository {
             throw new IllegalStateException("Only SUBMITTED, REOPENED or REJECTED vouchers can be edited.");
         }
         String beforeSnapshot = snapshot(voucherHeaderId);
+        String voucherType = voucherCode(request.voucherType(), request.transactionType());
         jdbcTemplate.update(
             """
             UPDATE voucher_headers
             SET
+                voucher_type = :voucherType,
+                voucher_type_description = :voucherTypeDescription,
                 voucher_date = :voucherDate,
                 system_date = :systemDate,
                 transaction_type = :transactionType,
@@ -348,9 +351,11 @@ public class VoucherRepository {
             """,
             new MapSqlParameterSource()
                 .addValue("voucherHeaderId", voucherHeaderId)
+                .addValue("voucherType", voucherType)
+                .addValue("voucherTypeDescription", null)
                 .addValue("voucherDate", request.voucherDate())
                 .addValue("systemDate", request.systemDate())
-                .addValue("transactionType", clean(request.transactionType()))
+                .addValue("transactionType", null)
                 .addValue("voucherAmount", request.voucherAmount())
                 .addValue("contractNumber", clean(request.contractNumber()))
                 .addValue("contractType", clean(request.contractType()))
@@ -367,7 +372,7 @@ public class VoucherRepository {
             new MapSqlParameterSource("voucherHeaderId", voucherHeaderId)
         );
         for (VoucherDetailRequest detail : request.details()) {
-            insertDetail(voucherHeaderId, request.category(), detail, userId);
+            insertDetail(voucherHeaderId, request.category(), voucherType, detail, userId);
         }
         String afterSnapshot = snapshot(voucherHeaderId);
         audit(voucherHeaderId, "UPDATED", beforeSnapshot, afterSnapshot, userId);
@@ -684,13 +689,14 @@ public class VoucherRepository {
         return find(voucherHeaderId);
     }
 
-    private void insertDetail(Long headerId, String headerCategory, VoucherDetailRequest detail, Long userId) {
+    private void insertDetail(Long headerId, String headerCategory, String voucherType, VoucherDetailRequest detail, Long userId) {
         jdbcTemplate.update(
             """
             INSERT INTO voucher_details (
                 voucher_header_id,
                 serial_number,
                 category,
+                voucher_type,
                 ledger_code,
                 ledger_name,
                 sub_ledger_code,
@@ -709,6 +715,7 @@ public class VoucherRepository {
                 :headerId,
                 :serialNumber,
                 :category,
+                :voucherType,
                 :ledgerCode,
                 :ledgerName,
                 :subLedgerCode,
@@ -728,6 +735,7 @@ public class VoucherRepository {
                 .addValue("headerId", headerId)
                 .addValue("serialNumber", detail.serialNumber())
                 .addValue("category", clean(detail.category()) == null ? clean(headerCategory) : clean(detail.category()))
+                .addValue("voucherType", clean(voucherType))
                 .addValue("ledgerCode", clean(detail.ledgerCode()))
                 .addValue("ledgerName", clean(detail.ledgerName()))
                 .addValue("subLedgerCode", clean(detail.subLedgerCode()))
@@ -940,12 +948,25 @@ public class VoucherRepository {
             return cleanNumber;
         }
         String prefix = switch (voucherType) {
+            case "BP", "BR", "CP", "CR", "JV" -> voucherType;
             case "PAYMENT" -> "PV";
             case "RECEIPT" -> "RV";
             case "JOURNAL" -> "JV";
             default -> "VCH";
         };
         return prefix + "-" + String.format("%06d", headerId);
+    }
+
+    private String voucherCode(String voucherType, String transactionType) {
+        String type = clean(voucherType) == null ? "" : clean(voucherType).toUpperCase(Locale.ROOT);
+        String mode = clean(transactionType) == null ? "" : clean(transactionType).toUpperCase(Locale.ROOT);
+        return switch (type) {
+            case "BP", "BR", "CP", "CR", "JV" -> type;
+            case "PAYMENT" -> "BANK".equals(mode) ? "BP" : "CP";
+            case "RECEIPT" -> "BANK".equals(mode) ? "BR" : "CR";
+            case "JOURNAL" -> "JV";
+            default -> type;
+        };
     }
 
     private String clean(String value) {

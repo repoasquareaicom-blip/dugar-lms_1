@@ -15,6 +15,10 @@ const defaultFilters = {
   overdueInstallmentCount: '',
 };
 
+function hasReportScope(filters) {
+  return Boolean(filters?.areaCode?.trim() || filters?.contractNumber?.trim());
+}
+
 function demandListErrorMessage(error, fallback) {
   if (error?.response?.status === 401) {
     return 'Demand List API is still rejecting this report request. Please restart the API server so the latest report access change is active.';
@@ -51,6 +55,7 @@ export default function DemandListPage() {
   const [sortColumn, setSortColumn] = useState('loanNumber');
   const [sortDirection, setSortDirection] = useState('asc');
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
   const [message, setMessage] = useState('');
   const [selectedRow, setSelectedRow] = useState(null);
   const [printData, setPrintData] = useState(null);
@@ -70,6 +75,7 @@ export default function DemandListPage() {
       }
 
       setLoading(true);
+      setLoadingMessage('Generating Demand List. Large areas may take a little longer while receipts and dues are calculated.');
       setMessage('');
       try {
         const data = await fetchDemandList(appliedFilters, { page, size: pageSize, sortColumn, sortDirection });
@@ -84,7 +90,10 @@ export default function DemandListPage() {
         setTotalElements(0);
         setMessage(demandListErrorMessage(error, 'Unable to load Demand List.'));
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+          setLoadingMessage('');
+        }
       }
     }
 
@@ -97,6 +106,10 @@ export default function DemandListPage() {
   const generate = () => {
     if (!filters.asOnDate) {
       setMessage('As On Date is required.');
+      return;
+    }
+    if (!hasReportScope(filters)) {
+      setMessage('Select an Area or enter Contract No before generating.');
       return;
     }
     setPage(0);
@@ -134,7 +147,12 @@ export default function DemandListPage() {
       setMessage('Generate the Demand List before printing.');
       return null;
     }
+    if (!hasReportScope(appliedFilters)) {
+      setMessage('Select an Area or enter Contract No before generating.');
+      return null;
+    }
     setLoading(true);
+    setLoadingMessage('Preparing Demand List output. Please wait while the report data is collected.');
     setMessage('');
     try {
       const data = await fetchDemandListPrint(appliedFilters, { sortColumn, sortDirection });
@@ -149,6 +167,7 @@ export default function DemandListPage() {
       return null;
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -272,6 +291,16 @@ export default function DemandListPage() {
       {printData && <DemandListPrintView data={printData} filters={appliedFilters} />}
 
       <DemandListDetailsDrawer row={selectedRow} onClose={() => setSelectedRow(null)} />
+
+      {loading && (
+        <div className="no-print fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-sm border border-blue-900 bg-white px-5 py-4 text-center shadow-2xl">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-[#0052CC]" />
+            <div className="mt-3 text-[14px] font-black uppercase text-[#0052CC]">Loading report</div>
+            <div className="mt-1 text-[12px] font-bold text-black">{loadingMessage || 'Please wait while the report is processed.'}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

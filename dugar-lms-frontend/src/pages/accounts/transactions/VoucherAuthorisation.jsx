@@ -68,8 +68,15 @@ export default function VoucherAuthorisation() {
   });
 
   const openVoucher = (voucher) => {
-    const type = String(voucher.voucherType || 'RECEIPT').toLowerCase();
-    const mode = String(voucher.transactionType || 'CASH').toLowerCase();
+    const code = String(voucher.voucherType || 'CR').trim().toUpperCase();
+    const type = code === 'JV' || code === 'JOURNAL'
+      ? 'journal'
+      : code === 'BP' || code === 'CP' || code === 'PAYMENT'
+        ? 'payment'
+        : 'receipt';
+    const mode = code === 'BP' || code === 'BR'
+      ? 'bank'
+      : String(voucher.transactionType || 'CASH').toLowerCase();
     const path = type === 'journal'
       ? '/accounts/transaction/edit/journal'
       : `/accounts/transaction/edit/${type}/${mode === 'bank' ? 'bank' : 'cash'}`;

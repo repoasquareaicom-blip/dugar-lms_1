@@ -45,20 +45,15 @@ export async function saveContractPartyDraft({ contractId, contractNumber, contr
 }
 
 export async function fetchContractAreas({ keyword = '', limit = 20 } = {}) {
-  const params = {
-    asOnDate: new Date().toISOString().slice(0, 10),
-    page: 0,
-    size: 250,
-  };
+  const params = {};
   addParam(params, 'keyword', keyword);
-  const response = await apiClient.get('/reports/demand-list', { params });
-  const rows = response.data?.rows?.content || [];
-  const normalizedKeyword = String(keyword || '').trim().toLowerCase();
+  addParam(params, 'limit', limit);
+  const response = await apiClient.get('/contracts/areas', { params });
+  const rows = Array.isArray(response.data) ? response.data : response.data?.content || [];
   const areas = rows
-    .map((row) => row.area)
+    .map((area) => String(area || '').trim())
     .filter(Boolean)
     .filter((area, index, list) => list.indexOf(area) === index)
-    .filter((area) => !normalizedKeyword || String(area).toLowerCase().includes(normalizedKeyword))
     .sort((left, right) => String(left).localeCompare(String(right)));
   return areas.slice(0, Math.max(1, Math.min(limit, 50)));
 }

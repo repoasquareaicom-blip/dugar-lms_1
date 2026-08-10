@@ -118,7 +118,7 @@ public class ContractListRepository {
         FROM contracts
         WHERE is_active = TRUE
           AND NULLIF(TRIM(area_code), '') IS NOT NULL
-          AND (:keyword IS NULL OR LOWER(TRIM(area_code)) LIKE :keyword)
+          AND (:keyword = '' OR LOWER(TRIM(area_code)) LIKE :keyword)
         ORDER BY area_code
         LIMIT :limit
         """;
@@ -198,7 +198,7 @@ public class ContractListRepository {
         return namedParameterJdbcTemplate.queryForList(
             FIND_AREAS_SQL,
             new MapSqlParameterSource()
-                .addValue("keyword", cleanedKeyword == null ? null : "%" + cleanedKeyword + "%")
+                .addValue("keyword", cleanedKeyword == null ? "" : "%" + cleanedKeyword + "%")
                 .addValue("limit", Math.max(1, Math.min(limit, 50))),
             String.class
         );

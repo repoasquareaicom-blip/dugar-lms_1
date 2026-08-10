@@ -88,8 +88,9 @@ public class VoucherService {
 
     private void validate(VoucherSaveRequest request) {
         String type = request.voucherType() == null ? "" : request.voucherType().trim().toUpperCase(Locale.ROOT);
-        if (!Set.of("PAYMENT", "RECEIPT", "JOURNAL").contains(type)) {
-            throw new IllegalArgumentException("Voucher type must be Payment, Receipt, or Journal.");
+        String nature = voucherNature(type);
+        if (nature == null) {
+            throw new IllegalArgumentException("Voucher type must be BP, BR, CP, CR, or JV.");
         }
         if (request.voucherDate().isAfter(LocalDate.now())) {
             throw new IllegalArgumentException("Voucher date cannot be a future date.");
@@ -97,7 +98,7 @@ public class VoucherService {
         if (amount(request.voucherAmount()).signum() <= 0) {
             throw new IllegalArgumentException("Voucher amount must be greater than zero.");
         }
-        if (!"JOURNAL".equals(type) && (request.headerControlCode() == null || request.headerControlCode().isBlank())) {
+        if (!"JOURNAL".equals(nature) && (request.headerControlCode() == null || request.headerControlCode().isBlank())) {
             throw new IllegalArgumentException("Header control code is required.");
         }
         if (request.headerControlCode() != null && !request.headerControlCode().isBlank() && !repository.activeLedgerExists(request.headerControlCode())) {
@@ -114,13 +115,13 @@ public class VoucherService {
             if (debit.signum() < 0 || credit.signum() < 0) {
                 throw new IllegalArgumentException("Debit and credit amounts cannot be negative.");
             }
-            if ("PAYMENT".equals(type) && debit.signum() <= 0) {
+            if ("PAYMENT".equals(nature) && debit.signum() <= 0) {
                 throw new IllegalArgumentException("Debit amount is required for payment voucher rows.");
             }
-            if ("RECEIPT".equals(type) && credit.signum() <= 0) {
+            if ("RECEIPT".equals(nature) && credit.signum() <= 0) {
                 throw new IllegalArgumentException("Credit amount is required for receipt voucher rows.");
             }
-            if ("JOURNAL".equals(type) && debit.signum() <= 0 && credit.signum() <= 0) {
+            if ("JOURNAL".equals(nature) && debit.signum() <= 0 && credit.signum() <= 0) {
                 throw new IllegalArgumentException("Debit or credit amount is required for journal voucher rows.");
             }
             if (!repository.activeLedgerExists(detail.ledgerCode())) {
@@ -142,13 +143,13 @@ public class VoucherService {
             creditTotal = creditTotal.add(credit);
         }
 
-        if ("PAYMENT".equals(type) && amount(request.voucherAmount()).compareTo(debitTotal) != 0) {
+        if ("PAYMENT".equals(nature) && amount(request.voucherAmount()).compareTo(debitTotal) != 0) {
             throw new IllegalArgumentException("Debit total must match voucher amount.");
         }
-        if ("RECEIPT".equals(type) && amount(request.voucherAmount()).compareTo(creditTotal) != 0) {
+        if ("RECEIPT".equals(nature) && amount(request.voucherAmount()).compareTo(creditTotal) != 0) {
             throw new IllegalArgumentException("Credit total must match voucher amount.");
         }
-        if ("JOURNAL".equals(type) && debitTotal.compareTo(creditTotal) != 0) {
+        if ("JOURNAL".equals(nature) && debitTotal.compareTo(creditTotal) != 0) {
             throw new IllegalArgumentException("Journal debit total must match credit total.");
         }
     }
@@ -159,13 +160,14 @@ public class VoucherService {
 
     private void validateReview(VoucherReviewDto voucher) {
         String type = voucher.voucherType() == null ? "" : voucher.voucherType().trim().toUpperCase(Locale.ROOT);
-        if (!Set.of("PAYMENT", "RECEIPT", "JOURNAL").contains(type)) {
-            throw new IllegalArgumentException("Voucher type must be Payment, Receipt, or Journal.");
+        String nature = voucherNature(type);
+        if (nature == null) {
+            throw new IllegalArgumentException("Voucher type must be BP, BR, CP, CR, or JV.");
         }
         if (amount(voucher.voucherAmount()).signum() <= 0) {
             throw new IllegalArgumentException("Voucher amount must be greater than zero.");
         }
-        if (!"JOURNAL".equals(type) && (voucher.headerControlCode() == null || voucher.headerControlCode().isBlank())) {
+        if (!"JOURNAL".equals(nature) && (voucher.headerControlCode() == null || voucher.headerControlCode().isBlank())) {
             throw new IllegalArgumentException("Header control code is required.");
         }
         if (voucher.details() == null || voucher.details().isEmpty()) {
@@ -177,23 +179,23 @@ public class VoucherService {
             if (!repository.activeLedgerExists(detail.ledgerCode())) {
                 throw new IllegalArgumentException("Details code " + detail.ledgerCode() + " is inactive or was not found.");
             }
-            if ("PAYMENT".equals(type) && debit.signum() <= 0) {
+            if ("PAYMENT".equals(nature) && debit.signum() <= 0) {
                 throw new IllegalArgumentException("Debit amount is required for payment voucher rows.");
             }
-            if ("RECEIPT".equals(type) && credit.signum() <= 0) {
+            if ("RECEIPT".equals(nature) && credit.signum() <= 0) {
                 throw new IllegalArgumentException("Credit amount is required for receipt voucher rows.");
             }
-            if ("JOURNAL".equals(type) && debit.signum() <= 0 && credit.signum() <= 0) {
+            if ("JOURNAL".equals(nature) && debit.signum() <= 0 && credit.signum() <= 0) {
                 throw new IllegalArgumentException("Debit or credit amount is required for journal voucher rows.");
             }
         }
-        if ("PAYMENT".equals(type) && amount(voucher.voucherAmount()).compareTo(amount(voucher.totalDebit())) != 0) {
+        if ("PAYMENT".equals(nature) && amount(voucher.voucherAmount()).compareTo(amount(voucher.totalDebit())) != 0) {
             throw new IllegalArgumentException("Debit total must match voucher amount.");
         }
-        if ("RECEIPT".equals(type) && amount(voucher.voucherAmount()).compareTo(amount(voucher.totalCredit())) != 0) {
+        if ("RECEIPT".equals(nature) && amount(voucher.voucherAmount()).compareTo(amount(voucher.totalCredit())) != 0) {
             throw new IllegalArgumentException("Credit total must match voucher amount.");
         }
-        if ("JOURNAL".equals(type) && amount(voucher.totalDebit()).compareTo(amount(voucher.totalCredit())) != 0) {
+        if ("JOURNAL".equals(nature) && amount(voucher.totalDebit()).compareTo(amount(voucher.totalCredit())) != 0) {
             throw new IllegalArgumentException("Journal debit total must match credit total.");
         }
     }
@@ -202,6 +204,15 @@ public class VoucherService {
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException(message);
         }
+    }
+
+    private String voucherNature(String type) {
+        return switch (type) {
+            case "BP", "CP", "PAYMENT" -> "PAYMENT";
+            case "BR", "CR", "RECEIPT" -> "RECEIPT";
+            case "JV", "JOURNAL" -> "JOURNAL";
+            default -> null;
+        };
     }
 
     private String nullToBlank(String value) {

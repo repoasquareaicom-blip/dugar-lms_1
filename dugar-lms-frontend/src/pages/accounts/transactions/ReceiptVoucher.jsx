@@ -108,6 +108,14 @@ function voucherKind(path) {
   return 'receipt';
 }
 
+function voucherCode(kind, pathOrMode = '') {
+  if (kind === 'journal') return 'JV';
+  const lower = String(pathOrMode || '').toLowerCase();
+  const isBank = lower.includes('/bank') || lower === 'bank';
+  if (kind === 'payment') return isBank ? 'BP' : 'CP';
+  return isBank ? 'BR' : 'CR';
+}
+
 function readParty(contract) {
   if (!contract) return null;
   const area = contract.areaCode || contract.area || contract.branch || contract.branchCode || contract.area_code || '-';
@@ -278,14 +286,15 @@ const ReceiptVoucher = () => {
 
   const payload = (allowDuplicateDetails = false) => {
     const contract = rows.find((row) => row.loanReference)?.loanReference || null;
+    const code = voucherCode(kind, location.pathname);
     return {
-      voucherType: kind.toUpperCase(),
-      voucherTypeDescription: voucherTitle,
+      voucherType: code,
+      voucherTypeDescription: null,
       voucherNumber: editMode ? voucherNo : voucherNo,
       voucherDate,
       systemDate,
-      transactionType: location.pathname.toLowerCase().includes('/bank') ? 'BANK' : 'CASH',
-      voucherAmount: amount(voucherAmount),
+      transactionType: null,
+      voucherAmount: isJournal ? detailDebitTotal : amount(voucherAmount),
       category,
       contractId: contract?.contractId || null,
       contractNumber: contract?.contractNumber || contract?.legacyContractNumber || null,
@@ -300,6 +309,7 @@ const ReceiptVoucher = () => {
           category,
           ledgerCode: row.detailsCode?.ledgerCode || '',
           ledgerName: row.detailsCode?.ledgerName || '',
+          subLedgerCode: row.loanReference?.contractNumber || row.loanReference?.legacyContractNumber || '',
           debitAmount: amount(row.debit),
           creditAmount: amount(row.credit),
           partyCode: row.loanReference?.customerCode || '',
@@ -910,8 +920,7 @@ const VoucherSearchModal = ({ kind, transactionType, onClose, onSelect }) => {
     setLoading(true);
     setError('');
     searchVouchers({
-      voucherType: kind.toUpperCase(),
-      transactionType,
+      voucherType: voucherCode(kind, transactionType),
       voucherNumber: filters.voucherNumber,
       voucherDate: filters.voucherDate,
       contractNumber: filters.contractNumber,
