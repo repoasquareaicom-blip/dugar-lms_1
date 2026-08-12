@@ -32,7 +32,9 @@ public class DemandListCalculationService {
         return new DemandListRowDto(
             source.contractId(),
             source.loanNumber(),
+            source.borrowerCode(),
             source.borrowerName(),
+            source.guarantorCode(),
             source.guarantorName(),
             source.productType(),
             source.assetDescription(),
@@ -40,6 +42,8 @@ public class DemandListCalculationService {
             source.registrationOrLocation(),
             source.ownerNumber(),
             source.usage(),
+            loanAmount,
+            money(source.flatInterestRate()),
             totalContractValue,
             authorisedReceipts,
             principalOutstanding,

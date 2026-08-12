@@ -10,16 +10,64 @@ import java.util.List;
 @Repository
 public class DemandListRepository {
 
-    private static final String SOURCE_SQL = """
-        WITH receipt_base AS (
+    private static final String SOURCE_CONTRACT_BASE_SQL = """
+        WITH contract_base AS (
             SELECT
-                vd.voucher_detail_id,
-                GREATEST(COALESCE(vd.credit_amount, 0), 0) AS receipt_amount,
-                vh.contract_id,
-                NULLIF(UPPER(TRIM(vh.contract_number)), '') AS header_contract_number,
-                NULLIF(UPPER(TRIM(vd.loan_reference)), '') AS loan_reference,
-                NULLIF(UPPER(TRIM(vd.sub_ledger_code)), '') AS sub_ledger_code
-            FROM voucher_headers vh
+                c.contract_id,
+                NULLIF(UPPER(TRIM(c.contract_number)), '') AS contract_number_match,
+                NULLIF(UPPER(TRIM(c.legacy_contract_number)), '') AS legacy_contract_number_match,
+                COALESCE(NULLIF(TRIM(c.contract_number), ''), NULLIF(TRIM(c.legacy_contract_number), ''), c.contract_id::text) AS loan_number,
+                NULLIF(TRIM(c.borrower_code), '') AS borrower_code,
+                NULLIF(TRIM(pm.full_name), '') AS borrower_name,
+                NULLIF(TRIM(c.guarantor_code), '') AS guarantor_code,
+                NULLIF(TRIM(gm.full_name), '') AS guarantor_name,
+                COALESCE(NULLIF(TRIM(a.product_type), ''), NULLIF(TRIM(c.contract_type), '')) AS product_type,
+                NULLIF(TRIM(c.contract_type), '') AS contract_type,
+                COALESCE(NULLIF(TRIM(a.vehicle_make), ''), NULLIF(TRIM(c.vehicle_make), ''), NULLIF(TRIM(c.equipment_model), '')) AS asset_description,
+                NULLIF(TRIM(a.vehicle_type_code), '') AS vehicle_type_code,
+                COALESCE(
+                    NULLIF(TRIM(a.registration_number), ''),
+                    NULLIF(TRIM(c.registration_number), ''),
+                    NULLIF(TRIM(CONCAT_WS(', ', NULLIF(TRIM(a.flat_no), ''), NULLIF(TRIM(a.apartment_no), ''), NULLIF(TRIM(a.street_name), ''), NULLIF(TRIM(a.area_name), ''), NULLIF(TRIM(a.property_city), ''))), '')
+                ) AS registration_or_location,
+                COALESCE(NULLIF(TRIM(a.owner_serial_no), ''), NULLIF(TRIM(cd.owner_serial_number), '')) AS owner_number,
+                COALESCE(NULLIF(TRIM(a.deal_of_assets), ''), NULLIF(TRIM(a.finance_type), ''), NULLIF(TRIM(c.mode_of_payment), '')) AS usage,
+                COALESCE(c.loan_amount, 0) AS loan_amount,
+                COALESCE(c.finance_charges, 0) AS finance_charges,
+                COALESCE(c.flat_interest_rate, 0) AS flat_interest_rate,
+                COALESCE(c.total_contract_value, 0) AS total_contract_value,
+                c.first_emi_date,
+                COALESCE(NULLIF(TRIM(c.payment_frequency), ''), NULLIF(TRIM(c.repayment_terms), ''), NULLIF(TRIM(c.mode_of_payment), '')) AS payment_frequency,
+                NULLIF(TRIM(c.area_code), '') AS area,
+                COALESCE(NULLIF(TRIM(cd.branch_collection_tool_by), ''), NULLIF(TRIM(cd.ho_collection_tool_by), ''), NULLIF(TRIM(cd.loan_referred_by), '')) AS field_officer
+            FROM contracts c
+            LEFT JOIN party_masters pm
+              ON UPPER(TRIM(pm.party_code)) = UPPER(TRIM(c.borrower_code))
+             AND pm.is_active = TRUE
+            LEFT JOIN party_masters gm
+              ON UPPER(TRIM(gm.party_code)) = UPPER(TRIM(c.guarantor_code))
+             AND gm.is_active = TRUE
+            LEFT JOIN contract_details cd
+              ON cd.contract_id = c.contract_id
+             AND cd.is_active = TRUE
+            LEFT JOIN LATERAL (
+                SELECT *
+                FROM assets asset
+                WHERE asset.contract_id = c.contract_id
+                ORDER BY asset.asset_id
+                LIMIT 1
+            ) a ON TRUE
+            WHERE c.is_active = TRUE
+              AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
+        """;
+
+    private static final String SOURCE_RECEIPTS_AND_SELECT_SQL = """
+        ),
+        receipt_matches AS (
+            SELECT c.contract_id, vd.voucher_detail_id, GREATEST(COALESCE(vd.credit_amount, 0), 0) AS receipt_amount
+            FROM contract_base c
+            JOIN voucher_headers vh
+              ON vh.contract_id = c.contract_id
             JOIN voucher_details vd
               ON vd.voucher_header_id = vh.voucher_header_id
             WHERE UPPER(TRIM(COALESCE(vh.status, ''))) = 'AUTHORISED'
@@ -27,53 +75,57 @@ public class DemandListRepository {
               AND TRIM(COALESCE(vd.ledger_code, '')) IN ('3001', '4201')
               AND UPPER(TRIM(COALESCE(vd.voucher_type, vh.voucher_type, ''))) <> 'HJ'
               AND COALESCE(vd.credit_amount, 0) > 0
-        ),
-        receipt_matches AS (
-            SELECT c.contract_id, rb.voucher_detail_id, rb.receipt_amount
-            FROM receipt_base rb
-            JOIN contracts c
-              ON c.contract_id = rb.contract_id
-            WHERE c.is_active = TRUE
-              AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
 
             UNION
 
-            SELECT c.contract_id, rb.voucher_detail_id, rb.receipt_amount
-            FROM receipt_base rb
-            JOIN contracts c
-              ON rb.header_contract_number IN (
-                  UPPER(TRIM(COALESCE(c.contract_number, ''))),
-                  UPPER(TRIM(COALESCE(c.legacy_contract_number, '')))
+            SELECT c.contract_id, vd.voucher_detail_id, GREATEST(COALESCE(vd.credit_amount, 0), 0) AS receipt_amount
+            FROM contract_base c
+            JOIN voucher_headers vh
+              ON NULLIF(UPPER(TRIM(vh.contract_number)), '') IN (
+                  c.contract_number_match,
+                  c.legacy_contract_number_match
               )
-            WHERE rb.header_contract_number IS NOT NULL
-              AND c.is_active = TRUE
-              AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
+            JOIN voucher_details vd
+              ON vd.voucher_header_id = vh.voucher_header_id
+            WHERE UPPER(TRIM(COALESCE(vh.status, ''))) = 'AUTHORISED'
+              AND vh.voucher_date <= :asOnDate
+              AND TRIM(COALESCE(vd.ledger_code, '')) IN ('3001', '4201')
+              AND UPPER(TRIM(COALESCE(vd.voucher_type, vh.voucher_type, ''))) <> 'HJ'
+              AND COALESCE(vd.credit_amount, 0) > 0
 
             UNION
 
-            SELECT c.contract_id, rb.voucher_detail_id, rb.receipt_amount
-            FROM receipt_base rb
-            JOIN contracts c
-              ON rb.loan_reference IN (
-                  UPPER(TRIM(COALESCE(c.contract_number, ''))),
-                  UPPER(TRIM(COALESCE(c.legacy_contract_number, '')))
+            SELECT c.contract_id, vd.voucher_detail_id, GREATEST(COALESCE(vd.credit_amount, 0), 0) AS receipt_amount
+            FROM contract_base c
+            JOIN voucher_details vd
+              ON NULLIF(UPPER(TRIM(vd.loan_reference)), '') IN (
+                  c.contract_number_match,
+                  c.legacy_contract_number_match
               )
-            WHERE rb.loan_reference IS NOT NULL
-              AND c.is_active = TRUE
-              AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
+            JOIN voucher_headers vh
+              ON vh.voucher_header_id = vd.voucher_header_id
+            WHERE UPPER(TRIM(COALESCE(vh.status, ''))) = 'AUTHORISED'
+              AND vh.voucher_date <= :asOnDate
+              AND TRIM(COALESCE(vd.ledger_code, '')) IN ('3001', '4201')
+              AND UPPER(TRIM(COALESCE(vd.voucher_type, vh.voucher_type, ''))) <> 'HJ'
+              AND COALESCE(vd.credit_amount, 0) > 0
 
             UNION
 
-            SELECT c.contract_id, rb.voucher_detail_id, rb.receipt_amount
-            FROM receipt_base rb
-            JOIN contracts c
-              ON rb.sub_ledger_code IN (
-                  UPPER(TRIM(COALESCE(c.contract_number, ''))),
-                  UPPER(TRIM(COALESCE(c.legacy_contract_number, '')))
+            SELECT c.contract_id, vd.voucher_detail_id, GREATEST(COALESCE(vd.credit_amount, 0), 0) AS receipt_amount
+            FROM contract_base c
+            JOIN voucher_details vd
+              ON NULLIF(UPPER(TRIM(vd.sub_ledger_code)), '') IN (
+                  c.contract_number_match,
+                  c.legacy_contract_number_match
               )
-            WHERE rb.sub_ledger_code IS NOT NULL
-              AND c.is_active = TRUE
-              AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
+            JOIN voucher_headers vh
+              ON vh.voucher_header_id = vd.voucher_header_id
+            WHERE UPPER(TRIM(COALESCE(vh.status, ''))) = 'AUTHORISED'
+              AND vh.voucher_date <= :asOnDate
+              AND TRIM(COALESCE(vd.ledger_code, '')) IN ('3001', '4201')
+              AND UPPER(TRIM(COALESCE(vd.voucher_type, vh.voucher_type, ''))) <> 'HJ'
+              AND COALESCE(vd.credit_amount, 0) > 0
         ),
         authorised_receipts AS (
             SELECT
@@ -86,50 +138,31 @@ public class DemandListRepository {
             GROUP BY contract_id
         )
         SELECT
-            c.contract_id,
-            COALESCE(NULLIF(TRIM(c.contract_number), ''), NULLIF(TRIM(c.legacy_contract_number), ''), c.contract_id::text) AS loan_number,
-            NULLIF(TRIM(pm.full_name), '') AS borrower_name,
-            NULLIF(TRIM(gm.full_name), '') AS guarantor_name,
-            COALESCE(NULLIF(TRIM(a.product_type), ''), NULLIF(TRIM(c.contract_type), '')) AS product_type,
-            NULLIF(TRIM(c.contract_type), '') AS contract_type,
-            COALESCE(NULLIF(TRIM(a.vehicle_make), ''), NULLIF(TRIM(c.vehicle_make), ''), NULLIF(TRIM(c.equipment_model), '')) AS asset_description,
-            NULLIF(TRIM(a.vehicle_type_code), '') AS vehicle_type_code,
-            COALESCE(
-                NULLIF(TRIM(a.registration_number), ''),
-                NULLIF(TRIM(c.registration_number), ''),
-                NULLIF(TRIM(CONCAT_WS(', ', NULLIF(TRIM(a.flat_no), ''), NULLIF(TRIM(a.apartment_no), ''), NULLIF(TRIM(a.street_name), ''), NULLIF(TRIM(a.area_name), ''), NULLIF(TRIM(a.property_city), ''))), '')
-            ) AS registration_or_location,
-            COALESCE(NULLIF(TRIM(a.owner_serial_no), ''), NULLIF(TRIM(cd.owner_serial_number), '')) AS owner_number,
-            COALESCE(NULLIF(TRIM(a.deal_of_assets), ''), NULLIF(TRIM(a.finance_type), ''), NULLIF(TRIM(c.mode_of_payment), '')) AS usage,
-            COALESCE(c.loan_amount, 0) AS loan_amount,
-            COALESCE(c.finance_charges, 0) AS finance_charges,
-            COALESCE(c.total_contract_value, 0) AS total_contract_value,
-            c.first_emi_date,
-            COALESCE(NULLIF(TRIM(c.payment_frequency), ''), NULLIF(TRIM(c.repayment_terms), ''), NULLIF(TRIM(c.mode_of_payment), '')) AS payment_frequency,
-            NULLIF(TRIM(c.area_code), '') AS area,
-            COALESCE(NULLIF(TRIM(cd.branch_collection_tool_by), ''), NULLIF(TRIM(cd.ho_collection_tool_by), ''), NULLIF(TRIM(cd.loan_referred_by), '')) AS field_officer,
+            cb.contract_id,
+            cb.loan_number,
+            cb.borrower_code,
+            cb.borrower_name,
+            cb.guarantor_code,
+            cb.guarantor_name,
+            cb.product_type,
+            cb.contract_type,
+            cb.asset_description,
+            cb.vehicle_type_code,
+            cb.registration_or_location,
+            cb.owner_number,
+            cb.usage,
+            cb.loan_amount,
+            cb.finance_charges,
+            cb.flat_interest_rate,
+            cb.total_contract_value,
+            cb.first_emi_date,
+            cb.payment_frequency,
+            cb.area,
+            cb.field_officer,
             COALESCE(ar.authorised_receipts, 0) AS authorised_receipts
-        FROM contracts c
-        LEFT JOIN party_masters pm
-          ON UPPER(TRIM(pm.party_code)) = UPPER(TRIM(c.borrower_code))
-         AND pm.is_active = TRUE
-        LEFT JOIN party_masters gm
-          ON UPPER(TRIM(gm.party_code)) = UPPER(TRIM(c.guarantor_code))
-         AND gm.is_active = TRUE
-        LEFT JOIN contract_details cd
-          ON cd.contract_id = c.contract_id
-         AND cd.is_active = TRUE
-        LEFT JOIN LATERAL (
-            SELECT *
-            FROM assets asset
-            WHERE asset.contract_id = c.contract_id
-            ORDER BY asset.asset_id
-            LIMIT 1
-        ) a ON TRUE
+        FROM contract_base cb
         LEFT JOIN authorised_receipts ar
-          ON ar.contract_id = c.contract_id
-        WHERE c.is_active = TRUE
-          AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
+          ON ar.contract_id = cb.contract_id
         """;
 
     private static final String REPAYMENT_SQL = """
@@ -146,7 +179,9 @@ public class DemandListRepository {
     private static final RowMapper<DemandListSourceRow> SOURCE_ROW_MAPPER = (rs, rowNum) -> new DemandListSourceRow(
         rs.getLong("contract_id"),
         rs.getString("loan_number"),
+        rs.getString("borrower_code"),
         rs.getString("borrower_name"),
+        rs.getString("guarantor_code"),
         rs.getString("guarantor_name"),
         rs.getString("product_type"),
         rs.getString("contract_type"),
@@ -157,6 +192,7 @@ public class DemandListRepository {
         rs.getString("usage"),
         rs.getBigDecimal("loan_amount"),
         rs.getBigDecimal("finance_charges"),
+        rs.getBigDecimal("flat_interest_rate"),
         rs.getBigDecimal("total_contract_value"),
         rs.getObject("first_emi_date", java.time.LocalDate.class),
         rs.getString("payment_frequency"),
@@ -195,7 +231,7 @@ public class DemandListRepository {
     }
 
     private QueryParts queryParts(DemandListRequest request) {
-        StringBuilder sql = new StringBuilder(SOURCE_SQL);
+        StringBuilder sql = new StringBuilder(SOURCE_CONTRACT_BASE_SQL);
         MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("asOnDate", request.asOnDate());
 
@@ -206,6 +242,7 @@ public class DemandListRepository {
         appendEquals(sql, params, "COALESCE(a.product_type, c.contract_type)", "productType", request.productType());
         appendContractNumber(sql, params, request.contractNumber());
         appendKeyword(sql, params, request.keyword());
+        sql.append(SOURCE_RECEIPTS_AND_SELECT_SQL);
 
         return new QueryParts(sql.toString(), params);
     }
@@ -244,11 +281,11 @@ public class DemandListRepository {
         }
         sql.append("""
             AND (
-                LOWER(COALESCE(c.contract_number, '')) LIKE :contractNumber
-                OR LOWER(COALESCE(c.legacy_contract_number, '')) LIKE :contractNumber
+                UPPER(TRIM(COALESCE(c.contract_number, ''))) = :contractNumber
+                OR UPPER(TRIM(COALESCE(c.legacy_contract_number, ''))) = :contractNumber
             )
             """);
-        params.addValue("contractNumber", "%" + contractNumber.trim().toLowerCase() + "%");
+        params.addValue("contractNumber", contractNumber.trim().toUpperCase());
     }
 
     private record QueryParts(String sql, MapSqlParameterSource params) {

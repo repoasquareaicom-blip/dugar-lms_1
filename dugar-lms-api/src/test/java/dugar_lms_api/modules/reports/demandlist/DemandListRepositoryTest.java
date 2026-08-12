@@ -50,13 +50,17 @@ class DemandListRepositoryTest {
         verify(jdbcTemplate).query(sql.capture(), params.capture(), any(RowMapper.class));
 
         assertThat(sql.getValue()).contains(":areaCode", ":branchId", ":fieldOfficerCode", ":contractType", ":productType", ":contractNumber", ":keyword");
+        assertThat(sql.getValue()).contains("UPPER(TRIM(COALESCE(c.area_code, ''))) = :areaCode");
+        assertThat(sql.getValue()).doesNotContain("c.area_code, '')) LIKE :areaCode");
+        assertThat(sql.getValue()).contains("UPPER(TRIM(COALESCE(c.contract_number, ''))) = :contractNumber");
+        assertThat(sql.getValue()).doesNotContain("c.contract_number, '')) LIKE :contractNumber");
         MapSqlParameterSource source = (MapSqlParameterSource) params.getValue();
         assertThat(source.getValue("areaCode")).isEqualTo("A1");
         assertThat(source.getValue("branchId")).isEqualTo("B1");
         assertThat(source.getValue("fieldOfficerCode")).isEqualTo("FO1");
         assertThat(source.getValue("contractType")).isEqualTo("HP");
         assertThat(source.getValue("productType")).isEqualTo("VEHICLE");
-        assertThat(source.getValue("contractNumber")).isEqualTo("%cn123%");
+        assertThat(source.getValue("contractNumber")).isEqualTo("CN123");
         assertThat(source.getValue("keyword")).isEqualTo("%ravi%");
     }
 }

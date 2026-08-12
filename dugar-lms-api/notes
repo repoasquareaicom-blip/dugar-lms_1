@@ -1,0 +1,20 @@
+mvn clean package -DskipTests
+mvn spring-boot:run
+
+DB local host tunnel
+#ssh -i "H:\workspace\Dugar\LMS\LMS\Development V_1_0\dugar-lms-api\docs\Dugar-LMS-Key.pem" -N -L 5434:127.0.0.1:5432 ubuntu@prolms.asquareai.com
+
+ssh 
+ssh -i "H:\workspace\Dugar\LMS\LMS\Development V_1_0\dugar-lms-api\docs\Dugar-LMS-Key.pem" ubuntu@prolms.asquareai.com
+
+restart api
+sudo systemctl restart dugar-lms
+check status
+sudo systemctl status dugar-lms
+
+
+
+legacy insert query to psg
+HPNEW.ACCMAS  to legacy.accmas
+TO_Date  TO_TIMESTAMP
+MM/DD/YYYY HH:MI:SS AM   MM/DD/YYYY HH12:MI:SS AM

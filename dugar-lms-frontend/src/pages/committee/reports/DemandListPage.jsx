@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import DemandListDetailsDrawer from '../../../components/demand-list/DemandListDetailsDrawer';
 import DemandListFilters from '../../../components/demand-list/DemandListFilters';
-import DemandListGrid from '../../../components/demand-list/DemandListGrid';
+import { demandListColumns, lineValues } from '../../../components/demand-list/DemandListGrid';
 import DemandListPrintView from '../../../components/demand-list/DemandListPrintView';
 import DemandListSummary from '../../../components/demand-list/DemandListSummary';
-import { fetchDemandList, fetchDemandListPrint } from '../../../services/demandListService';
+import { fetchDemandList } from '../../../services/demandListService';
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -41,7 +41,64 @@ function firstValue(row, keys) {
   return '';
 }
 
-const pageSizes = [25, 50, 100, 250];
+function alignClass(align) {
+  if (align === 'right') return 'text-right';
+  if (align === 'center') return 'text-center';
+  return 'text-left';
+}
+
+function headerAlignClass(align) {
+  return align === 'right' ? 'text-right' : 'text-left';
+}
+
+function StackCell({ values, align = 'left' }) {
+  return (
+    <div className={`space-y-0.5 leading-4 ${alignClass(align)}`}>
+      {values.map((value, index) => (
+        <div key={index} className="min-h-4 whitespace-normal">
+          {value}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DemandListTable({ rows, onOpen }) {
+  return (
+    <div className="no-print min-h-0 flex-1 overflow-auto bg-white">
+      <table className="min-w-[1250px] border-collapse text-[12px] text-black">
+        <thead className="sticky top-0 z-20 bg-[#e8edf5] text-[12px] font-bold">
+          <tr>
+            {demandListColumns.map((column) => (
+              <th key={column.key} className={`${column.width} border border-black/40 px-2 py-1 align-top ${headerAlignClass(column.align)}`}>
+                {column.label.map((line) => <div key={line}>{line}</div>)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => {
+            const displayRow = { ...row, serialNumber: index + 1 };
+            return (
+              <tr key={row.contractId} onDoubleClick={() => onOpen(row)} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-blue-50`}>
+                {demandListColumns.map((column) => (
+                  <td key={column.key} className={`border border-black/30 px-2 py-1 align-top ${alignClass(column.align)}`}>
+                    <StackCell values={lineValues(displayRow, column.key)} align={column.align || 'left'} />
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={demandListColumns.length} className="border border-black/30 px-3 py-6 text-center font-bold uppercase text-black/50">No records found</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function DemandListPage() {
   const [filters, setFilters] = useState(defaultFilters);
@@ -49,61 +106,13 @@ export default function DemandListPage() {
   const [rows, setRows] = useState([]);
   const [summary, setSummary] = useState(null);
   const [warnings, setWarnings] = useState([]);
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
-  const [totalElements, setTotalElements] = useState(0);
-  const [sortColumn, setSortColumn] = useState('loanNumber');
-  const [sortDirection, setSortDirection] = useState('asc');
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [message, setMessage] = useState('');
   const [selectedRow, setSelectedRow] = useState(null);
   const [printData, setPrintData] = useState(null);
 
-  const totalPages = Math.max(1, Math.ceil(totalElements / pageSize));
-
-  useEffect(() => {
-    let active = true;
-
-    async function load() {
-      if (!appliedFilters) {
-        return;
-      }
-      if (!appliedFilters.asOnDate) {
-        setMessage('As On Date is required.');
-        return;
-      }
-
-      setLoading(true);
-      setLoadingMessage('Generating Demand List. Large areas may take a little longer while receipts and dues are calculated.');
-      setMessage('');
-      try {
-        const data = await fetchDemandList(appliedFilters, { page, size: pageSize, sortColumn, sortDirection });
-        if (!active) return;
-        setRows(data?.rows?.content || []);
-        setSummary(data?.summary || null);
-        setWarnings(data?.warnings || []);
-        setTotalElements(Number(data?.rows?.totalElements || 0));
-      } catch (error) {
-        if (!active) return;
-        setRows([]);
-        setTotalElements(0);
-        setMessage(demandListErrorMessage(error, 'Unable to load Demand List.'));
-      } finally {
-        if (active) {
-          setLoading(false);
-          setLoadingMessage('');
-        }
-      }
-    }
-
-    load();
-    return () => {
-      active = false;
-    };
-  }, [appliedFilters, page, pageSize, sortColumn, sortDirection]);
-
-  const generate = () => {
+  const generate = async () => {
     if (!filters.asOnDate) {
       setMessage('As On Date is required.');
       return;
@@ -112,33 +121,39 @@ export default function DemandListPage() {
       setMessage('Select an Area or enter Contract No before generating.');
       return;
     }
-    setPage(0);
-    setAppliedFilters(filters);
+    setLoading(true);
+    setLoadingMessage('Generating Demand List from the ageing procedure.');
+    setMessage('');
+    try {
+      const data = await fetchDemandList(filters);
+      setRows(data?.rows?.content || []);
+      setSummary(data?.summary || null);
+      setWarnings(data?.warnings || []);
+      setAppliedFilters(filters);
+      setPrintData(null);
+    } catch (error) {
+      setRows([]);
+      setSummary(null);
+      setWarnings([]);
+      setAppliedFilters(null);
+      setMessage(demandListErrorMessage(error, 'Unable to load Demand List.'));
+    } finally {
+      setLoading(false);
+      setLoadingMessage('');
+    }
   };
 
   const reset = () => {
     setFilters(defaultFilters);
     setAppliedFilters(null);
-    setPage(0);
     setMessage('');
     setRows([]);
     setSummary(null);
     setWarnings([]);
-    setTotalElements(0);
     setPrintData(null);
   };
 
-  const changeSort = (field) => {
-    setPage(0);
-    if (sortColumn !== field) {
-      setSortColumn(field);
-      setSortDirection('asc');
-      return;
-    }
-    setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
-  };
-
-  const loadPrint = async () => {
+  const currentReport = () => {
     if (!appliedFilters) {
       setMessage('Generate the Demand List before printing.');
       return null;
@@ -151,34 +166,18 @@ export default function DemandListPage() {
       setMessage('Select an Area or enter Contract No before generating.');
       return null;
     }
-    setLoading(true);
-    setLoadingMessage('Preparing Demand List output. Please wait while the report data is collected.');
-    setMessage('');
-    try {
-      const data = await fetchDemandListPrint(appliedFilters, { sortColumn, sortDirection });
-      if (data?.printLimitExceeded) {
-        setMessage(data.message || 'Demand List is too large to print.');
-        return null;
-      }
-      setPrintData(data);
-      return data;
-    } catch (error) {
-      setMessage(demandListErrorMessage(error, 'Unable to load print data.'));
-      return null;
-    } finally {
-      setLoading(false);
-      setLoadingMessage('');
-    }
+    return { rows: { content: rows }, summary, warnings };
   };
 
-  const print = async () => {
-    const data = await loadPrint();
+  const print = () => {
+    const data = currentReport();
     if (!data) return;
+    setPrintData(data);
     window.setTimeout(() => window.print(), 150);
   };
 
-  const exportExcel = async () => {
-    const data = await loadPrint();
+  const exportExcel = () => {
+    const data = currentReport();
     if (!data) return;
     const rowsForExport = data?.rows?.content || [];
     const title = `Demand List as on ${appliedFilters.asOnDate}`;
@@ -225,13 +224,6 @@ export default function DemandListPage() {
     URL.revokeObjectURL(url);
   };
 
-  const rangeText = useMemo(() => {
-    if (totalElements === 0) return '0 of 0';
-    const start = page * pageSize + 1;
-    const end = Math.min(totalElements, (page + 1) * pageSize);
-    return `${start}-${end} of ${totalElements}`;
-  }, [page, pageSize, totalElements]);
-
   return (
     <div className="flex h-full min-h-0 flex-col bg-white font-['Segoe_UI',Arial,sans-serif] text-[12px] text-black">
       <style>{`
@@ -274,18 +266,10 @@ export default function DemandListPage() {
       {warnings.length > 0 && <div className="no-print border-b border-amber-200 bg-amber-50 px-2 py-1 font-bold text-amber-800">{warnings.join(' | ')}</div>}
 
       <DemandListSummary summary={summary} />
-      <DemandListGrid rows={rows} page={page} pageSize={pageSize} sortColumn={sortColumn} sortDirection={sortDirection} onSort={changeSort} onOpen={setSelectedRow} />
+      <DemandListTable rows={rows} onOpen={setSelectedRow} />
 
-      <div className="no-print flex items-center justify-between border-t border-black/20 bg-white px-2 py-1">
-        <div className="font-bold">{loading ? 'Loading...' : rangeText}</div>
-        <div className="flex items-center gap-2">
-          <select className="h-7 border border-black/30 px-2" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }}>
-            {pageSizes.map((size) => <option key={size} value={size}>{size}</option>)}
-          </select>
-          <button type="button" className="h-7 border border-black/30 px-3 font-bold disabled:opacity-40" disabled={page <= 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Prev</button>
-          <span className="font-bold">Page {page + 1} / {totalPages}</span>
-          <button type="button" className="h-7 border border-black/30 px-3 font-bold disabled:opacity-40" disabled={page + 1 >= totalPages} onClick={() => setPage((value) => value + 1)}>Next</button>
-        </div>
+      <div className="no-print border-t border-black/20 bg-white px-2 py-1 font-bold">
+        {loading ? 'Loading...' : `${rows.length.toLocaleString('en-IN')} records`}
       </div>
 
       {printData && <DemandListPrintView data={printData} filters={appliedFilters} />}

@@ -6,7 +6,9 @@ import java.time.LocalDate;
 record DemandListSourceRow(
     Long contractId,
     String loanNumber,
+    String borrowerCode,
     String borrowerName,
+    String guarantorCode,
     String guarantorName,
     String productType,
     String contractType,
@@ -17,6 +19,7 @@ record DemandListSourceRow(
     String usage,
     BigDecimal loanAmount,
     BigDecimal financeCharges,
+    BigDecimal flatInterestRate,
     BigDecimal totalContractValue,
     LocalDate firstEmiDate,
     String paymentFrequency,

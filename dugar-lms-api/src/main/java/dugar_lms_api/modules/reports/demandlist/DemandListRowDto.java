@@ -6,7 +6,9 @@ import java.time.LocalDate;
 public record DemandListRowDto(
     Long contractId,
     String loanNumber,
+    String borrowerCode,
     String borrowerName,
+    String guarantorCode,
     String guarantorName,
     String productType,
     String assetDescription,
@@ -14,6 +16,8 @@ public record DemandListRowDto(
     String registrationOrLocation,
     String ownerNumber,
     String usage,
+    BigDecimal loanAmount,
+    BigDecimal flatInterestRate,
     BigDecimal contractValue,
     BigDecimal authorisedReceipts,
     BigDecimal principalOutstanding,

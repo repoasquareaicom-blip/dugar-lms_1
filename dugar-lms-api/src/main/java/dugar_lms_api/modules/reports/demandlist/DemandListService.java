@@ -1,51 +1,45 @@
 package dugar_lms_api.modules.reports.demandlist;
 
 import dugar_lms_api.common.pagination.PageResponse;
+import dugar_lms_api.modules.reports.aginganalysis.BranchWiseAgeingProcedureRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 public class DemandListService {
 
-    static final int DEFAULT_PAGE = 0;
-    static final int DEFAULT_SIZE = 25;
-    static final int MAX_SIZE = 250;
     static final int PRINT_ROW_LIMIT = 10_000;
 
     private final DemandListRepository demandListRepository;
     private final DemandListCalculationService demandListCalculationService;
+    private final BranchWiseAgeingProcedureRepository branchWiseAgeingProcedureRepository;
 
     public DemandListService(
         DemandListRepository demandListRepository,
-        DemandListCalculationService demandListCalculationService
+        DemandListCalculationService demandListCalculationService,
+        BranchWiseAgeingProcedureRepository branchWiseAgeingProcedureRepository
     ) {
         this.demandListRepository = demandListRepository;
         this.demandListCalculationService = demandListCalculationService;
+        this.branchWiseAgeingProcedureRepository = branchWiseAgeingProcedureRepository;
     }
 
     public DemandListResponse getDemandList(DemandListRequest request, Authentication authentication) {
         DemandListRequest validated = validate(request, false);
-        List<DemandListRowDto> filteredRows = calculatedRows(validated);
-        List<DemandListRowDto> sortedRows = sortRows(filteredRows, validated.sortColumn(), validated.sortDirection());
-        int page = page(validated.page());
-        int size = size(validated.size());
-        int from = Math.min(page * size, sortedRows.size());
-        int to = Math.min(from + size, sortedRows.size());
-        List<DemandListRowDto> pageRows = sortedRows.subList(from, to);
-        int totalPages = sortedRows.isEmpty() ? 0 : (int) Math.ceil((double) sortedRows.size() / size);
+        List<DemandListRowDto> rows = procedureRows(validated);
 
         return new DemandListResponse(
-            new PageResponse<>(pageRows, page, size, sortedRows.size(), totalPages, page == 0, totalPages == 0 || page >= totalPages - 1, pageRows.size()),
-            demandListCalculationService.summarize(filteredRows),
-            warnings(filteredRows),
+            page(rows),
+            demandListCalculationService.summarize(rows),
+            warnings(rows),
             LocalDateTime.now(),
             auditUser(authentication),
             false,
@@ -55,29 +49,31 @@ public class DemandListService {
 
     public DemandListResponse getPrintDemandList(DemandListRequest request, Authentication authentication) {
         DemandListRequest validated = validate(request, true);
-        List<DemandListRowDto> filteredRows = calculatedRows(validated);
-        if (filteredRows.size() > PRINT_ROW_LIMIT) {
-            return new DemandListResponse(
-                new PageResponse<>(List.of(), 0, PRINT_ROW_LIMIT, filteredRows.size(), 1, true, true, 0),
-                demandListCalculationService.summarize(filteredRows),
-                warnings(filteredRows),
-                LocalDateTime.now(),
-                auditUser(authentication),
-                true,
-                "Demand List contains more than 10,000 rows. Refine the filters before printing."
-            );
-        }
-
-        List<DemandListRowDto> sortedRows = sortRows(filteredRows, validated.sortColumn(), validated.sortDirection());
+        List<DemandListRowDto> rows = procedureRows(validated);
         return new DemandListResponse(
-            new PageResponse<>(sortedRows, 0, sortedRows.size(), sortedRows.size(), sortedRows.isEmpty() ? 0 : 1, true, true, sortedRows.size()),
-            demandListCalculationService.summarize(filteredRows),
-            warnings(filteredRows),
+            page(rows),
+            demandListCalculationService.summarize(rows),
+            warnings(rows),
             LocalDateTime.now(),
             auditUser(authentication),
             false,
             null
         );
+    }
+
+    public List<DemandListRowDto> calculateRowsForReport(DemandListRequest request) {
+        if (request == null || request.asOnDate() == null) {
+            throw new IllegalArgumentException("As On Date is required");
+        }
+        return calculatedRows(request);
+    }
+
+    private List<DemandListRowDto> procedureRows(DemandListRequest request) {
+        return branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode()).stream()
+            .filter(row -> contractNumberMatches(row, request.contractNumber()))
+            .filter(row -> overdueCountMatches(row, request.overdueInstallmentCount()))
+            .map(this::demandListRow)
+            .toList();
     }
 
     private List<DemandListRowDto> calculatedRows(DemandListRequest request) {
@@ -98,9 +94,6 @@ public class DemandListService {
         if (request == null || request.asOnDate() == null) {
             throw new IllegalArgumentException("As On Date is required");
         }
-        if (clean(request.areaCode()) == null && clean(request.contractNumber()) == null) {
-            throw new IllegalArgumentException("Area or Contract No is required");
-        }
         return new DemandListRequest(
             request.asOnDate(),
             clean(request.areaCode()),
@@ -113,10 +106,43 @@ public class DemandListService {
             clean(request.contractNumber()),
             validOverdueCount(request.overdueInstallmentCount()),
             clean(request.keyword()),
-            print ? 0 : page(request.page()),
-            print ? PRINT_ROW_LIMIT : size(request.size()),
+            0,
+            PRINT_ROW_LIMIT,
             clean(request.sortColumn()),
             clean(request.sortDirection())
+        );
+    }
+
+    private DemandListRowDto demandListRow(BranchWiseAgeingProcedureRepository.ProcedureContractReportRow row) {
+        return new DemandListRowDto(
+            row.contractId(),
+            row.contractNumber(),
+            row.borrowerCode(),
+            row.borrowerName(),
+            row.guarantorCode(),
+            row.guarantorName(),
+            first(row.category(), row.contractType()),
+            row.vehicleMake(),
+            null,
+            row.registrationNumber(),
+            row.ownerSerialNo(),
+            row.contractType(),
+            money(row.loanAmount()),
+            money(row.flatInterestRate()),
+            money(row.totalContractValue()),
+            money(row.totalReceived()),
+            money(row.principalOutstanding()),
+            money(row.interestOutstanding()),
+            money(row.totalOutstanding()),
+            row.overdueEmiCount(),
+            money(row.overdueAmount()),
+            row.overdueFromDate(),
+            row.overdueEndDate(),
+            money(row.currentDue()),
+            row.currentDueDate(),
+            row.areaCode(),
+            null,
+            null
         );
     }
 
@@ -132,6 +158,17 @@ public class DemandListService {
         return overdueInstallmentCount == null || overdueInstallmentCount.equals(row.overdueInstallmentCount());
     }
 
+    private boolean overdueCountMatches(BranchWiseAgeingProcedureRepository.ProcedureContractReportRow row, Integer overdueInstallmentCount) {
+        return overdueInstallmentCount == null || overdueInstallmentCount.equals(row.overdueEmiCount());
+    }
+
+    private boolean contractNumberMatches(BranchWiseAgeingProcedureRepository.ProcedureContractReportRow row, String contractNumber) {
+        if (contractNumber == null) {
+            return true;
+        }
+        return contractNumber.equalsIgnoreCase(String.valueOf(row.contractNumber()).trim());
+    }
+
     private Integer validOverdueCount(Integer value) {
         return value == null || value < 0 ? null : value;
     }
@@ -144,38 +181,9 @@ public class DemandListService {
             .toList();
     }
 
-    private List<DemandListRowDto> sortRows(List<DemandListRowDto> rows, String sortColumn, String sortDirection) {
-        Comparator<DemandListRowDto> comparator = comparator(sortColumn);
-        if ("desc".equalsIgnoreCase(sortDirection)) {
-            comparator = comparator.reversed();
-        }
-        return rows.stream().sorted(comparator.thenComparing(DemandListRowDto::contractId, Comparator.nullsLast(Long::compareTo))).toList();
-    }
-
-    private Comparator<DemandListRowDto> comparator(String sortColumn) {
-        String normalized = sortColumn == null ? "loanNumber" : sortColumn.trim();
-        return switch (normalized) {
-            case "borrowerName" -> Comparator.comparing(DemandListRowDto::borrowerName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-            case "productType" -> Comparator.comparing(DemandListRowDto::productType, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-            case "contractValue" -> Comparator.comparing(row -> money(row.contractValue()));
-            case "principalOutstanding" -> Comparator.comparing(row -> money(row.principalOutstanding()));
-            case "interestOutstanding" -> Comparator.comparing(row -> money(row.interestOutstanding()));
-            case "totalOutstanding" -> Comparator.comparing(row -> money(row.totalOutstanding()));
-            case "overdueInstallmentCount" -> Comparator.comparing(row -> row.overdueInstallmentCount() == null ? 0 : row.overdueInstallmentCount());
-            case "overdueAmount" -> Comparator.comparing(row -> money(row.overdueAmount()));
-            case "currentDueAmount" -> Comparator.comparing(row -> money(row.currentDueAmount()));
-            case "area" -> Comparator.comparing(DemandListRowDto::area, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-            case "fieldOfficer" -> Comparator.comparing(DemandListRowDto::fieldOfficer, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-            default -> Comparator.comparing(DemandListRowDto::loanNumber, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-        };
-    }
-
-    private int page(Integer page) {
-        return page == null || page < 0 ? DEFAULT_PAGE : page;
-    }
-
-    private int size(Integer size) {
-        return size == null || size < 1 ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
+    private PageResponse<DemandListRowDto> page(List<DemandListRowDto> rows) {
+        int size = rows.size();
+        return new PageResponse<>(rows, 0, size, size, size == 0 ? 0 : 1, true, true, size);
     }
 
     private String clean(String value) {
@@ -183,7 +191,12 @@ public class DemandListService {
     }
 
     private BigDecimal money(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
+        return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String first(String first, String second) {
+        String cleanedFirst = clean(first);
+        return cleanedFirst == null ? clean(second) : cleanedFirst;
     }
 
     private String auditUser(Authentication authentication) {

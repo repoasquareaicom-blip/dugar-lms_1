@@ -58,7 +58,7 @@ public class AfcReportRepository {
     private static final String RECEIPTS_SQL = """
         SELECT
             vh.voucher_date AS receipt_date,
-            COALESCE(NULLIF(TRIM(vh.receipt_number), ''), NULLIF(TRIM(vh.voucher_number), ''), vh.voucher_header_id::text) AS receipt_number,
+            COALESCE(NULLIF(TRIM(vh.receipt_number), ''), NULLIF(TRIM(vh.temporary_receipt_number), ''), NULLIF(TRIM(vh.voucher_number), ''), vh.voucher_header_id::text) AS receipt_number,
             GREATEST(COALESCE(vd.credit_amount, 0), 0) AS amount
         FROM voucher_headers vh
         JOIN voucher_details vd
@@ -66,6 +66,7 @@ public class AfcReportRepository {
         WHERE UPPER(TRIM(COALESCE(vh.status, ''))) = 'AUTHORISED'
           AND vh.voucher_date <= :asOnDate
           AND TRIM(COALESCE(vd.ledger_code, '')) IN ('3001', '4201')
+          AND UPPER(TRIM(COALESCE(vd.voucher_type, vh.voucher_type, ''))) <> 'HJ'
           AND GREATEST(COALESCE(vd.credit_amount, 0), 0) > 0
           AND (
               vh.contract_id = :contractId
@@ -76,6 +77,10 @@ public class AfcReportRepository {
               OR (
                   NULLIF(TRIM(vd.loan_reference), '') IS NOT NULL
                   AND UPPER(TRIM(vd.loan_reference)) IN (UPPER(TRIM(:loanNumber)), UPPER(TRIM(COALESCE(:legacyLoanNumber, ''))))
+              )
+              OR (
+                  NULLIF(TRIM(vd.sub_ledger_code), '') IS NOT NULL
+                  AND UPPER(TRIM(vd.sub_ledger_code)) IN (UPPER(TRIM(:loanNumber)), UPPER(TRIM(COALESCE(:legacyLoanNumber, ''))))
               )
           )
         ORDER BY vh.voucher_date, vh.voucher_header_id, vd.voucher_detail_id

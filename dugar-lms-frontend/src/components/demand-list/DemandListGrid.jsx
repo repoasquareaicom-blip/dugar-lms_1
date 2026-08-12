@@ -1,7 +1,7 @@
 const groupedColumns = [
   { key: 'serialNumber', label: ['Sl. No'], align: 'right', sortField: 'serialNumber', width: 'w-[70px]' },
   { key: 'loanNumber', label: ['Loan No.'], sortField: 'loanNumber', width: 'w-[110px]' },
-  { key: 'party', label: ['Name of Borrower', 'Name of Guarantor'], sortField: 'borrowerName', width: 'w-[230px]' },
+  { key: 'party', label: ['Name of Borrower', 'Name of Guarantor'], sortField: 'borrowerName', width: 'w-[260px]' },
   {
     key: 'asset',
     label: ['Product Type', 'Make of Vehicle/', 'Regn No./Location', 'No .of Owner', 'Product usage'],
@@ -52,7 +52,10 @@ function lineValues(row, key) {
     case 'loanNumber':
       return [row.loanNumber || ''];
     case 'party':
-      return [row.borrowerName || '', row.guarantorName || ''];
+      return [
+        row.borrowerName || '',
+        row.guarantorName || '',
+      ];
     case 'asset':
       return [
         row.productType || '',

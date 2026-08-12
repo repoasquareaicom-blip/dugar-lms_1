@@ -4,7 +4,9 @@ import { formatDate, formatMoney } from './DemandListGrid';
 
 const fields = [
   ['Loan No.', 'loanNumber'],
+  ['Borrower Code', 'borrowerCode'],
   ['Borrower Name', 'borrowerName'],
+  ['Guarantor Code', 'guarantorCode'],
   ['Guarantor Name', 'guarantorName'],
   ['Product Type', 'productType'],
   ['Asset / Property', 'assetDescription'],

@@ -233,6 +233,73 @@ function ensureCommitteeDemandListMenu(menuTree) {
     subMenus: [],
   });
 
+  reports.subMenus = reports.subMenus.filter((menu) => {
+    if (!menuMatches(menu, ['aging analysis', 'ageing analysis'])) return true;
+    const path = menu.path || menu.urlPath || '#';
+    const code = normalizeText(menu.menuCode || menu.menu_code);
+    const hasChildren = (menu.subMenus || []).length > 0;
+    return code === 'committee_aging_analysis' || path === '#' || hasChildren;
+  });
+
+  const agingAnalysis = ensureMenu(reports, {
+    menuId: 'frontend-aging-analysis',
+    menuName: 'Aging Analysis',
+    menuCode: 'COMMITTEE_AGING_ANALYSIS',
+    icon: 'BarChart3',
+    path: '#',
+    urlPath: '#',
+    displayOrder: nextOrder(reports.subMenus),
+    subMenus: [],
+  });
+
+  agingAnalysis.path = '#';
+  agingAnalysis.urlPath = '#';
+  agingAnalysis.subMenus = agingAnalysis.subMenus || [];
+
+  ensureMenu(agingAnalysis, {
+    menuId: 'frontend-aging-branch-wise',
+    menuName: 'Branch Wise',
+    menuCode: 'COMMITTEE_AGING_BRANCH_WISE',
+    icon: 'GitBranch',
+    path: '/committee/aging-analysis/branch-wise',
+    urlPath: '/committee/aging-analysis/branch-wise',
+    displayOrder: 1,
+    subMenus: [],
+  });
+
+  ensureMenu(agingAnalysis, {
+    menuId: 'frontend-aging-consolidated',
+    menuName: 'Consolidated',
+    menuCode: 'COMMITTEE_AGING_CONSOLIDATED',
+    icon: 'Table2',
+    path: '/committee/aging-analysis/consolidated',
+    urlPath: '/committee/aging-analysis/consolidated',
+    displayOrder: 2,
+    subMenus: [],
+  });
+
+  ensureMenu(agingAnalysis, {
+    menuId: 'frontend-aging-loan-ticket-wise',
+    menuName: 'Loan Ticket Wise',
+    menuCode: 'COMMITTEE_AGING_LOAN_TICKET_WISE',
+    icon: 'IndianRupee',
+    path: '/committee/aging-analysis/loan-ticket-wise',
+    urlPath: '/committee/aging-analysis/loan-ticket-wise',
+    displayOrder: 3,
+    subMenus: [],
+  });
+
+  ensureMenu(agingAnalysis, {
+    menuId: 'frontend-aging-interest-wise',
+    menuName: 'Interest Wise',
+    menuCode: 'COMMITTEE_AGING_INTEREST_WISE',
+    icon: 'Percent',
+    path: '/committee/aging-analysis/interest-wise',
+    urlPath: '/committee/aging-analysis/interest-wise',
+    displayOrder: 4,
+    subMenus: [],
+  });
+
   return menuTree;
 }
 

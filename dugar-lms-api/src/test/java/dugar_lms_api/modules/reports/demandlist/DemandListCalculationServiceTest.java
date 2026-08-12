@@ -142,7 +142,7 @@ class DemandListCalculationServiceTest {
     }
 
     private DemandListSourceRow source(String loan, String finance, String total, String receipts, LocalDate firstEmiDate, String frequency) {
-        return new DemandListSourceRow(1L, "L1", "Borrower", "Guarantor", "HP", "HP", "Asset", "VEH", "TN01", "1", "Use", bd(loan), bd(finance), bd(total), firstEmiDate, frequency, "AREA", "FO", bd(receipts));
+        return new DemandListSourceRow(1L, "L1", "B001", "Borrower", "G001", "Guarantor", "HP", "HP", "Asset", "VEH", "TN01", "1", "Use", bd(loan), bd(finance), bd("12"), bd(total), firstEmiDate, frequency, "AREA", "FO", bd(receipts));
     }
 
     private DemandListRepaymentSlab slab(int sequence, int count, String amount) {

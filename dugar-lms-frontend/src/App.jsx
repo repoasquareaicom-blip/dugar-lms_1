@@ -26,6 +26,8 @@ import VoucherAuthorisation from './pages/accounts/transactions/VoucherAuthorisa
 import Ratios from './pages/accounts/reports/ratios.jsx';
 import DemandListPage from './pages/committee/reports/DemandListPage.jsx';
 import AfcReportPage from './pages/committee/reports/AfcReportPage.jsx';
+import AgingAnalysisPage from './pages/committee/reports/AgingAnalysisPage.jsx';
+import AgingMatrixReportPage from './pages/committee/reports/AgingMatrixReportPage.jsx';
 import { normalizeMenuTree } from './utils/menuNormalizer';
 import { fetchContractDashboard } from './services/dashboardService';
 
@@ -491,6 +493,11 @@ function App() {
           <Route path="/accounts/reports/ratios" element={<Ratios />} />
           <Route path="/committee/reports/demand-list" element={<DemandListPage />} />
           <Route path="/committee/reports/afc" element={<AfcReportPage />} />
+          <Route path="/committee/reports/aging-analysis" element={<AgingAnalysisPage />} />
+          <Route path="/committee/aging-analysis/branch-wise" element={<AgingAnalysisPage initialTab="branch" />} />
+          <Route path="/committee/aging-analysis/consolidated" element={<AgingAnalysisPage initialTab="consolidated" />} />
+          <Route path="/committee/aging-analysis/loan-ticket-wise" element={<AgingMatrixReportPage type="loan-ticket" />} />
+          <Route path="/committee/aging-analysis/interest-wise" element={<AgingMatrixReportPage type="interest" />} />
           <Route 
   path="*" 
   element={

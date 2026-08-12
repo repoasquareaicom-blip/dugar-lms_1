@@ -93,6 +93,19 @@ const FALLBACK_MENU = [
         subMenus: [
           { menuId: 142, menuName: 'Demand List', icon: 'FileSpreadsheet', path: '/committee/reports/demand-list', displayOrder: 1, subMenus: [] },
           { menuId: 143, menuName: 'AFC Report', icon: 'FileText', path: '/committee/reports/afc', displayOrder: 2, subMenus: [] },
+          {
+            menuId: 144,
+            menuName: 'Aging Analysis',
+            icon: 'BarChart3',
+            path: '#',
+            displayOrder: 3,
+            subMenus: [
+              { menuId: 145, menuName: 'Branch Wise', icon: 'GitBranch', path: '/committee/aging-analysis/branch-wise', displayOrder: 1, subMenus: [] },
+              { menuId: 146, menuName: 'Consolidated', icon: 'Table2', path: '/committee/aging-analysis/consolidated', displayOrder: 2, subMenus: [] },
+              { menuId: 147, menuName: 'Loan Ticket Wise', icon: 'IndianRupee', path: '/committee/aging-analysis/loan-ticket-wise', displayOrder: 3, subMenus: [] },
+              { menuId: 148, menuName: 'Interest Wise', icon: 'Percent', path: '/committee/aging-analysis/interest-wise', displayOrder: 4, subMenus: [] },
+            ],
+          },
         ],
       },
     ],

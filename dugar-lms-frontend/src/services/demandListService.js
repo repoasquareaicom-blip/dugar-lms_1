@@ -6,29 +6,25 @@ function addParam(params, key, value) {
   }
 }
 
-function paramsFrom(filters = {}, options = {}) {
+function paramsFrom(filters = {}) {
   const params = {};
   addParam(params, 'asOnDate', filters.asOnDate);
-  addParam(params, 'areaCode', filters.areaCode);
-  addParam(params, 'contractNumber', filters.contractNumber);
+  addParam(params, 'areaCode', String(filters.areaCode || '').trim());
+  addParam(params, 'contractNumber', String(filters.contractNumber || '').trim());
   addParam(params, 'overdueInstallmentCount', filters.overdueInstallmentCount);
-  addParam(params, 'page', options.page);
-  addParam(params, 'size', options.size);
-  addParam(params, 'sortColumn', options.sortColumn);
-  addParam(params, 'sortDirection', options.sortDirection);
   return params;
 }
 
-export async function fetchDemandList(filters, options) {
+export async function fetchDemandList(filters) {
   const response = await apiClient.get('/reports/demand-list', {
-    params: paramsFrom(filters, options),
+    params: paramsFrom(filters),
   });
   return response.data;
 }
 
-export async function fetchDemandListPrint(filters, options = {}) {
+export async function fetchDemandListPrint(filters) {
   const response = await apiClient.get('/reports/demand-list/print', {
-    params: paramsFrom(filters, options),
+    params: paramsFrom(filters),
   });
   return response.data;
 }

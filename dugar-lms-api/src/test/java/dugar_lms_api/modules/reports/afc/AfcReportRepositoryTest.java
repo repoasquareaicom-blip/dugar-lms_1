@@ -32,6 +32,9 @@ class AfcReportRepositoryTest {
         assertThat(sql.getValue()).contains("UPPER(TRIM(COALESCE(vh.status, ''))) = 'AUTHORISED'");
         assertThat(sql.getValue()).contains("vh.voucher_date <= :asOnDate");
         assertThat(sql.getValue()).contains("TRIM(COALESCE(vd.ledger_code, '')) IN ('3001', '4201')");
+        assertThat(sql.getValue()).contains("UPPER(TRIM(COALESCE(vd.voucher_type, vh.voucher_type, ''))) <> 'HJ'");
+        assertThat(sql.getValue()).contains("vh.temporary_receipt_number");
+        assertThat(sql.getValue()).contains("vd.sub_ledger_code");
         assertThat(sql.getValue()).doesNotContain("voucher_header_history");
         assertThat(sql.getValue()).doesNotContain("voucher_detail_history");
     }
