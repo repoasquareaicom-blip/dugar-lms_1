@@ -1,6 +1,7 @@
-import { Printer, RotateCcw, Search, Sheet, X } from 'lucide-react';
+import { Printer, RotateCcw, Search, Sheet } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { fetchAgingAnalysis, fetchAgingContractDetail, fetchAgingContractEmis, fetchAgingContractReceipts, fetchAgingContracts } from '../../../services/agingAnalysisService';
+import AgingDrilldownDrawer from '../../../components/aging-analysis/AgingDrilldownDrawer';
+import { fetchAgingAnalysis, fetchAgingContractDetail, fetchAgingContractEmis, fetchAgingContractReceipts, fetchAgingContracts, fetchAgingRawVoucher } from '../../../services/agingAnalysisService';
 import { fetchContractAreas } from '../../../services/contractsService';
 
 const today = new Date().toISOString().slice(0, 10);
@@ -10,30 +11,35 @@ const fieldClass = 'h-8 w-full border-0 bg-white px-2 text-[12px] text-black out
 const branchColumns = [
   ['area', 'Area', 'left'],
   ['noOfAccounts', 'No.A/Cs', 'right'],
-  ['aum', 'AUM', 'right'],
-  ['current', 'Current', 'right'],
-  ['bucket1To30', '1--30', 'right'],
-  ['bucket31To60', '31--60', 'right'],
-  ['bucket61To90', '61--90', 'right'],
-  ['bucket91To120', '91--120', 'right'],
-  ['bucket121To150', '121--150', 'right'],
-  ['bucket151To180', '151--180', 'right'],
-  ['bucketAbove180', '180 & above', 'right'],
-  ['total', 'Total', 'right'],
+  ['aum', 'AUM (Rs Lakhs)', 'right', 'lakhs'],
+  ['current', 'Current (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket1To30', '1--30 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket31To60', '31--60 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket61To90', '61--90 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket91To120', '91--120 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket121To150', '121--150 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket151To180', '151--180 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucketAbove180', '180 & above (Rs Lakhs)', 'right', 'lakhs'],
+  ['total', 'Total Outstanding (Rs Lakhs)', 'right', 'lakhs'],
 ];
 
 const consolidatedColumns = [
   ['label', 'Ageing Bucket', 'left'],
   ['noOfAccounts', 'No.Of A/cs', 'right'],
-  ['principalOutstanding', 'O/S Principal', 'right'],
-  ['interestOutstanding', 'O/S Interest', 'right'],
-  ['total', 'Total', 'right'],
+  ['principalOutstanding', 'O/S Principal (Rs Lakhs)', 'right', 'lakhs'],
+  ['interestOutstanding', 'O/S Interest (Rs Lakhs)', 'right', 'lakhs'],
+  ['total', 'Total (Rs Lakhs)', 'right', 'lakhs'],
   ['portfolioPercent', '% of portfolio', 'right'],
 ];
 
 function formatMoney(value) {
   if (value === null || value === undefined || value === '') return '';
   return Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatLakhs(value) {
+  if (value === null || value === undefined || value === '') return '';
+  return (Number(value || 0) / 100000).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatPercent(value) {
@@ -56,8 +62,9 @@ function errorMessage(error, fallback) {
   return error?.response?.data?.message || error?.message || fallback;
 }
 
-function displayValue(row, key) {
+function displayValue(row, key, format) {
   if (key === 'portfolioPercent') return formatPercent(row[key]);
+  if (format === 'lakhs') return formatLakhs(row[key]);
   if (key !== 'area' && key !== 'label' && key !== 'noOfAccounts') return formatMoney(row[key]);
   if (key === 'noOfAccounts') {
     if (row[key] === null || row[key] === undefined || row[key] === '') return '';
@@ -196,7 +203,7 @@ function ReportTable({ columns, rows, footerRow, onCellClick }) {
         <tbody>
           {rows.map((row, index) => (
             <tr key={`${row.area || row.bucket || row.label}-${index}`} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-blue-50`}>
-              {columns.map(([key, , align]) => (
+              {columns.map(([key, , align, format]) => (
                 <td key={key} className={`border border-black/30 px-2 py-1 ${align === 'right' ? 'text-right' : 'text-left'}`}>
                   {onCellClick && branchBucketByKey[key] ? (
                     <button
@@ -204,9 +211,9 @@ function ReportTable({ columns, rows, footerRow, onCellClick }) {
                       className="w-full text-inherit underline decoration-dotted underline-offset-2 hover:text-[#0052CC]"
                       onClick={() => onCellClick(row, key)}
                     >
-                      {displayValue(row, key)}
+                      {displayValue(row, key, format)}
                     </button>
-                  ) : displayValue(row, key)}
+                  ) : displayValue(row, key, format)}
                 </td>
               ))}
             </tr>
@@ -220,9 +227,9 @@ function ReportTable({ columns, rows, footerRow, onCellClick }) {
         {footerRow && rows.length > 0 && (
           <tfoot className="sticky bottom-0 z-10 bg-[#e8edf5] font-black">
             <tr>
-              {columns.map(([key, , align]) => (
+              {columns.map(([key, , align, format]) => (
                 <td key={key} className={`border border-black/40 px-2 py-1 ${align === 'right' ? 'text-right' : 'text-left'}`}>
-                  {displayValue(footerRow, key)}
+                  {displayValue(footerRow, key, format)}
                 </td>
               ))}
             </tr>
@@ -236,10 +243,10 @@ function ReportTable({ columns, rows, footerRow, onCellClick }) {
 function SummaryStrip({ summary }) {
   const items = [
     ['No. of A/cs', Number(summary?.noOfAccounts || 0).toLocaleString('en-IN')],
-    ['AUM', formatMoney(summary?.aum)],
-    ['Current', formatMoney(summary?.current)],
-    ['Total Overdue', formatMoney(summary?.totalOverdue)],
-    ['Total', formatMoney(summary?.total)],
+    ['AUM (Rs Lakhs)', formatLakhs(summary?.aum)],
+    ['Current (Rs Lakhs)', formatLakhs(summary?.current)],
+    ['Total Overdue (Rs Lakhs)', formatLakhs(summary?.totalOverdue)],
+    ['Total (Rs Lakhs)', formatLakhs(summary?.total)],
   ];
 
   return (
@@ -268,103 +275,22 @@ function consolidatedTotalRow(rows) {
   };
 }
 
-function DrilldownDrawer({ state, onClose, onSelectContract }) {
-  if (!state?.open) return null;
-  const contracts = state.contracts || [];
-  const detail = state.detail;
-  const emis = state.emis || [];
-  const receipts = state.receipts || [];
-
-  return (
-    <div className="no-print fixed inset-0 z-[120]">
-      <button type="button" aria-label="Close aging drilldown" className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="absolute inset-y-0 right-0 flex w-[860px] max-w-[96vw] flex-col border-l-2 border-black/20 bg-white text-[12px] text-black shadow-2xl">
-        <div className="flex items-center justify-between border-b border-black/20 bg-slate-50 px-3 py-2">
-          <div className="font-bold uppercase">{state.title || 'Aging Drilldown'}</div>
-          <button type="button" onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded border border-red-300 bg-red-50 text-red-700 hover:bg-red-100" title="Close">
-            <X size={16} />
-          </button>
-        </div>
-        {state.loading && (
-          <div className="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-3 py-2 font-bold text-blue-700">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-[#0052CC]" />
-            Loading drill-down...
-          </div>
-        )}
-        {state.message && <div className="border-b border-red-200 bg-red-50 px-3 py-2 font-bold text-red-700">{state.message}</div>}
-        <div className="min-h-0 flex-1 overflow-auto p-3">
-          <div className="mb-3 text-[13px] font-black uppercase text-[#0052CC]">Contracts</div>
-          {state.loading && contracts.length === 0 && (
-            <div className="flex h-32 items-center justify-center border border-dashed border-blue-200 bg-blue-50/50">
-              <div className="text-center">
-                <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-[#0052CC]" />
-                <div className="mt-2 font-bold uppercase text-[#0052CC]">Loading</div>
-              </div>
-            </div>
-          )}
-          {(!state.loading || contracts.length > 0) && <table className="mb-4 min-w-full border-collapse">
-            <thead className="bg-[#e8edf5] font-bold">
-              <tr>
-                {['Contract Number', 'Borrower', 'AUM', 'Total Outstanding', 'Overdue EMIs', 'Bucket'].map((label) => <th key={label} className="border border-black/30 px-2 py-1 text-left">{label}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {contracts.map((row) => (
-                <tr key={row.contractId} className="hover:bg-blue-50">
-                  <td className="border border-black/20 px-2 py-1">
-                    <button type="button" className="font-bold text-[#0052CC] underline" onClick={() => onSelectContract(row.contractId)}>{row.loanNumber}</button>
-                  </td>
-                  <td className="border border-black/20 px-2 py-1">{row.borrowerName || ''}</td>
-                  <td className="border border-black/20 px-2 py-1 text-right">{formatMoney(row.principalOutstanding)}</td>
-                  <td className="border border-black/20 px-2 py-1 text-right">{formatMoney(row.totalOutstanding)}</td>
-                  <td className="border border-black/20 px-2 py-1 text-right">{row.overdueInstallmentCount || 0}</td>
-                  <td className="border border-black/20 px-2 py-1">{state.bucketLabel || ''}</td>
-                </tr>
-              ))}
-              {!state.loading && contracts.length === 0 && <tr><td colSpan="6" className="border border-black/20 px-3 py-5 text-center font-bold uppercase text-black/50">No contracts found</td></tr>}
-            </tbody>
-          </table>}
-
-          {detail && (
-            <>
-              <div className="mb-2 text-[13px] font-black uppercase text-[#0052CC]">Contract Details - {detail.contractNumber}</div>
-              <div className="mb-4 grid grid-cols-2 gap-x-4 border border-black/20 p-2">
-                {[
-                  ['Area Code', detail.areaCode],
-                  ['Total Contract Value', formatMoney(detail.totalContractValue)],
-                  ['Finance Charges', formatMoney(detail.financeCharges)],
-                  ['Original Principal', formatMoney(detail.originalPrincipal)],
-                  ['Total Received', formatMoney(detail.totalReceived)],
-                  ['Principal Recovered', formatMoney(detail.principalRecovered)],
-                  ['AUM', formatMoney(detail.aum)],
-                  ['Total Outstanding', formatMoney(detail.totalOutstanding)],
-                  ['Overdue EMIs', detail.overdueEmiCount],
-                  ['Ageing Bucket', detail.ageingBucket],
-                ].map(([label, value]) => (
-                  <div key={label} className="contents">
-                    <div className="border-b border-black/10 py-1 font-bold uppercase text-black/60">{label}</div>
-                    <div className="border-b border-black/10 py-1 text-right font-bold">{value}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mb-2 text-[13px] font-black uppercase text-[#0052CC]">EMI Schedule</div>
-              <table className="mb-4 min-w-full border-collapse">
-                <thead className="bg-[#e8edf5] font-bold"><tr>{['EMI No', 'Due Date', 'Installment', 'Paid', 'Outstanding', 'Status'].map((label) => <th key={label} className="border border-black/30 px-2 py-1 text-left">{label}</th>)}</tr></thead>
-                <tbody>{emis.map((emi) => <tr key={emi.emiNumber}><td className="border border-black/20 px-2 py-1">{emi.emiNumber}</td><td className="border border-black/20 px-2 py-1">{emi.dueDate || ''}</td><td className="border border-black/20 px-2 py-1 text-right">{formatMoney(emi.installmentAmount)}</td><td className="border border-black/20 px-2 py-1 text-right">{formatMoney(emi.paidAmount)}</td><td className="border border-black/20 px-2 py-1 text-right">{formatMoney(emi.outstandingAmount)}</td><td className="border border-black/20 px-2 py-1 font-bold">{emi.status}</td></tr>)}</tbody>
-              </table>
-
-              <div className="mb-2 text-[13px] font-black uppercase text-[#0052CC]">Receipt History</div>
-              <table className="min-w-full border-collapse">
-                <thead className="bg-[#e8edf5] font-bold"><tr>{['Date', 'Voucher No', 'Type', 'Receipt No', 'Ledger', 'Sub Ledger', 'Credit', 'Narration'].map((label) => <th key={label} className="border border-black/30 px-2 py-1 text-left">{label}</th>)}</tr></thead>
-                <tbody>{receipts.map((receipt, index) => <tr key={`${receipt.voucherNumber}-${index}`}><td className="border border-black/20 px-2 py-1">{receipt.voucherDate || ''}</td><td className="border border-black/20 px-2 py-1">{receipt.voucherNumber || ''}</td><td className="border border-black/20 px-2 py-1">{receipt.voucherType || ''}</td><td className="border border-black/20 px-2 py-1">{receipt.receiptNumber || receipt.temporaryReceiptNumber || ''}</td><td className="border border-black/20 px-2 py-1">{receipt.ledgerCode || ''}</td><td className="border border-black/20 px-2 py-1">{receipt.subLedgerCode || ''}</td><td className="border border-black/20 px-2 py-1 text-right">{formatMoney(receipt.collectionAmount)}</td><td className="border border-black/20 px-2 py-1">{receipt.narration || ''}</td></tr>)}</tbody>
-              </table>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+function branchTotalRow(rows, summary) {
+  if (!rows.length) return null;
+  return {
+    area: 'TOTAL',
+    noOfAccounts: summary?.noOfAccounts ?? rows.reduce((sum, row) => sum + Number(row.noOfAccounts || 0), 0),
+    aum: summary?.aum ?? rows.reduce((total, row) => total + Number(row.aum || 0), 0),
+    current: summary?.current ?? rows.reduce((total, row) => total + Number(row.current || 0), 0),
+    bucket1To30: rows.reduce((total, row) => total + Number(row.bucket1To30 || 0), 0),
+    bucket31To60: rows.reduce((total, row) => total + Number(row.bucket31To60 || 0), 0),
+    bucket61To90: rows.reduce((total, row) => total + Number(row.bucket61To90 || 0), 0),
+    bucket91To120: rows.reduce((total, row) => total + Number(row.bucket91To120 || 0), 0),
+    bucket121To150: rows.reduce((total, row) => total + Number(row.bucket121To150 || 0), 0),
+    bucket151To180: rows.reduce((total, row) => total + Number(row.bucket151To180 || 0), 0),
+    bucketAbove180: rows.reduce((total, row) => total + Number(row.bucketAbove180 || 0), 0),
+    total: summary?.total ?? rows.reduce((total, row) => total + Number(row.total || 0), 0),
+  };
 }
 
 export default function AgingAnalysisPage({ initialTab = 'branch' }) {
@@ -411,7 +337,7 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
   const openBranchDrilldown = async (row, key) => {
     const bucket = branchBucketByKey[key] || 'all';
     const title = `Contracts - ${row.area || filters.areaCode}`;
-    const nextState = { open: true, loading: true, title, bucketLabel: key === 'area' ? 'All' : branchColumns.find(([columnKey]) => columnKey === key)?.[1], contracts: [], detail: null, emis: [], receipts: [], message: '' };
+    const nextState = { open: true, loading: true, title, bucketLabel: key === 'area' ? 'All' : branchColumns.find(([columnKey]) => columnKey === key)?.[1], contracts: [], detail: null, emis: [], receipts: [], message: '', rawVoucher: null, rawVoucherKey: null };
     setDrilldown(nextState);
     try {
       const contracts = await fetchAgingContracts({ areaCode: row.area || filters.areaCode, bucket, asOnDate: titleDate });
@@ -422,7 +348,7 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
   };
 
   const selectDrilldownContract = async (contractId) => {
-    setDrilldown((current) => ({ ...current, loading: true, message: '' }));
+    setDrilldown((current) => ({ ...current, loading: true, message: '', rawVoucher: null, rawVoucherKey: null, rawVoucherMessage: '', rawVoucherLoading: false }));
     try {
       const [detail, emis, receipts] = await Promise.all([
         fetchAgingContractDetail(contractId, { asOnDate: titleDate }),
@@ -432,6 +358,22 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
       setDrilldown((current) => ({ ...current, loading: false, detail, emis, receipts }));
     } catch (error) {
       setDrilldown((current) => ({ ...current, loading: false, message: error?.response?.data?.message || error?.message || 'Unable to load contract details.' }));
+    }
+  };
+
+  const selectDrilldownReceipt = async (receipt) => {
+    const contractId = drilldown.detail?.contractId;
+    if (!contractId || !receipt?.voucherNumber) return;
+    const rawVoucherKey = `${receipt.voucherType || ''}:${receipt.voucherNumber || ''}`;
+    setDrilldown((current) => ({ ...current, rawVoucherLoading: true, rawVoucherMessage: '', rawVoucherKey, rawVoucher: null }));
+    try {
+      const rawVoucher = await fetchAgingRawVoucher(contractId, {
+        voucherNumber: receipt.voucherNumber,
+        voucherType: receipt.voucherType,
+      });
+      setDrilldown((current) => ({ ...current, rawVoucherLoading: false, rawVoucher }));
+    } catch (error) {
+      setDrilldown((current) => ({ ...current, rawVoucherLoading: false, rawVoucherMessage: error?.response?.data?.message || error?.message || 'Unable to load raw voucher details.' }));
     }
   };
 
@@ -484,16 +426,16 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
         <tr><th colspan="${columns.length}">${excelCell(caption)}</th></tr>
         <tr>${columns.map(([, label]) => `<th>${excelCell(label)}</th>`).join('')}</tr>
         ${rows.map((row) => `
-          <tr>${columns.map(([key]) => `<td>${excelCell(displayValue(row, key))}</td>`).join('')}</tr>
+          <tr>${columns.map(([key, , , format]) => `<td>${excelCell(displayValue(row, key, format))}</td>`).join('')}</tr>
         `).join('')}
-        ${footerRow ? `<tr>${columns.map(([key]) => `<td><strong>${excelCell(displayValue(footerRow, key))}</strong></td>`).join('')}</tr>` : ''}
+        ${footerRow ? `<tr>${columns.map(([key, , , format]) => `<td><strong>${excelCell(displayValue(footerRow, key, format))}</strong></td>`).join('')}</tr>` : ''}
       </table>
     `;
     const html = `
       <html>
         <head><meta charset="utf-8" /></head>
         <body>
-          ${tableHtml(`Branch Wise ${title}`, branchColumns, report.branchWise || [])}
+          ${tableHtml(`Branch Wise ${title}`, branchColumns, report.branchWise || [], branchTotalRow(report.branchWise || [], report.summary))}
           <br/>
           ${tableHtml(`Consolidated ${title}`, consolidatedColumns, report.consolidated || [], consolidatedTotalRow(report.consolidated || []))}
         </body>
@@ -512,6 +454,7 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
 
   const branchRows = data?.branchWise || [];
   const consolidatedRows = data?.consolidated || [];
+  const branchFooter = branchTotalRow(branchRows, data?.summary);
   const consolidatedFooter = consolidatedTotalRow(consolidatedRows);
   const titleDate = data?.asOnDate || appliedFilters?.asOnDate || filters.asOnDate;
 
@@ -548,27 +491,32 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
       </div>
       <div className="no-print flex min-h-0 flex-1">
         {activeTab === 'branch'
-          ? <ReportTable columns={branchColumns} rows={branchRows} onCellClick={openBranchDrilldown} />
+          ? <ReportTable columns={branchColumns} rows={branchRows} footerRow={branchFooter} onCellClick={openBranchDrilldown} />
           : <ReportTable columns={consolidatedColumns} rows={consolidatedRows} footerRow={consolidatedFooter} />}
       </div>
-      <DrilldownDrawer state={drilldown} onClose={() => setDrilldown({ open: false, loading: false, contracts: [], detail: null, emis: [], receipts: [] })} onSelectContract={selectDrilldownContract} />
+      <AgingDrilldownDrawer state={drilldown} onClose={() => setDrilldown({ open: false, loading: false, contracts: [], detail: null, emis: [], receipts: [] })} onSelectContract={selectDrilldownContract} onSelectReceipt={selectDrilldownReceipt} />
       <div className="aging-print-root">
         <div className="aging-print-title">Branch Wise Aging Analysis As on {titleDate}</div>
         <table className="aging-print-table">
           <thead><tr>{branchColumns.map(([, label, align]) => <th key={label} className={align === 'right' ? 'right' : ''}>{label}</th>)}</tr></thead>
           <tbody>
-            {branchRows.map((row, index) => <tr key={`print-branch-${index}`}>{branchColumns.map(([key, , align]) => <td key={key} className={align === 'right' ? 'right' : ''}>{displayValue(row, key)}</td>)}</tr>)}
+            {branchRows.map((row, index) => <tr key={`print-branch-${index}`}>{branchColumns.map(([key, , align, format]) => <td key={key} className={align === 'right' ? 'right' : ''}>{displayValue(row, key, format)}</td>)}</tr>)}
           </tbody>
+          {branchFooter && (
+            <tfoot>
+              <tr>{branchColumns.map(([key, , align, format]) => <td key={key} className={align === 'right' ? 'right' : ''}><strong>{displayValue(branchFooter, key, format)}</strong></td>)}</tr>
+            </tfoot>
+          )}
         </table>
         <div className="aging-print-title">Consolidated Aging Analysis As on {titleDate}</div>
         <table className="aging-print-table">
           <thead><tr>{consolidatedColumns.map(([, label, align]) => <th key={label} className={align === 'right' ? 'right' : ''}>{label}</th>)}</tr></thead>
           <tbody>
-            {consolidatedRows.map((row, index) => <tr key={`print-consolidated-${index}`}>{consolidatedColumns.map(([key, , align]) => <td key={key} className={align === 'right' ? 'right' : ''}>{displayValue(row, key)}</td>)}</tr>)}
+            {consolidatedRows.map((row, index) => <tr key={`print-consolidated-${index}`}>{consolidatedColumns.map(([key, , align, format]) => <td key={key} className={align === 'right' ? 'right' : ''}>{displayValue(row, key, format)}</td>)}</tr>)}
           </tbody>
           {consolidatedFooter && (
             <tfoot>
-              <tr>{consolidatedColumns.map(([key, , align]) => <td key={key} className={align === 'right' ? 'right' : ''}><strong>{displayValue(consolidatedFooter, key)}</strong></td>)}</tr>
+              <tr>{consolidatedColumns.map(([key, , align, format]) => <td key={key} className={align === 'right' ? 'right' : ''}><strong>{displayValue(consolidatedFooter, key, format)}</strong></td>)}</tr>
             </tfoot>
           )}
         </table>

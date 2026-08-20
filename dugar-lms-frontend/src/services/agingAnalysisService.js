@@ -68,3 +68,11 @@ export async function fetchAgingContractReceipts(contractId, { asOnDate } = {}) 
   const response = await apiClient.get(`/reports/aging-analysis/contracts/${contractId}/receipts`, { params });
   return response.data;
 }
+
+export async function fetchAgingRawVoucher(contractId, { voucherNumber, voucherType } = {}) {
+  const params = {};
+  addParam(params, 'voucherNumber', voucherNumber);
+  addParam(params, 'voucherType', voucherType);
+  const response = await apiClient.get(`/reports/aging-analysis/contracts/${contractId}/raw-voucher`, { params });
+  return response.data;
+}

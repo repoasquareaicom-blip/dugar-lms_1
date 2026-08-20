@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import DemandListDetailsDrawer from '../../../components/demand-list/DemandListDetailsDrawer';
+import { useMemo, useState } from 'react';
+import AgingDrilldownDrawer from '../../../components/aging-analysis/AgingDrilldownDrawer';
 import DemandListFilters from '../../../components/demand-list/DemandListFilters';
 import { demandListColumns, lineValues } from '../../../components/demand-list/DemandListGrid';
 import DemandListPrintView from '../../../components/demand-list/DemandListPrintView';
 import DemandListSummary from '../../../components/demand-list/DemandListSummary';
+import { fetchAgingContractDetail, fetchAgingContractEmis, fetchAgingContractReceipts, fetchAgingRawVoucher } from '../../../services/agingAnalysisService';
 import { fetchDemandList } from '../../../services/demandListService';
 
 const today = new Date().toISOString().slice(0, 10);
@@ -14,6 +15,7 @@ const defaultFilters = {
   contractNumber: '',
   overdueInstallmentCount: '',
 };
+const pageSizeOptions = [10, 25, 50, 100];
 
 function hasReportScope(filters) {
   return Boolean(filters?.areaCode?.trim() || filters?.contractNumber?.trim());
@@ -63,7 +65,22 @@ function StackCell({ values, align = 'left' }) {
   );
 }
 
-function DemandListTable({ rows, onOpen }) {
+function DemandListTable({ rows, page, pageSize, onOpen }) {
+  const renderCell = (displayRow, column) => {
+    if (column.key === 'loanNumber') {
+      return (
+        <button
+          type="button"
+          className="font-bold text-[#0052CC] underline decoration-dotted underline-offset-2 hover:text-[#003A8C]"
+          onClick={() => onOpen(displayRow)}
+        >
+          {displayRow.loanNumber || ''}
+        </button>
+      );
+    }
+    return <StackCell values={lineValues(displayRow, column.key)} align={column.align || 'left'} />;
+  };
+
   return (
     <div className="no-print min-h-0 flex-1 overflow-auto bg-white">
       <table className="min-w-[1250px] border-collapse text-[12px] text-black">
@@ -78,12 +95,12 @@ function DemandListTable({ rows, onOpen }) {
         </thead>
         <tbody>
           {rows.map((row, index) => {
-            const displayRow = { ...row, serialNumber: index + 1 };
+            const displayRow = { ...row, serialNumber: page * pageSize + index + 1 };
             return (
               <tr key={row.contractId} onDoubleClick={() => onOpen(row)} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-blue-50`}>
                 {demandListColumns.map((column) => (
                   <td key={column.key} className={`border border-black/30 px-2 py-1 align-top ${alignClass(column.align)}`}>
-                    <StackCell values={lineValues(displayRow, column.key)} align={column.align || 'left'} />
+                    {renderCell(displayRow, column)}
                   </td>
                 ))}
               </tr>
@@ -100,16 +117,75 @@ function DemandListTable({ rows, onOpen }) {
   );
 }
 
+function DemandListPagination({ page, pageSize, totalRecords, loading, onPageChange, onPageSizeChange }) {
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const startRecord = totalRecords === 0 ? 0 : page * pageSize + 1;
+  const endRecord = Math.min(totalRecords, (page + 1) * pageSize);
+  const firstPage = Math.max(0, Math.min(page - 2, totalPages - 5));
+  const pageNumbers = Array.from({ length: Math.min(5, totalPages) }, (_, index) => firstPage + index);
+
+  return (
+    <div className="no-print flex flex-wrap items-center justify-between gap-3 border-t border-black/20 bg-white px-2 py-1 font-bold">
+      <div className="flex items-center gap-2">
+        <span>Rows per page:</span>
+        <select
+          value={pageSize}
+          disabled={loading}
+          onChange={(event) => onPageSizeChange(Number(event.target.value))}
+          className="h-7 border border-black/30 bg-white px-2 text-[12px] font-bold outline-none disabled:opacity-50"
+        >
+          {pageSizeOptions.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+        <span className="text-black/70">{startRecord}-{endRecord} of {totalRecords.toLocaleString('en-IN')}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          disabled={loading || page === 0}
+          onClick={() => onPageChange(page - 1)}
+          className="h-7 border border-black/30 bg-white px-3 text-[12px] font-bold disabled:opacity-40"
+        >
+          Previous
+        </button>
+        {pageNumbers.map((pageNumber) => (
+          <button
+            key={pageNumber}
+            type="button"
+            disabled={loading}
+            onClick={() => onPageChange(pageNumber)}
+            className={`h-7 min-w-7 border px-2 text-[12px] font-bold disabled:opacity-40 ${pageNumber === page ? 'border-[#0052CC] bg-[#0052CC] text-white' : 'border-black/30 bg-white text-black'}`}
+          >
+            {pageNumber + 1}
+          </button>
+        ))}
+        <button
+          type="button"
+          disabled={loading || page + 1 >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="h-7 border border-black/30 bg-white px-3 text-[12px] font-bold disabled:opacity-40"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function DemandListPage() {
   const [filters, setFilters] = useState(defaultFilters);
   const [appliedFilters, setAppliedFilters] = useState(null);
   const [rows, setRows] = useState([]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalRecords, setTotalRecords] = useState(0);
   const [summary, setSummary] = useState(null);
   const [warnings, setWarnings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [message, setMessage] = useState('');
-  const [selectedRow, setSelectedRow] = useState(null);
+  const [drilldown, setDrilldown] = useState({ open: false, loading: false, contracts: [], detail: null, emis: [], receipts: [] });
   const [printData, setPrintData] = useState(null);
 
   const generate = async () => {
@@ -126,13 +202,18 @@ export default function DemandListPage() {
     setMessage('');
     try {
       const data = await fetchDemandList(filters);
-      setRows(data?.rows?.content || []);
+      const content = data?.rows?.content || [];
+      setRows(content);
+      setPage(0);
+      setTotalRecords(Number(data?.rows?.totalElements ?? content.length));
       setSummary(data?.summary || null);
       setWarnings(data?.warnings || []);
       setAppliedFilters(filters);
       setPrintData(null);
     } catch (error) {
       setRows([]);
+      setPage(0);
+      setTotalRecords(0);
       setSummary(null);
       setWarnings([]);
       setAppliedFilters(null);
@@ -148,9 +229,70 @@ export default function DemandListPage() {
     setAppliedFilters(null);
     setMessage('');
     setRows([]);
+    setPage(0);
+    setPageSize(10);
+    setTotalRecords(0);
     setSummary(null);
     setWarnings([]);
     setPrintData(null);
+    setDrilldown({ open: false, loading: false, contracts: [], detail: null, emis: [], receipts: [] });
+  };
+
+  const closeDrilldown = () => {
+    setDrilldown({ open: false, loading: false, contracts: [], detail: null, emis: [], receipts: [] });
+  };
+
+  const loadDrilldownContract = async (contractId, asOnDate) => {
+    setDrilldown((current) => ({ ...current, loading: true, message: '', rawVoucher: null, rawVoucherKey: null, rawVoucherMessage: '', rawVoucherLoading: false }));
+    try {
+      const [detail, emis, receipts] = await Promise.all([
+        fetchAgingContractDetail(contractId, { asOnDate }),
+        fetchAgingContractEmis(contractId, { asOnDate }),
+        fetchAgingContractReceipts(contractId, { asOnDate }),
+      ]);
+      setDrilldown((current) => ({ ...current, loading: false, detail, emis, receipts }));
+    } catch (error) {
+      setDrilldown((current) => ({ ...current, loading: false, message: error?.response?.data?.message || error?.message || 'Unable to load contract details.' }));
+    }
+  };
+
+  const openDemandDrilldown = async (row) => {
+    if (!row?.contractId) {
+      setMessage('Contract id is missing for this Demand List row.');
+      return;
+    }
+    const asOnDate = appliedFilters?.asOnDate || filters.asOnDate;
+    const nextState = {
+      open: true,
+      loading: true,
+      title: `Demand Drilldown - ${row.loanNumber || row.contractId}`,
+      bucketLabel: row.overdueInstallmentCount > 0 ? `${row.overdueInstallmentCount} overdue EMI${row.overdueInstallmentCount === 1 ? '' : 's'}` : 'Current',
+      contracts: [row],
+      detail: null,
+      emis: [],
+      receipts: [],
+      message: '',
+      rawVoucher: null,
+      rawVoucherKey: null,
+    };
+    setDrilldown(nextState);
+    await loadDrilldownContract(row.contractId, asOnDate);
+  };
+
+  const selectDrilldownReceipt = async (receipt) => {
+    const contractId = drilldown.detail?.contractId;
+    if (!contractId || !receipt?.voucherNumber) return;
+    const rawVoucherKey = `${receipt.voucherType || ''}:${receipt.voucherNumber || ''}`;
+    setDrilldown((current) => ({ ...current, rawVoucherLoading: true, rawVoucherMessage: '', rawVoucherKey, rawVoucher: null }));
+    try {
+      const rawVoucher = await fetchAgingRawVoucher(contractId, {
+        voucherNumber: receipt.voucherNumber,
+        voucherType: receipt.voucherType,
+      });
+      setDrilldown((current) => ({ ...current, rawVoucherLoading: false, rawVoucher }));
+    } catch (error) {
+      setDrilldown((current) => ({ ...current, rawVoucherLoading: false, rawVoucherMessage: error?.response?.data?.message || error?.message || 'Unable to load raw voucher details.' }));
+    }
   };
 
   const currentReport = () => {
@@ -167,6 +309,21 @@ export default function DemandListPage() {
       return null;
     }
     return { rows: { content: rows }, summary, warnings };
+  };
+
+  const pagedRows = useMemo(() => {
+    const start = page * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [page, pageSize, rows]);
+
+  const changePageSize = (nextPageSize) => {
+    setPageSize(nextPageSize);
+    setPage(0);
+  };
+
+  const changePage = (nextPage) => {
+    const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+    setPage(Math.min(Math.max(0, nextPage), totalPages - 1));
   };
 
   const print = () => {
@@ -266,15 +423,20 @@ export default function DemandListPage() {
       {warnings.length > 0 && <div className="no-print border-b border-amber-200 bg-amber-50 px-2 py-1 font-bold text-amber-800">{warnings.join(' | ')}</div>}
 
       <DemandListSummary summary={summary} />
-      <DemandListTable rows={rows} onOpen={setSelectedRow} />
+      <DemandListTable rows={pagedRows} page={page} pageSize={pageSize} onOpen={openDemandDrilldown} />
 
-      <div className="no-print border-t border-black/20 bg-white px-2 py-1 font-bold">
-        {loading ? 'Loading...' : `${rows.length.toLocaleString('en-IN')} records`}
-      </div>
+      <DemandListPagination
+        page={page}
+        pageSize={pageSize}
+        totalRecords={totalRecords}
+        loading={loading}
+        onPageChange={changePage}
+        onPageSizeChange={changePageSize}
+      />
 
       {printData && <DemandListPrintView data={printData} filters={appliedFilters} />}
 
-      <DemandListDetailsDrawer row={selectedRow} onClose={() => setSelectedRow(null)} />
+      <AgingDrilldownDrawer state={drilldown} onClose={closeDrilldown} onSelectContract={(contractId) => loadDrilldownContract(contractId, appliedFilters?.asOnDate || filters.asOnDate)} onSelectReceipt={selectDrilldownReceipt} />
 
       {loading && (
         <div className="no-print fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-4">
