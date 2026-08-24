@@ -3,6 +3,7 @@ package dugar_lms_api.modules.reports.aginganalysis;
 import dugar_lms_api.modules.reports.demandlist.DemandListRequest;
 import dugar_lms_api.modules.reports.demandlist.DemandListRowDto;
 import dugar_lms_api.modules.reports.demandlist.DemandListService;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
@@ -45,15 +46,18 @@ public class AgingAnalysisService {
     private final DemandListService demandListService;
     private final BranchWiseAgeingProcedureRepository branchWiseAgeingProcedureRepository;
     private final AgingAnalysisDrilldownRepository drilldownRepository;
+    private final ConsolidatedPortfolioRepository consolidatedPortfolioRepository;
 
     public AgingAnalysisService(
         DemandListService demandListService,
         BranchWiseAgeingProcedureRepository branchWiseAgeingProcedureRepository,
-        AgingAnalysisDrilldownRepository drilldownRepository
+        AgingAnalysisDrilldownRepository drilldownRepository,
+        ConsolidatedPortfolioRepository consolidatedPortfolioRepository
     ) {
         this.demandListService = demandListService;
         this.branchWiseAgeingProcedureRepository = branchWiseAgeingProcedureRepository;
         this.drilldownRepository = drilldownRepository;
+        this.consolidatedPortfolioRepository = consolidatedPortfolioRepository;
     }
 
     public AgingAnalysisResponse getAgingAnalysis(AgingAnalysisRequest request, Authentication authentication) {
@@ -61,7 +65,10 @@ public class AgingAnalysisService {
         if (validated.contractNumber() != null) {
             throw new IllegalArgumentException("Contract No filter is not supported for Branch Wise Ageing stored procedure report yet");
         }
-        List<AgingAnalysisBranchRowDto> branchRows = branchWiseAgeingProcedureRepository.getBranchWiseRows(validated.asOnDate(), validated.areaCode());
+        ReportAccessScope accessScope = ReportAccessScope.from(authentication);
+        List<AgingAnalysisBranchRowDto> branchRows = accessScope.restrictedToUserGroup()
+            ? branchWiseAgeingProcedureRepository.getBranchWiseRows(validated.asOnDate(), validated.areaCode(), accessScope)
+            : branchWiseAgeingProcedureRepository.getBranchWiseRows(validated.asOnDate(), validated.areaCode());
 
         return new AgingAnalysisResponse(
             validated.asOnDate(),
@@ -77,7 +84,7 @@ public class AgingAnalysisService {
     public AgingAnalysisMatrixResponse getLoanTicketWise(LocalDate asOnDate, String areaCode, Authentication authentication) {
         LocalDate reportDate = asOnDate == null ? LocalDate.now() : asOnDate;
         AgingAnalysisRequest request = validate(new AgingAnalysisRequest(reportDate, areaCode, null));
-        List<AgedLoan> agedLoans = procedureAgedLoans(request);
+        List<AgedLoan> agedLoans = procedureAgedLoans(request, ReportAccessScope.from(authentication));
         return new AgingAnalysisMatrixResponse(
             reportDate,
             "Loan Ticket Wise",
@@ -91,7 +98,7 @@ public class AgingAnalysisService {
     public AgingAnalysisMatrixResponse getInterestWise(LocalDate asOnDate, String areaCode, Authentication authentication) {
         LocalDate reportDate = asOnDate == null ? LocalDate.now() : asOnDate;
         AgingAnalysisRequest request = validate(new AgingAnalysisRequest(reportDate, areaCode, null));
-        List<AgedLoan> agedLoans = procedureAgedLoans(request);
+        List<AgedLoan> agedLoans = procedureAgedLoans(request, ReportAccessScope.from(authentication));
         return new AgingAnalysisMatrixResponse(
             reportDate,
             "Interest Wise",
@@ -102,7 +109,14 @@ public class AgingAnalysisService {
         );
     }
 
-    public List<DemandListRowDto> getContracts(LocalDate asOnDate, String areaCode, String bucket) {
+    public ConsolidatedPortfolioResponse getConsolidatedPortfolio(LocalDate asOnDate, String areaCode) {
+        if (asOnDate == null) {
+            throw new IllegalArgumentException("As On Date is required");
+        }
+        return consolidatedPortfolioRepository.getPortfolio(asOnDate, cleanPortfolioArea(areaCode));
+    }
+
+    public List<DemandListRowDto> getContracts(LocalDate asOnDate, String areaCode, String bucket, Authentication authentication) {
         AgingAnalysisRequest request = validate(new AgingAnalysisRequest(asOnDate == null ? LocalDate.now() : asOnDate, areaCode, null));
         DemandListRequest demandRequest = new DemandListRequest(
             request.asOnDate(),
@@ -121,20 +135,23 @@ public class AgingAnalysisService {
             null,
             null
         );
-        return demandListService.calculateRowsForReport(demandRequest).stream()
+        return demandListService.calculateRowsForReport(demandRequest, ReportAccessScope.from(authentication)).stream()
             .filter(row -> bucketMatches(row.overdueInstallmentCount(), bucket))
             .toList();
     }
 
-    private List<AgedLoan> procedureAgedLoans(AgingAnalysisRequest request) {
-        return branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode()).stream()
+    private List<AgedLoan> procedureAgedLoans(AgingAnalysisRequest request, ReportAccessScope accessScope) {
+        List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> rows = accessScope != null && accessScope.restrictedToUserGroup()
+            ? branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode(), accessScope)
+            : branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode());
+        return rows.stream()
             .map(row -> procedureAgedLoan(row, request.asOnDate()))
             .toList();
     }
 
-    public AgingAnalysisContractDetailDto getContractDetail(Long contractId, LocalDate asOnDate) {
+    public AgingAnalysisContractDetailDto getContractDetail(Long contractId, LocalDate asOnDate, Authentication authentication) {
         LocalDate reportDate = asOnDate == null ? LocalDate.now() : asOnDate;
-        AgingAnalysisDrilldownRepository.ContractSource source = contractSource(contractId);
+        AgingAnalysisDrilldownRepository.ContractSource source = contractSource(contractId, ReportAccessScope.from(authentication));
         List<AgingAnalysisReceiptDto> receipts = drilldownRepository.findReceipts(source.contractNumber(), reportDate);
         BigDecimal totalReceived = receipts.stream().map(AgingAnalysisReceiptDto::collectionAmount).reduce(ZERO, BigDecimal::add);
         BigDecimal totalContractValue = money(source.totalContractValue());
@@ -163,16 +180,21 @@ public class AgingAnalysisService {
         );
     }
 
-    public List<AgingAnalysisEmiDto> getEmis(Long contractId, LocalDate asOnDate) {
+    public List<AgingAnalysisEmiDto> getEmis(Long contractId, LocalDate asOnDate, Authentication authentication) {
         LocalDate reportDate = asOnDate == null ? LocalDate.now() : asOnDate;
-        AgingAnalysisDrilldownRepository.ContractSource source = contractSource(contractId);
+        AgingAnalysisDrilldownRepository.ContractSource source = contractSource(contractId, ReportAccessScope.from(authentication));
         return emis(source, drilldownRepository.findReceipts(source.contractNumber(), reportDate), reportDate);
     }
 
-    public List<AgingAnalysisReceiptDto> getReceipts(Long contractId, LocalDate asOnDate) {
+    public List<AgingAnalysisReceiptDto> getReceipts(Long contractId, LocalDate asOnDate, Authentication authentication) {
         LocalDate reportDate = asOnDate == null ? LocalDate.now() : asOnDate;
-        AgingAnalysisDrilldownRepository.ContractSource source = contractSource(contractId);
+        AgingAnalysisDrilldownRepository.ContractSource source = contractSource(contractId, ReportAccessScope.from(authentication));
         return drilldownRepository.findReceipts(source.contractNumber(), reportDate);
+    }
+
+    public AgingAnalysisRawVoucherDto getRawVoucher(Long contractId, String voucherType, String voucherNumber, Authentication authentication) {
+        AgingAnalysisDrilldownRepository.ContractSource source = contractSource(contractId, ReportAccessScope.from(authentication));
+        return drilldownRepository.findRawVoucher(source.contractNumber(), voucherType, voucherNumber);
     }
 
     private List<AgedLoan> agedLoans(AgingAnalysisRequest request) {
@@ -199,10 +221,14 @@ public class AgingAnalysisService {
     }
 
     private AgingAnalysisDrilldownRepository.ContractSource contractSource(Long contractId) {
+        return contractSource(contractId, new ReportAccessScope(false));
+    }
+
+    private AgingAnalysisDrilldownRepository.ContractSource contractSource(Long contractId, ReportAccessScope accessScope) {
         if (contractId == null) {
             throw new IllegalArgumentException("Contract is required");
         }
-        AgingAnalysisDrilldownRepository.ContractSource source = drilldownRepository.findContract(contractId);
+        AgingAnalysisDrilldownRepository.ContractSource source = drilldownRepository.findContract(contractId, accessScope);
         if (source == null) {
             throw new IllegalArgumentException("Contract not found");
         }
@@ -666,6 +692,10 @@ public class AgingAnalysisService {
 
     private String cleanNullable(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String cleanPortfolioArea(String value) {
+        return value == null || value.isBlank() ? "" : value.trim();
     }
 
     private String auditUser(Authentication authentication) {

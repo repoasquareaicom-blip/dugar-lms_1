@@ -2,6 +2,7 @@ package dugar_lms_api.modules.reports.demandlist;
 
 import dugar_lms_api.common.pagination.PageResponse;
 import dugar_lms_api.modules.reports.aginganalysis.BranchWiseAgeingProcedureRepository;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
@@ -34,7 +35,7 @@ public class DemandListService {
 
     public DemandListResponse getDemandList(DemandListRequest request, Authentication authentication) {
         DemandListRequest validated = validate(request, false);
-        List<DemandListRowDto> rows = procedureRows(validated);
+        List<DemandListRowDto> rows = procedureRows(validated, ReportAccessScope.from(authentication));
 
         return new DemandListResponse(
             page(rows),
@@ -49,7 +50,7 @@ public class DemandListService {
 
     public DemandListResponse getPrintDemandList(DemandListRequest request, Authentication authentication) {
         DemandListRequest validated = validate(request, true);
-        List<DemandListRowDto> rows = procedureRows(validated);
+        List<DemandListRowDto> rows = procedureRows(validated, ReportAccessScope.from(authentication));
         return new DemandListResponse(
             page(rows),
             demandListCalculationService.summarize(rows),
@@ -62,14 +63,21 @@ public class DemandListService {
     }
 
     public List<DemandListRowDto> calculateRowsForReport(DemandListRequest request) {
+        return calculateRowsForReport(request, new ReportAccessScope(false));
+    }
+
+    public List<DemandListRowDto> calculateRowsForReport(DemandListRequest request, ReportAccessScope accessScope) {
         if (request == null || request.asOnDate() == null) {
             throw new IllegalArgumentException("As On Date is required");
         }
-        return calculatedRows(request);
+        return procedureRows(validate(request, true), accessScope);
     }
 
-    private List<DemandListRowDto> procedureRows(DemandListRequest request) {
-        return branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode()).stream()
+    private List<DemandListRowDto> procedureRows(DemandListRequest request, ReportAccessScope accessScope) {
+        List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> sourceRows = accessScope != null && accessScope.restrictedToUserGroup()
+            ? branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode(), accessScope)
+            : branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode());
+        return sourceRows.stream()
             .filter(row -> contractNumberMatches(row, request.contractNumber()))
             .filter(row -> overdueCountMatches(row, request.overdueInstallmentCount()))
             .map(this::demandListRow)

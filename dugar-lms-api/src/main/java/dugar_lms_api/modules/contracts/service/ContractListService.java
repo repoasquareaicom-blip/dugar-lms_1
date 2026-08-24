@@ -3,6 +3,8 @@ package dugar_lms_api.modules.contracts.service;
 import dugar_lms_api.common.pagination.PageResponse;
 import dugar_lms_api.modules.contracts.dto.ContractListDto;
 import dugar_lms_api.modules.contracts.repository.ContractListRepository;
+import dugar_lms_api.modules.reports.ReportAccessScope;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -21,10 +23,19 @@ public class ContractListService {
     }
 
     public PageResponse<ContractListDto> getContracts(ContractListCriteria criteria) {
-        ContractListCriteria validatedCriteria = validate(criteria);
+        return getContracts(criteria, null);
+    }
 
-        long totalElements = contractListRepository.count(validatedCriteria);
-        List<ContractListDto> content = contractListRepository.find(validatedCriteria);
+    public PageResponse<ContractListDto> getContracts(ContractListCriteria criteria, Authentication authentication) {
+        ContractListCriteria validatedCriteria = validate(criteria);
+        ReportAccessScope accessScope = ReportAccessScope.from(authentication);
+
+        long totalElements = accessScope.restrictedToUserGroup()
+            ? contractListRepository.count(validatedCriteria, accessScope)
+            : contractListRepository.count(validatedCriteria);
+        List<ContractListDto> content = accessScope.restrictedToUserGroup()
+            ? contractListRepository.find(validatedCriteria, accessScope)
+            : contractListRepository.find(validatedCriteria);
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / validatedCriteria.size());
 
         return new PageResponse<>(
@@ -40,6 +51,14 @@ public class ContractListService {
     }
 
     public List<String> getAreas(String keyword, Integer limit) {
+        return getAreas(keyword, limit, null);
+    }
+
+    public List<String> getAreas(String keyword, Integer limit, Authentication authentication) {
+        ReportAccessScope accessScope = ReportAccessScope.from(authentication);
+        if (accessScope.restrictedToUserGroup()) {
+            return contractListRepository.findAreas(normalize(keyword), limit == null ? 20 : limit, accessScope);
+        }
         return contractListRepository.findAreas(normalize(keyword), limit == null ? 20 : limit);
     }
 

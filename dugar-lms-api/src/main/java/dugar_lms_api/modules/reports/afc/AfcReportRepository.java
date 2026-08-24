@@ -1,5 +1,6 @@
 package dugar_lms_api.modules.reports.afc;
 
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -34,12 +35,28 @@ public class AfcReportRepository {
             ORDER BY asset.asset_id
             LIMIT 1
         ) a ON TRUE
+        LEFT JOIN users created_user
+          ON c.created_by = created_user.user_id::text
+          OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
+        LEFT JOIN users updated_user
+          ON c.updated_by = updated_user.user_id::text
+          OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
         WHERE c.is_active = TRUE
           AND (
               UPPER(TRIM(COALESCE(c.contract_number, ''))) = UPPER(TRIM(:loanNumber))
               OR UPPER(TRIM(COALESCE(c.legacy_contract_number, ''))) = UPPER(TRIM(:loanNumber))
           )
           AND (:areaCode IS NULL OR UPPER(TRIM(COALESCE(c.area_code, ''))) = UPPER(TRIM(:areaCode)))
+          AND (
+              :restricted = FALSE
+              OR (
+                  LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
+                  AND (
+                      NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
+                      OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
+                  )
+              )
+          )
         ORDER BY c.contract_id DESC
         LIMIT 1
         """;
@@ -118,11 +135,16 @@ public class AfcReportRepository {
     }
 
     public Optional<AfcReportSource> findSource(String loanNumber, String areaCode) {
+        return findSource(loanNumber, areaCode, new ReportAccessScope(false));
+    }
+
+    public Optional<AfcReportSource> findSource(String loanNumber, String areaCode, ReportAccessScope accessScope) {
         List<AfcReportSource> rows = jdbcTemplate.query(
             SOURCE_SQL,
             new MapSqlParameterSource()
                 .addValue("loanNumber", loanNumber, Types.VARCHAR)
-                .addValue("areaCode", areaCode, Types.VARCHAR),
+                .addValue("areaCode", areaCode, Types.VARCHAR)
+                .addValue("restricted", accessScope != null && accessScope.restrictedToUserGroup()),
             SOURCE_MAPPER
         );
         return rows.stream().findFirst();

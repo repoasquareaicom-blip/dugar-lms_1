@@ -104,6 +104,7 @@ const FALLBACK_MENU = [
               { menuId: 146, menuName: 'Consolidated', icon: 'Table2', path: '/committee/aging-analysis/consolidated', displayOrder: 2, subMenus: [] },
               { menuId: 147, menuName: 'Loan Ticket Wise', icon: 'IndianRupee', path: '/committee/aging-analysis/loan-ticket-wise', displayOrder: 3, subMenus: [] },
               { menuId: 148, menuName: 'Interest Wise', icon: 'Percent', path: '/committee/aging-analysis/interest-wise', displayOrder: 4, subMenus: [] },
+              { menuId: 149, menuName: 'Consolidated Portfolio', icon: 'PieChart', path: '/committee/aging-analysis/consolidated-portfolio', displayOrder: 5, subMenus: [] },
             ],
           },
         ],

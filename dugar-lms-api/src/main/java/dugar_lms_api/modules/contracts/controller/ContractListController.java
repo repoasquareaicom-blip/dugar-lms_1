@@ -6,6 +6,7 @@ import dugar_lms_api.modules.contracts.service.ContractListCriteria;
 import dugar_lms_api.modules.contracts.service.ContractListService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -42,7 +43,8 @@ public class ContractListController {
         @RequestParam(required = false) Integer size,
         @RequestParam(required = false) String sortColumn,
         @RequestParam(required = false) String sortBy,
-        @RequestParam(required = false) String sortDirection
+        @RequestParam(required = false) String sortDirection,
+        Authentication authentication
     ) {
         ContractListCriteria criteria = new ContractListCriteria(
             keyword != null ? keyword : search,
@@ -61,14 +63,15 @@ public class ContractListController {
             sortColumn != null ? sortColumn : sortBy,
             sortDirection
         );
-        return ResponseEntity.ok(contractListService.getContracts(criteria));
+        return ResponseEntity.ok(contractListService.getContracts(criteria, authentication));
     }
 
     @GetMapping("/areas")
     public ResponseEntity<java.util.List<String>> listAreas(
         @RequestParam(required = false) String keyword,
-        @RequestParam(required = false) Integer limit
+        @RequestParam(required = false) Integer limit,
+        Authentication authentication
     ) {
-        return ResponseEntity.ok(contractListService.getAreas(keyword, limit));
+        return ResponseEntity.ok(contractListService.getAreas(keyword, limit, authentication));
     }
 }

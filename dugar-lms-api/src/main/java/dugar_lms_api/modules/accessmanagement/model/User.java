@@ -24,6 +24,8 @@ public class User extends BaseEntity {
 
     private Long roleId;
 
+    private String userGroup = "admin";
+
     private Boolean isActive = true;
 
     private LocalDateTime lastLoginAt;

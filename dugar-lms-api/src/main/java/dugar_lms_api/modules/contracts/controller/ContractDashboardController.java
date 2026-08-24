@@ -3,6 +3,7 @@ package dugar_lms_api.modules.contracts.controller;
 import dugar_lms_api.modules.contracts.dto.ContractDashboardDto;
 import dugar_lms_api.modules.contracts.service.ContractDashboardService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -21,8 +22,9 @@ public class ContractDashboardController {
     @GetMapping
     public ResponseEntity<ContractDashboardDto> getDashboard(
         @RequestParam(defaultValue = "YTD") String disbursementPeriod,
-        @RequestParam(required = false) Integer accountYear
+        @RequestParam(required = false) Integer accountYear,
+        Authentication authentication
     ) {
-        return ResponseEntity.ok(contractDashboardService.getDashboard(disbursementPeriod, accountYear));
+        return ResponseEntity.ok(contractDashboardService.getDashboard(disbursementPeriod, accountYear, authentication));
     }
 }

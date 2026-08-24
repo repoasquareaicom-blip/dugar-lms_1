@@ -56,12 +56,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/contracts/areas").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/reports/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/reports/demand-list").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/reports/demand-list/print").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/reports/afc").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/reports/afc/print").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/reports/**").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/contracts/los/receive").permitAll()
                 .requestMatchers(HttpMethod.POST,"/api/migration/contracts/import").authenticated()

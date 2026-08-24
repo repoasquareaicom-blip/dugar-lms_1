@@ -39,6 +39,17 @@ export async function fetchInterestWiseAging(filters) {
   return response.data;
 }
 
+export async function fetchConsolidatedPortfolio(filters = {}) {
+  const response = await apiClient.get('/reports/aging-analysis/consolidated-portfolio', {
+    params: {
+      asOnDate: filters.asOnDate,
+      areaCode: String(filters.areaCode || '').trim(),
+    },
+    timeout: 120000,
+  });
+  return response.data;
+}
+
 export async function fetchAgingContracts({ areaCode, bucket, asOnDate } = {}) {
   const params = {};
   addParam(params, 'areaCode', String(areaCode || '').trim());

@@ -233,6 +233,8 @@ function ensureCommitteeDemandListMenu(menuTree) {
     subMenus: [],
   });
 
+  reports.subMenus = reports.subMenus.filter((menu) => !menuMatches(menu, ['consolidated portfolio']));
+
   reports.subMenus = reports.subMenus.filter((menu) => {
     if (!menuMatches(menu, ['aging analysis', 'ageing analysis'])) return true;
     const path = menu.path || menu.urlPath || '#';
@@ -297,6 +299,17 @@ function ensureCommitteeDemandListMenu(menuTree) {
     path: '/committee/aging-analysis/interest-wise',
     urlPath: '/committee/aging-analysis/interest-wise',
     displayOrder: 4,
+    subMenus: [],
+  });
+
+  ensureMenu(agingAnalysis, {
+    menuId: 'frontend-aging-consolidated-portfolio',
+    menuName: 'Consolidated Portfolio',
+    menuCode: 'COMMITTEE_AGING_CONSOLIDATED_PORTFOLIO',
+    icon: 'PieChart',
+    path: '/committee/aging-analysis/consolidated-portfolio',
+    urlPath: '/committee/aging-analysis/consolidated-portfolio',
+    displayOrder: 5,
     subMenus: [],
   });
 

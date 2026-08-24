@@ -9,6 +9,7 @@ const NAME_ROUTE_MAP = [
   { keys: ['demand list'], route: '/committee/reports/demand-list' },
   { keys: ['afc report', 'afc'], route: '/committee/reports/afc' },
   { keys: ['branch wise aging analysis', 'aging analysis branch wise'], route: '/committee/aging-analysis/branch-wise' },
+  { keys: ['consolidated portfolio', 'portfolio consolidated'], route: '/committee/aging-analysis/consolidated-portfolio' },
   { keys: ['consolidated aging analysis', 'aging analysis consolidated'], route: '/committee/aging-analysis/consolidated' },
   { keys: ['loan ticket wise aging analysis', 'aging analysis loan ticket wise', 'loan ticket wise'], route: '/committee/aging-analysis/loan-ticket-wise' },
   { keys: ['interest wise aging analysis', 'aging analysis interest wise', 'interest wise'], route: '/committee/aging-analysis/interest-wise' },

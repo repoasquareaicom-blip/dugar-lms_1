@@ -1,5 +1,6 @@
 package dugar_lms_api.modules.reports.aginganalysis;
 
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -28,9 +29,14 @@ public class BranchWiseAgeingProcedureRepository {
     }
 
     public List<AgingAnalysisBranchRowDto> getBranchWiseRows(LocalDate asOnDate, String areaCode) {
+        return getBranchWiseRows(asOnDate, areaCode, new ReportAccessScope(false));
+    }
+
+    public List<AgingAnalysisBranchRowDto> getBranchWiseRows(LocalDate asOnDate, String areaCode, ReportAccessScope accessScope) {
         long startedAt = System.nanoTime();
         List<AgingAnalysisBranchRowDto> rows = jdbcTemplate.execute((ConnectionCallback<List<AgingAnalysisBranchRowDto>>) (connection) -> {
             String normalizedArea = clean(areaCode);
+            boolean restricted = accessScope != null && accessScope.restrictedToUserGroup();
             try (var call = connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?)")) {
                 call.setObject(1, asOnDate);
                 call.setString(2, normalizedArea);
@@ -39,28 +45,47 @@ public class BranchWiseAgeingProcedureRepository {
 
             String sql = """
                 SELECT
-                    area_code,
+                    r.area_code,
                     COUNT(*) AS no_of_accounts,
-                    COALESCE(SUM(principal_outstanding), 0) AS aum,
-                    COALESCE(SUM(current_due), 0) AS current_amount,
-                    COALESCE(SUM(overdue_amount) FILTER (WHERE ageing_bucket = '1-30'), 0) AS days_1_30,
-                    COALESCE(SUM(overdue_amount) FILTER (WHERE ageing_bucket = '31-60'), 0) AS days_31_60,
-                    COALESCE(SUM(overdue_amount) FILTER (WHERE ageing_bucket = '61-90'), 0) AS days_61_90,
-                    COALESCE(SUM(overdue_amount) FILTER (WHERE ageing_bucket = '91-120'), 0) AS days_91_120,
-                    COALESCE(SUM(overdue_amount) FILTER (WHERE ageing_bucket = '121-150'), 0) AS days_121_150,
-                    COALESCE(SUM(overdue_amount) FILTER (WHERE ageing_bucket = '151-180'), 0) AS days_151_180,
-                    COALESCE(SUM(overdue_amount) FILTER (WHERE ageing_bucket = 'ABOVE 180'), 0) AS days_above_180,
-                    COALESCE(SUM(current_due), 0) + COALESCE(SUM(overdue_amount), 0) AS total_outstanding,
-                    COALESCE(SUM(interest_outstanding), 0) AS interest_outstanding
-                FROM tmp_contract_report
-                WHERE (? IS NULL OR UPPER(TRIM(COALESCE(area_code, ''))) = ?)
-                  AND COALESCE(total_outstanding, 0) > 0
-                GROUP BY area_code
-                ORDER BY area_code
+                    COALESCE(SUM(r.principal_outstanding), 0) AS aum,
+                    COALESCE(SUM(r.current_due), 0) AS current_amount,
+                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '1-30'), 0) AS days_1_30,
+                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '31-60'), 0) AS days_31_60,
+                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '61-90'), 0) AS days_61_90,
+                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '91-120'), 0) AS days_91_120,
+                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '121-150'), 0) AS days_121_150,
+                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '151-180'), 0) AS days_151_180,
+                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = 'ABOVE 180'), 0) AS days_above_180,
+                    COALESCE(SUM(r.current_due), 0) + COALESCE(SUM(r.overdue_amount), 0) AS total_outstanding,
+                    COALESCE(SUM(r.interest_outstanding), 0) AS interest_outstanding
+                FROM tmp_contract_report r
+                LEFT JOIN contracts c
+                  ON c.contract_id = r.contract_id
+                LEFT JOIN users created_user
+                  ON c.created_by = created_user.user_id::text
+                  OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
+                LEFT JOIN users updated_user
+                  ON c.updated_by = updated_user.user_id::text
+                  OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
+                WHERE (? IS NULL OR UPPER(TRIM(COALESCE(r.area_code, ''))) = ?)
+                  AND COALESCE(r.total_outstanding, 0) > 0
+                  AND (
+                      ? = FALSE
+                      OR (
+                          LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
+                          AND (
+                              NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
+                              OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
+                          )
+                      )
+                  )
+                GROUP BY r.area_code
+                ORDER BY r.area_code
                 """;
             try (var select = connection.prepareStatement(sql)) {
                 select.setString(1, normalizedArea);
                 select.setString(2, normalizedArea);
+                select.setBoolean(3, restricted);
                 try (ResultSet rs = select.executeQuery()) {
                     List<AgingAnalysisBranchRowDto> result = new ArrayList<>();
                     Set<String> columns = columns(rs);
@@ -91,9 +116,14 @@ public class BranchWiseAgeingProcedureRepository {
     }
 
     public List<ProcedureContractReportRow> getContractReportRows(LocalDate asOnDate, String areaCode) {
+        return getContractReportRows(asOnDate, areaCode, new ReportAccessScope(false));
+    }
+
+    public List<ProcedureContractReportRow> getContractReportRows(LocalDate asOnDate, String areaCode, ReportAccessScope accessScope) {
         long startedAt = System.nanoTime();
         List<ProcedureContractReportRow> rows = jdbcTemplate.execute((ConnectionCallback<List<ProcedureContractReportRow>>) (connection) -> {
             String normalizedArea = clean(areaCode);
+            boolean restricted = accessScope != null && accessScope.restrictedToUserGroup();
             try (var call = connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?)")) {
                 call.setObject(1, asOnDate);
                 call.setString(2, normalizedArea);
@@ -133,6 +163,12 @@ public class BranchWiseAgeingProcedureRepository {
                 FROM tmp_contract_report r
                 LEFT JOIN contracts c
                   ON c.contract_id = r.contract_id
+                LEFT JOIN users created_user
+                  ON c.created_by = created_user.user_id::text
+                  OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
+                LEFT JOIN users updated_user
+                  ON c.updated_by = updated_user.user_id::text
+                  OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
                 LEFT JOIN party_masters pm
                   ON UPPER(TRIM(pm.party_code)) = UPPER(TRIM(r.borrower_code))
                  AND pm.is_active = TRUE
@@ -140,11 +176,22 @@ public class BranchWiseAgeingProcedureRepository {
                   ON UPPER(TRIM(gm.party_code)) = UPPER(TRIM(r.guarantor_code))
                  AND gm.is_active = TRUE
                 WHERE (? IS NULL OR UPPER(TRIM(COALESCE(r.area_code, ''))) = ?)
+                  AND (
+                      ? = FALSE
+                      OR (
+                          LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
+                          AND (
+                              NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
+                              OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
+                          )
+                      )
+                  )
                 ORDER BY r.area_code, r.contract_number
                 """;
             try (var select = connection.prepareStatement(sql)) {
                 select.setString(1, normalizedArea);
                 select.setString(2, normalizedArea);
+                select.setBoolean(3, restricted);
                 try (ResultSet rs = select.executeQuery()) {
                     List<ProcedureContractReportRow> result = new ArrayList<>();
                     while (rs.next()) {

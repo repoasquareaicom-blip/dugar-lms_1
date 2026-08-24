@@ -55,37 +55,59 @@ public class AgingAnalysisController {
         return ResponseEntity.ok(agingAnalysisService.getInterestWise(asOnDate, areaCode, authentication));
     }
 
+    @GetMapping("/consolidated-portfolio")
+    public ResponseEntity<ConsolidatedPortfolioResponse> getConsolidatedPortfolio(
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOnDate,
+        @RequestParam(required = false) String areaCode
+    ) {
+        return ResponseEntity.ok(agingAnalysisService.getConsolidatedPortfolio(asOnDate, areaCode));
+    }
+
     @GetMapping("/contracts")
     public ResponseEntity<List<DemandListRowDto>> getContracts(
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOnDate,
         @RequestParam String areaCode,
-        @RequestParam(required = false) String bucket
+        @RequestParam(required = false) String bucket,
+        Authentication authentication
     ) {
-        return ResponseEntity.ok(agingAnalysisService.getContracts(asOnDate, areaCode, bucket));
+        return ResponseEntity.ok(agingAnalysisService.getContracts(asOnDate, areaCode, bucket, authentication));
     }
 
     @GetMapping("/contracts/{contractId}")
     public ResponseEntity<AgingAnalysisContractDetailDto> getContractDetail(
         @PathVariable Long contractId,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOnDate
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOnDate,
+        Authentication authentication
     ) {
-        return ResponseEntity.ok(agingAnalysisService.getContractDetail(contractId, asOnDate));
+        return ResponseEntity.ok(agingAnalysisService.getContractDetail(contractId, asOnDate, authentication));
     }
 
     @GetMapping("/contracts/{contractId}/emis")
     public ResponseEntity<List<AgingAnalysisEmiDto>> getEmis(
         @PathVariable Long contractId,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOnDate
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOnDate,
+        Authentication authentication
     ) {
-        return ResponseEntity.ok(agingAnalysisService.getEmis(contractId, asOnDate));
+        return ResponseEntity.ok(agingAnalysisService.getEmis(contractId, asOnDate, authentication));
     }
 
     @GetMapping("/contracts/{contractId}/receipts")
     public ResponseEntity<List<AgingAnalysisReceiptDto>> getReceipts(
         @PathVariable Long contractId,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOnDate
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOnDate,
+        Authentication authentication
     ) {
-        return ResponseEntity.ok(agingAnalysisService.getReceipts(contractId, asOnDate));
+        return ResponseEntity.ok(agingAnalysisService.getReceipts(contractId, asOnDate, authentication));
+    }
+
+    @GetMapping("/contracts/{contractId}/raw-voucher")
+    public ResponseEntity<AgingAnalysisRawVoucherDto> getRawVoucher(
+        @PathVariable Long contractId,
+        @RequestParam String voucherNumber,
+        @RequestParam(required = false) String voucherType,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(agingAnalysisService.getRawVoucher(contractId, voucherType, voucherNumber, authentication));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

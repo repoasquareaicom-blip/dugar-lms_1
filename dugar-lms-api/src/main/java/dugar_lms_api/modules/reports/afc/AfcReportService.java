@@ -1,5 +1,6 @@
 package dugar_lms_api.modules.reports.afc;
 
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
@@ -20,7 +21,10 @@ public class AfcReportService {
 
     public AfcReportResponse getReport(AfcReportRequest request, Authentication authentication) {
         AfcReportRequest validated = validate(request);
-        AfcReportSource source = repository.findSource(validated.loanNumber(), validated.areaCode())
+        ReportAccessScope accessScope = ReportAccessScope.from(authentication);
+        AfcReportSource source = (accessScope.restrictedToUserGroup()
+                ? repository.findSource(validated.loanNumber(), validated.areaCode(), accessScope)
+                : repository.findSource(validated.loanNumber(), validated.areaCode()))
             .orElseThrow(() -> new IllegalArgumentException("Loan Number not found"));
         List<AfcRepaymentSlab> slabs = repository.findRepaymentSlabs(source.contractId());
         List<AfcReceipt> receipts = repository.findReceipts(source, validated.asOnDate());

@@ -1,4 +1,4 @@
-import React, { createElement, useState } from 'react';
+import React, { createElement, useRef, useState } from 'react';
 import * as Icons from 'lucide-react';
 import { ChevronRight, Circle } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
@@ -6,10 +6,12 @@ import { resolveMenuPath } from '../utils/menuRouteMap';
 
 const NavItem = ({ item, depth = 0 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const closeTimerRef = useRef(null);
   const location = useLocation();
   
   const subMenus = item?.subMenus || item?.submenus || item?.children || [];
   const hasSubMenu = subMenus.length > 0;
+  const needsScrollablePanel = subMenus.length > 10;
   
   const targetPath = resolveMenuPath(item);
   const isLink = !hasSubMenu && targetPath && targetPath !== "#";
@@ -24,6 +26,24 @@ const NavItem = ({ item, depth = 0 }) => {
   };
 
   const IconComponent = getIcon(item.icon);
+
+  const openMenu = () => {
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setIsHovered(true);
+  };
+
+  const closeMenu = () => {
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = window.setTimeout(() => {
+      setIsHovered(false);
+      closeTimerRef.current = null;
+    }, 180);
+  };
 
   const commonClasses = `
     flex items-center gap-2 transition-all duration-200 relative whitespace-nowrap uppercase tracking-tight
@@ -41,8 +61,8 @@ const NavItem = ({ item, depth = 0 }) => {
     <div 
       style={{ fontFamily: 'Calibri, sans-serif' }}
       className={`relative h-full flex items-center ${depth > 0 ? 'w-full' : ''}`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={openMenu}
+      onMouseLeave={closeMenu}
     >
       {isLink ? (
         <Link 
@@ -88,9 +108,12 @@ const NavItem = ({ item, depth = 0 }) => {
         <div className={`
           absolute z-[1100] transition-all duration-300 ease-out
           ${isHovered ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible translate-y-1'}
-          ${depth === 0 ? 'top-[100%] left-0 pt-1 w-max' : 'left-[100%] top-0 pl-1 w-max'}
+          ${depth === 0 ? 'top-[100%] left-0 pt-2 w-max' : 'left-[calc(100%-6px)] top-[-10px] pl-3 w-max'}
         `}>
-          <div className="bg-white border-2 border-slate-200 shadow-2xl rounded-xl p-2 flex flex-col min-w-[240px]">
+          <div className={`
+            min-w-[260px] rounded-xl border-2 border-slate-200 bg-white p-2 shadow-2xl
+            ${needsScrollablePanel ? 'max-h-[calc(100vh-120px)] overflow-x-hidden overflow-y-auto' : ''}
+          `}>
             {[...subMenus]
               .sort((a, b) => (a.displayOrder || a.display_order || 0) - (b.displayOrder || b.display_order || 0))
               .map((sub) => (

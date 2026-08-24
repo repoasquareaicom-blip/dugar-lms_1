@@ -26,4 +26,6 @@ public class UserInfoResponse {
     private String roleName;
 
     private String roleCode;
+
+    private String userGroup;
 }

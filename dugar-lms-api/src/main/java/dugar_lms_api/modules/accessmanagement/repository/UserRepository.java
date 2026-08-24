@@ -23,6 +23,7 @@ public class UserRepository {
             full_name,
             email_id,
             role_id,
+            COALESCE(NULLIF(TRIM(user_group), ''), 'admin') AS user_group,
             is_active,
             created_at,
             updated_at,

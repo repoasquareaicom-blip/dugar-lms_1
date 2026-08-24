@@ -26,7 +26,7 @@ public class JwtService {
         this.jwtExpirationMs = jwtExpirationMs;
     }
 
-    public String generateToken(Long userId, String username, Long roleId, String roleCode) {
+    public String generateToken(Long userId, String username, Long roleId, String roleCode, String userGroup) {
         Date issuedAt = new Date();
         Date expiration = new Date(issuedAt.getTime() + jwtExpirationMs);
 
@@ -35,6 +35,7 @@ public class JwtService {
             .claim("userId", userId)
             .claim("roleId", roleId)
             .claim("roleCode", roleCode)
+            .claim("userGroup", userGroup)
             .issuedAt(issuedAt)
             .expiration(expiration)
             .signWith(buildSigningKey())
@@ -55,6 +56,10 @@ public class JwtService {
 
     public String extractRoleCode(String token) {
         return extractClaim(token, claims -> claims.get("roleCode", String.class));
+    }
+
+    public String extractUserGroup(String token) {
+        return extractClaim(token, claims -> claims.get("userGroup", String.class));
     }
 
     public boolean isTokenValid(String token) {

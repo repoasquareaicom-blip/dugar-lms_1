@@ -1,0 +1,44 @@
+Root User
+aws-dugar@asquareai.com
+hJcipgLQaK3
+
+th6NbegGEDuVnO
+AWS 
+YNuhDTWqv9j4
+YNuhDTWqv9j4!
+
+CREATE DATABASE dugar_lms;
+CREATE USER dugar_lms_user WITH PASSWORD 'mysecret';
+GRANT ALL PRIVILEGES ON DATABASE dugar_lms TO dugar_lms_user;
+
+Connect LIVE db in local psg admin
+To connect your local pgAdmin/Desktop to the production PostgreSQL through SSH tunnel, run this on your Windows Command Prompt:
+
+ssh -i "H:\workspace\Dugar\LMS\LMS\Development V_1_0\dugar-lms-api\docs\Dugar-LMS-Key.pem" -L 5433:localhost:5432 ubuntu@prolms.asquareai.com
+
+Keep that Command Prompt window open while using pgAdmin.
+
+Then pgAdmin connection settings are:
+
+Host:       127.0.0.1
+Port:       5433
+Database:   dugar_lms
+Username:   dugar_lms_user
+Password:   mysecret
+
+Important: we're using local port 5433 because your Windows machine may already have local PostgreSQL running on 5432.
+
+
+
+DB host: localhost
+DB port: 5432
+DB name: dugar_lms
+DB user: dugar_lms_user
+
+
+
+
+---------------------------
+Link
+dugarchambers@gmail.com
+password: Dugar2026

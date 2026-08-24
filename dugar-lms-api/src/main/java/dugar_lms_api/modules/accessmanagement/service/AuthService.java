@@ -90,7 +90,8 @@ public class AuthService {
             user.getUserId(),
             user.getUsername(),
             role.getRoleId(),
-            role.getRoleCode()
+            role.getRoleCode(),
+            user.getUserGroup()
         );
     }
 
@@ -107,6 +108,7 @@ public class AuthService {
             .roleId(role.getRoleId())
             .roleName(role.getRoleName())
             .roleCode(role.getRoleCode())
+            .userGroup(user.getUserGroup())
             .build();
 
         return LoginResponse.builder()

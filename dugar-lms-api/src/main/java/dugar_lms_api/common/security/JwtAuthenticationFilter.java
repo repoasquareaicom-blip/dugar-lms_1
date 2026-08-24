@@ -47,14 +47,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return (HttpMethod.POST.matches(method)
                 && "/api/auth/login".equals(servletPath))
             || (HttpMethod.GET.matches(method)
-                && ("/api/health".equals(servletPath)
-                    || "/api/contracts/areas".equals(servletPath)
-                    || servletPath.startsWith("/api/reports/")
-                    || "/api/reports/areas".equals(servletPath)
-                    || "/api/reports/demand-list".equals(servletPath)
-                    || "/api/reports/demand-list/print".equals(servletPath)
-                    || "/api/reports/afc".equals(servletPath)
-                    || "/api/reports/afc/print".equals(servletPath)));
+                && "/api/health".equals(servletPath));
     }
 
     @Override
@@ -109,6 +102,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Long userId = jwtService.extractUserId(token);
             Long roleId = jwtService.extractRoleId(token);
             String roleCode = jwtService.extractRoleCode(token);
+            String userGroup = jwtService.extractUserGroup(token);
 
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
 
@@ -126,6 +120,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 jwtDetails.put("userId", userId);
                 jwtDetails.put("roleId", roleId);
                 jwtDetails.put("roleCode", roleCode);
+                jwtDetails.put("userGroup", userGroup);
                 jwtDetails.put("authorities", authorities);
                 jwtDetails.put(
                     "request",

@@ -28,6 +28,7 @@ import DemandListPage from './pages/committee/reports/DemandListPage.jsx';
 import AfcReportPage from './pages/committee/reports/AfcReportPage.jsx';
 import AgingAnalysisPage from './pages/committee/reports/AgingAnalysisPage.jsx';
 import AgingMatrixReportPage from './pages/committee/reports/AgingMatrixReportPage.jsx';
+import ConsolidatedPortfolioPage from './pages/committee/reports/ConsolidatedPortfolioPage.jsx';
 import { normalizeMenuTree } from './utils/menuNormalizer';
 import { fetchContractDashboard } from './services/dashboardService';
 
@@ -498,6 +499,7 @@ function App() {
           <Route path="/committee/aging-analysis/consolidated" element={<AgingAnalysisPage initialTab="consolidated" />} />
           <Route path="/committee/aging-analysis/loan-ticket-wise" element={<AgingMatrixReportPage type="loan-ticket" />} />
           <Route path="/committee/aging-analysis/interest-wise" element={<AgingMatrixReportPage type="interest" />} />
+          <Route path="/committee/aging-analysis/consolidated-portfolio" element={<ConsolidatedPortfolioPage />} />
           <Route 
   path="*" 
   element={

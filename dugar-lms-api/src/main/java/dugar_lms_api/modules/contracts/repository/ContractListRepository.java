@@ -4,6 +4,7 @@ import dugar_lms_api.modules.contracts.dto.ContractListDto;
 import dugar_lms_api.modules.contracts.service.ContractListCriteria;
 import dugar_lms_api.modules.contracts.service.ContractListSortDirection;
 import dugar_lms_api.modules.contracts.service.ContractListSortField;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -103,6 +104,12 @@ public class ContractListRepository {
             FROM contract_repayment_structures repayment
             WHERE repayment.contract_id = c.contract_id
         ) rs ON TRUE
+        LEFT JOIN users created_user
+          ON c.created_by = created_user.user_id::text
+          OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
+        LEFT JOIN users updated_user
+          ON c.updated_by = updated_user.user_id::text
+          OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
         """;
 
     private static final String FIND_SQL_PREFIX = """
@@ -115,10 +122,26 @@ public class ContractListRepository {
 
     private static final String FIND_AREAS_SQL = """
         SELECT DISTINCT NULLIF(TRIM(area_code), '') AS area_code
-        FROM contracts
-        WHERE is_active = TRUE
-          AND NULLIF(TRIM(area_code), '') IS NOT NULL
-          AND (:keyword = '' OR LOWER(TRIM(area_code)) LIKE :keyword)
+        FROM contracts c
+        LEFT JOIN users created_user
+          ON c.created_by = created_user.user_id::text
+          OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
+        LEFT JOIN users updated_user
+          ON c.updated_by = updated_user.user_id::text
+          OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
+        WHERE c.is_active = TRUE
+          AND NULLIF(TRIM(c.area_code), '') IS NOT NULL
+          AND (:keyword = '' OR LOWER(TRIM(c.area_code)) LIKE :keyword)
+          AND (
+              :restricted = FALSE
+              OR (
+                  LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
+                  AND (
+                      NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
+                      OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
+                  )
+              )
+          )
         ORDER BY area_code
         LIMIT :limit
         """;
@@ -183,32 +206,50 @@ public class ContractListRepository {
     }
 
     public List<ContractListDto> find(ContractListCriteria criteria) {
-        QueryParts queryParts = queryParts(criteria);
+        return find(criteria, new ReportAccessScope(false));
+    }
+
+    public List<ContractListDto> find(ContractListCriteria criteria, ReportAccessScope accessScope) {
+        QueryParts queryParts = queryParts(criteria, accessScope);
         return namedParameterJdbcTemplate.query(findSql(criteria, queryParts.whereSql()), queryParts.params(), CONTRACT_LIST_ROW_MAPPER);
     }
 
     public long count(ContractListCriteria criteria) {
-        QueryParts queryParts = queryParts(criteria);
+        return count(criteria, new ReportAccessScope(false));
+    }
+
+    public long count(ContractListCriteria criteria, ReportAccessScope accessScope) {
+        QueryParts queryParts = queryParts(criteria, accessScope);
         Long total = namedParameterJdbcTemplate.queryForObject(COUNT_SQL + queryParts.whereSql(), queryParts.params(), Long.class);
         return total == null ? 0 : total;
     }
 
     public List<String> findAreas(String keyword, int limit) {
+        return findAreas(keyword, limit, new ReportAccessScope(false));
+    }
+
+    public List<String> findAreas(String keyword, int limit, ReportAccessScope accessScope) {
         String cleanedKeyword = normalizeLower(keyword);
         return namedParameterJdbcTemplate.queryForList(
             FIND_AREAS_SQL,
             new MapSqlParameterSource()
                 .addValue("keyword", cleanedKeyword == null ? "" : "%" + cleanedKeyword + "%")
-                .addValue("limit", Math.max(1, Math.min(limit, 50))),
+                .addValue("limit", Math.max(1, Math.min(limit, 50)))
+                .addValue("restricted", accessScope != null && accessScope.restrictedToUserGroup()),
             String.class
         );
     }
 
     private QueryParts queryParts(ContractListCriteria criteria) {
+        return queryParts(criteria, new ReportAccessScope(false));
+    }
+
+    private QueryParts queryParts(ContractListCriteria criteria, ReportAccessScope accessScope) {
         StringBuilder whereSql = new StringBuilder("""
             WHERE c.is_active = TRUE
             """);
         MapSqlParameterSource params = new MapSqlParameterSource();
+        appendAccessFilter(whereSql, params, accessScope);
 
         if (Boolean.TRUE.equals(criteria.isDraft())) {
             if (criteria.workflowStatus() == null || criteria.workflowStatus().isBlank()) {
@@ -240,6 +281,23 @@ public class ContractListRepository {
         params.addValue("offset", (long) criteria.page() * criteria.size());
 
         return new QueryParts(whereSql.toString(), params);
+    }
+
+    private void appendAccessFilter(StringBuilder whereSql, MapSqlParameterSource params, ReportAccessScope accessScope) {
+        boolean restricted = accessScope != null && accessScope.restrictedToUserGroup();
+        params.addValue("restricted", restricted);
+        whereSql.append("""
+            AND (
+                :restricted = FALSE
+                OR (
+                    LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
+                    AND (
+                        NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
+                        OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
+                    )
+                )
+            )
+            """);
     }
 
     private void appendKeywordFilter(StringBuilder whereSql, MapSqlParameterSource params, String keyword) {

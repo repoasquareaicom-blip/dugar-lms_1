@@ -20,6 +20,7 @@ public class UserRowMapper implements RowMapper<User> {
         user.setFullName(rs.getString("full_name"));
         user.setEmailId(rs.getString("email_id"));
         user.setRoleId(rs.getObject("role_id", Long.class));
+        user.setUserGroup(rs.getString("user_group"));
         user.setIsActive(rs.getObject("is_active", Boolean.class));
         user.setCreatedAt(toLocalDateTime(rs.getTimestamp("created_at")));
         user.setUpdatedAt(toLocalDateTime(rs.getTimestamp("updated_at")));

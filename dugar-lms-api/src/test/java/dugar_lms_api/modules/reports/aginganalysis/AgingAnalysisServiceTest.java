@@ -97,12 +97,56 @@ class AgingAnalysisServiceTest {
         assertThat(response.rows()).isNotEmpty();
     }
 
+    @Test
+    void consolidatedPortfolioPassesBlankAreaForAllAreas() {
+        ConsolidatedPortfolioRepository portfolioRepository = mock(ConsolidatedPortfolioRepository.class);
+        LocalDate asOnDate = LocalDate.of(2026, 8, 22);
+        ConsolidatedPortfolioResponse expected = new ConsolidatedPortfolioResponse(asOnDate, "", List.of(), List.of(), List.of());
+        when(portfolioRepository.getPortfolio(asOnDate, "")).thenReturn(expected);
+        AgingAnalysisService service = service(mock(DemandListService.class), mock(BranchWiseAgeingProcedureRepository.class), mock(AgingAnalysisDrilldownRepository.class), portfolioRepository);
+
+        ConsolidatedPortfolioResponse response = service.getConsolidatedPortfolio(asOnDate, " ");
+
+        assertThat(response).isSameAs(expected);
+    }
+
+    @Test
+    void consolidatedPortfolioPassesSelectedAsOnDateAndArea() {
+        ConsolidatedPortfolioRepository portfolioRepository = mock(ConsolidatedPortfolioRepository.class);
+        LocalDate asOnDate = LocalDate.of(2026, 8, 22);
+        ConsolidatedPortfolioResponse expected = new ConsolidatedPortfolioResponse(asOnDate, "F0001", List.of(), List.of(), List.of());
+        when(portfolioRepository.getPortfolio(asOnDate, "F0001")).thenReturn(expected);
+        AgingAnalysisService service = service(mock(DemandListService.class), mock(BranchWiseAgeingProcedureRepository.class), mock(AgingAnalysisDrilldownRepository.class), portfolioRepository);
+
+        ConsolidatedPortfolioResponse response = service.getConsolidatedPortfolio(asOnDate, " F0001 ");
+
+        assertThat(response).isSameAs(expected);
+    }
+
+    @Test
+    void consolidatedPortfolioRequiresAsOnDate() {
+        AgingAnalysisService service = service(mock(DemandListService.class), mock(BranchWiseAgeingProcedureRepository.class), mock(AgingAnalysisDrilldownRepository.class));
+
+        assertThatThrownBy(() -> service.getConsolidatedPortfolio(null, "F0001"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("As On Date is required");
+    }
+
     private AgingAnalysisService service(
         DemandListService demandListService,
         BranchWiseAgeingProcedureRepository procedureRepository,
         AgingAnalysisDrilldownRepository drilldownRepository
     ) {
-        return new AgingAnalysisService(demandListService, procedureRepository, drilldownRepository);
+        return service(demandListService, procedureRepository, drilldownRepository, mock(ConsolidatedPortfolioRepository.class));
+    }
+
+    private AgingAnalysisService service(
+        DemandListService demandListService,
+        BranchWiseAgeingProcedureRepository procedureRepository,
+        AgingAnalysisDrilldownRepository drilldownRepository,
+        ConsolidatedPortfolioRepository portfolioRepository
+    ) {
+        return new AgingAnalysisService(demandListService, procedureRepository, drilldownRepository, portfolioRepository);
     }
 
     private DemandListRowDto row(Long contractId, String area, BigDecimal totalOutstanding, BigDecimal overdueAmount, LocalDate overdueFromDate) {
