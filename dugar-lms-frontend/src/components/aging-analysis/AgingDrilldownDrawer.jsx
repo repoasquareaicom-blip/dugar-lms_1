@@ -5,6 +5,12 @@ function formatMoney(value) {
   return Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function areaDisplay(row) {
+  const areaCode = row?.areaCode || row?.area || '';
+  const areaName = row?.areaName || '';
+  return areaName ? `${areaCode} - ${areaName}` : areaCode;
+}
+
 function rawColumns(rows) {
   const seen = new Set();
   rows.forEach((row) => {
@@ -106,7 +112,7 @@ export default function AgingDrilldownDrawer({ state, onClose, onSelectContract,
               <div className="mb-2 text-[13px] font-black uppercase text-[#0052CC]">Contract Details - {detail.contractNumber}</div>
               <div className="mb-4 grid grid-cols-2 gap-x-4 border border-black/20 p-2">
                 {[
-                  ['Area Code', detail.areaCode],
+                  ['Area Code', areaDisplay(detail)],
                   ['Total Contract Value', formatMoney(detail.totalContractValue)],
                   ['Finance Charges', formatMoney(detail.financeCharges)],
                   ['Original Principal', formatMoney(detail.originalPrincipal)],

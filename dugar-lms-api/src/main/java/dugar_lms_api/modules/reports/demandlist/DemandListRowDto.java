@@ -29,7 +29,8 @@ public record DemandListRowDto(
     LocalDate overdueEndDate,
     BigDecimal currentDueAmount,
     LocalDate currentDueDate,
-    String area,
+    String areaCode,
+    String areaName,
     String fieldOfficer,
     String warning
 ) {

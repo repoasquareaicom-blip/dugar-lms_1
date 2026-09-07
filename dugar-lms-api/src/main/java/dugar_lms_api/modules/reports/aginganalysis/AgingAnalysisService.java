@@ -65,10 +65,8 @@ public class AgingAnalysisService {
         if (validated.contractNumber() != null) {
             throw new IllegalArgumentException("Contract No filter is not supported for Branch Wise Ageing stored procedure report yet");
         }
-        ReportAccessScope accessScope = ReportAccessScope.from(authentication);
-        List<AgingAnalysisBranchRowDto> branchRows = accessScope.restrictedToUserGroup()
-            ? branchWiseAgeingProcedureRepository.getBranchWiseRows(validated.asOnDate(), validated.areaCode(), accessScope)
-            : branchWiseAgeingProcedureRepository.getBranchWiseRows(validated.asOnDate(), validated.areaCode());
+        List<AgingAnalysisBranchRowDto> branchRows =
+            branchWiseAgeingProcedureRepository.getBranchWiseRows(validated.asOnDate(), validated.areaCode(), ReportAccessScope.from(authentication));
 
         return new AgingAnalysisResponse(
             validated.asOnDate(),
@@ -109,11 +107,11 @@ public class AgingAnalysisService {
         );
     }
 
-    public ConsolidatedPortfolioResponse getConsolidatedPortfolio(LocalDate asOnDate, String areaCode) {
+    public ConsolidatedPortfolioResponse getConsolidatedPortfolio(LocalDate asOnDate, String areaCode, Authentication authentication) {
         if (asOnDate == null) {
             throw new IllegalArgumentException("As On Date is required");
         }
-        return consolidatedPortfolioRepository.getPortfolio(asOnDate, cleanPortfolioArea(areaCode));
+        return consolidatedPortfolioRepository.getPortfolio(asOnDate, cleanPortfolioArea(areaCode), ReportAccessScope.from(authentication));
     }
 
     public List<DemandListRowDto> getContracts(LocalDate asOnDate, String areaCode, String bucket, Authentication authentication) {
@@ -141,9 +139,8 @@ public class AgingAnalysisService {
     }
 
     private List<AgedLoan> procedureAgedLoans(AgingAnalysisRequest request, ReportAccessScope accessScope) {
-        List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> rows = accessScope != null && accessScope.restrictedToUserGroup()
-            ? branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode(), accessScope)
-            : branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode());
+        List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> rows =
+            branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode(), accessScope);
         return rows.stream()
             .map(row -> procedureAgedLoan(row, request.asOnDate()))
             .toList();
@@ -166,6 +163,7 @@ public class AgingAnalysisService {
             source.contractId(),
             source.contractNumber(),
             source.areaCode(),
+            source.areaName(),
             source.contractDate(),
             source.firstEmiDate(),
             totalContractValue,
@@ -336,7 +334,7 @@ public class AgingAnalysisService {
         AgingBucket bucket = bucket(row, asOnDate);
         return new AgedLoan(
             row.contractId(),
-            clean(row.area()),
+            clean(row.areaCode()),
             bucket,
             consolidatedBucket(bucket),
             money(row.loanAmount()),
@@ -380,6 +378,7 @@ public class AgingAnalysisService {
 
             rows.add(new AgingAnalysisBranchRowDto(
                 entry.getKey(),
+                null,
                 loans.size(),
                 sum(loans, AgedLoan::totalOutstanding),
                 totals.getOrDefault(AgingBucket.CURRENT, ZERO),
@@ -396,7 +395,7 @@ public class AgingAnalysisService {
         }
 
         return rows.stream()
-            .sorted(Comparator.comparing(AgingAnalysisBranchRowDto::area, String.CASE_INSENSITIVE_ORDER))
+            .sorted(Comparator.comparing(AgingAnalysisBranchRowDto::areaCode, String.CASE_INSENSITIVE_ORDER))
             .toList();
     }
 

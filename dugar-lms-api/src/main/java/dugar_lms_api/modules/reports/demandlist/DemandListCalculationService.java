@@ -55,7 +55,8 @@ public class DemandListCalculationService {
             allocation.overdueEndDate(),
             allocation.currentDueAmount(),
             allocation.currentDueDate(),
-            source.area(),
+            source.areaCode(),
+            source.areaName(),
             source.fieldOfficer(),
             warning
         );

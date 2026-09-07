@@ -1,5 +1,6 @@
 package dugar_lms_api.modules.contracts.repository;
 
+import dugar_lms_api.modules.contracts.dto.ContractAreaOptionDto;
 import dugar_lms_api.modules.contracts.dto.ContractListDto;
 import dugar_lms_api.modules.contracts.service.ContractListCriteria;
 import dugar_lms_api.modules.contracts.service.ContractListSortDirection;
@@ -104,12 +105,6 @@ public class ContractListRepository {
             FROM contract_repayment_structures repayment
             WHERE repayment.contract_id = c.contract_id
         ) rs ON TRUE
-        LEFT JOIN users created_user
-          ON c.created_by = created_user.user_id::text
-          OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
-        LEFT JOIN users updated_user
-          ON c.updated_by = updated_user.user_id::text
-          OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
         """;
 
     private static final String FIND_SQL_PREFIX = """
@@ -121,25 +116,26 @@ public class ContractListRepository {
         """ + FROM_SQL;
 
     private static final String FIND_AREAS_SQL = """
-        SELECT DISTINCT NULLIF(TRIM(area_code), '') AS area_code
+        SELECT DISTINCT
+            NULLIF(TRIM(c.area_code), '') AS area_code,
+            NULLIF(TRIM(am.area_name), '') AS area_name
         FROM contracts c
-        LEFT JOIN users created_user
-          ON c.created_by = created_user.user_id::text
-          OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
-        LEFT JOIN users updated_user
-          ON c.updated_by = updated_user.user_id::text
-          OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
+        LEFT JOIN area_masters am
+          ON UPPER(TRIM(am.area_code)) = UPPER(TRIM(c.area_code))
         WHERE c.is_active = TRUE
           AND NULLIF(TRIM(c.area_code), '') IS NOT NULL
-          AND (:keyword = '' OR LOWER(TRIM(c.area_code)) LIKE :keyword)
+          AND (
+              :keyword = ''
+              OR LOWER(TRIM(c.area_code)) LIKE :keyword
+              OR LOWER(TRIM(COALESCE(am.area_name, ''))) LIKE :keyword
+          )
           AND (
               :restricted = FALSE
-              OR (
-                  LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
-                  AND (
-                      NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
-                      OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
-                  )
+              OR EXISTS (
+                  SELECT 1
+                  FROM users access_user
+                  WHERE access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))
+                    AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
               )
           )
         ORDER BY area_code
@@ -224,19 +220,22 @@ public class ContractListRepository {
         return total == null ? 0 : total;
     }
 
-    public List<String> findAreas(String keyword, int limit) {
+    public List<ContractAreaOptionDto> findAreas(String keyword, int limit) {
         return findAreas(keyword, limit, new ReportAccessScope(false));
     }
 
-    public List<String> findAreas(String keyword, int limit, ReportAccessScope accessScope) {
+    public List<ContractAreaOptionDto> findAreas(String keyword, int limit, ReportAccessScope accessScope) {
         String cleanedKeyword = normalizeLower(keyword);
-        return namedParameterJdbcTemplate.queryForList(
+        return namedParameterJdbcTemplate.query(
             FIND_AREAS_SQL,
             new MapSqlParameterSource()
                 .addValue("keyword", cleanedKeyword == null ? "" : "%" + cleanedKeyword + "%")
                 .addValue("limit", Math.max(1, Math.min(limit, 50)))
                 .addValue("restricted", accessScope != null && accessScope.restrictedToUserGroup()),
-            String.class
+            (rs, rowNum) -> new ContractAreaOptionDto(
+                rs.getString("area_code"),
+                rs.getString("area_name")
+            )
         );
     }
 
@@ -289,12 +288,11 @@ public class ContractListRepository {
         whereSql.append("""
             AND (
                 :restricted = FALSE
-                OR (
-                    LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
-                    AND (
-                        NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
-                        OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
-                    )
+                OR EXISTS (
+                    SELECT 1
+                    FROM users access_user
+                    WHERE access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))
+                      AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
                 )
             )
             """);

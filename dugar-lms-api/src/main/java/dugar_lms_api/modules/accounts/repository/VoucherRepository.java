@@ -10,6 +10,7 @@ import dugar_lms_api.modules.accounts.dto.VoucherReviewDto;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveResponse;
 import dugar_lms_api.modules.accounts.dto.VoucherSummaryDto;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -185,6 +186,10 @@ public class VoucherRepository {
     }
 
     public List<VoucherSummaryDto> search(String voucherType, String transactionType, String voucherNumber, LocalDate voucherDate, String contractNumber) {
+        return search(voucherType, transactionType, voucherNumber, voucherDate, contractNumber, new ReportAccessScope(false));
+    }
+
+    public List<VoucherSummaryDto> search(String voucherType, String transactionType, String voucherNumber, LocalDate voucherDate, String contractNumber, ReportAccessScope accessScope) {
         MapSqlParameterSource params = new MapSqlParameterSource();
         StringBuilder sql = new StringBuilder(
             """
@@ -208,6 +213,7 @@ public class VoucherRepository {
             WHERE h.status = 'AUTHORISED'
             """
         );
+        appendAccessFilter(sql, params, accessScope, "h");
 
         String cleanedVoucherType = clean(voucherType);
         if (cleanedVoucherType != null) {
@@ -254,6 +260,12 @@ public class VoucherRepository {
     }
 
     public VoucherDto find(Long voucherHeaderId) {
+        return find(voucherHeaderId, new ReportAccessScope(false));
+    }
+
+    public VoucherDto find(Long voucherHeaderId, ReportAccessScope accessScope) {
+        MapSqlParameterSource params = new MapSqlParameterSource("voucherHeaderId", voucherHeaderId);
+        addAccessParam(params, accessScope);
         VoucherDto header = jdbcTemplate.queryForObject(
             """
             SELECT
@@ -272,10 +284,19 @@ public class VoucherRepository {
                 remarks,
                 status,
                 version_number
-            FROM voucher_headers
-            WHERE voucher_header_id = :voucherHeaderId
+            FROM voucher_headers h
+            WHERE h.voucher_header_id = :voucherHeaderId
+              AND (
+                  :restricted = FALSE
+                  OR EXISTS (
+                      SELECT 1
+                      FROM users access_user
+                      WHERE access_user.user_id = h.updated_by
+                        AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+                  )
+              )
             """,
-            new MapSqlParameterSource("voucherHeaderId", voucherHeaderId),
+            params,
             HEADER_ROW_MAPPER
         );
         List<VoucherDetailDto> details = jdbcTemplate.query(
@@ -321,7 +342,11 @@ public class VoucherRepository {
     }
 
     public VoucherSaveResponse update(Long voucherHeaderId, VoucherSaveRequest request, Long userId) {
-        StatusVersion current = lockStatus(voucherHeaderId);
+        return update(voucherHeaderId, request, userId, new ReportAccessScope(false));
+    }
+
+    public VoucherSaveResponse update(Long voucherHeaderId, VoucherSaveRequest request, Long userId, ReportAccessScope accessScope) {
+        StatusVersion current = lockStatus(voucherHeaderId, accessScope);
         if (!List.of("SUBMITTED", "REOPENED", "REJECTED").contains(current.status())) {
             throw new IllegalStateException("Only SUBMITTED, REOPENED or REJECTED vouchers can be edited.");
         }
@@ -417,8 +442,12 @@ public class VoucherRepository {
     }
 
     public PageResponse<VoucherSummaryDto> authorisationQueue(VoucherAuthorisationCriteria criteria) {
+        return authorisationQueue(criteria, new ReportAccessScope(false));
+    }
+
+    public PageResponse<VoucherSummaryDto> authorisationQueue(VoucherAuthorisationCriteria criteria, ReportAccessScope accessScope) {
         MapSqlParameterSource params = new MapSqlParameterSource();
-        String whereSql = authorisationWhere(criteria, params);
+        String whereSql = authorisationWhere(criteria, params, accessScope);
         int page = criteria.page() == null || criteria.page() < 0 ? 0 : criteria.page();
         int size = criteria.size() == null || criteria.size() < 1 ? 25 : Math.min(criteria.size(), 250);
         params.addValue("size", size);
@@ -464,7 +493,11 @@ public class VoucherRepository {
     }
 
     public VoucherReviewDto review(Long voucherHeaderId) {
-        VoucherDto header = find(voucherHeaderId);
+        return review(voucherHeaderId, new ReportAccessScope(false));
+    }
+
+    public VoucherReviewDto review(Long voucherHeaderId, ReportAccessScope accessScope) {
+        VoucherDto header = find(voucherHeaderId, accessScope);
         Totals totals = totals(voucherHeaderId);
         List<VoucherHistoryDto> history = jdbcTemplate.query(
             """
@@ -535,7 +568,11 @@ public class VoucherRepository {
     }
 
     public VoucherDto authorise(Long voucherHeaderId, Long userId) {
-        StatusVersion current = lockStatus(voucherHeaderId);
+        return authorise(voucherHeaderId, userId, new ReportAccessScope(false));
+    }
+
+    public VoucherDto authorise(Long voucherHeaderId, Long userId, ReportAccessScope accessScope) {
+        StatusVersion current = lockStatus(voucherHeaderId, accessScope);
         requireStatus(current, "SUBMITTED");
         int updated = jdbcTemplate.update(
             """
@@ -561,7 +598,11 @@ public class VoucherRepository {
     }
 
     public VoucherDto reject(Long voucherHeaderId, Long userId, String reason) {
-        StatusVersion current = lockStatus(voucherHeaderId);
+        return reject(voucherHeaderId, userId, reason, new ReportAccessScope(false));
+    }
+
+    public VoucherDto reject(Long voucherHeaderId, Long userId, String reason, ReportAccessScope accessScope) {
+        StatusVersion current = lockStatus(voucherHeaderId, accessScope);
         requireStatus(current, "SUBMITTED");
         int updated = jdbcTemplate.update(
             """
@@ -585,7 +626,11 @@ public class VoucherRepository {
     }
 
     public VoucherDto cancel(Long voucherHeaderId, Long userId, String reason) {
-        StatusVersion current = lockStatus(voucherHeaderId);
+        return cancel(voucherHeaderId, userId, reason, new ReportAccessScope(false));
+    }
+
+    public VoucherDto cancel(Long voucherHeaderId, Long userId, String reason, ReportAccessScope accessScope) {
+        StatusVersion current = lockStatus(voucherHeaderId, accessScope);
         if (!List.of("SUBMITTED", "REJECTED", "REOPENED").contains(current.status())) {
             throw new IllegalStateException("Only SUBMITTED, REJECTED, or REOPENED vouchers can be cancelled.");
         }
@@ -611,7 +656,11 @@ public class VoucherRepository {
     }
 
     public VoucherDto reopen(Long voucherHeaderId, Long userId, String reason) {
-        StatusVersion current = lockStatus(voucherHeaderId);
+        return reopen(voucherHeaderId, userId, reason, new ReportAccessScope(false));
+    }
+
+    public VoucherDto reopen(Long voucherHeaderId, Long userId, String reason, ReportAccessScope accessScope) {
+        StatusVersion current = lockStatus(voucherHeaderId, accessScope);
         requireStatus(current, "AUTHORISED");
         Long historyId = createHistorySnapshot(voucherHeaderId, current, userId, clean(reason) == null ? "Voucher reopened for correction" : clean(reason));
         jdbcTemplate.update(
@@ -662,7 +711,11 @@ public class VoucherRepository {
     }
 
     public VoucherDto resubmit(Long voucherHeaderId, Long userId) {
-        StatusVersion current = lockStatus(voucherHeaderId);
+        return resubmit(voucherHeaderId, userId, new ReportAccessScope(false));
+    }
+
+    public VoucherDto resubmit(Long voucherHeaderId, Long userId, ReportAccessScope accessScope) {
+        StatusVersion current = lockStatus(voucherHeaderId, accessScope);
         if (!List.of("REOPENED", "REJECTED").contains(current.status())) {
             throw new IllegalStateException("Only REOPENED or REJECTED vouchers can be resubmitted.");
         }
@@ -750,8 +803,9 @@ public class VoucherRepository {
         );
     }
 
-    private String authorisationWhere(VoucherAuthorisationCriteria criteria, MapSqlParameterSource params) {
+    private String authorisationWhere(VoucherAuthorisationCriteria criteria, MapSqlParameterSource params, ReportAccessScope accessScope) {
         StringBuilder sql = new StringBuilder("WHERE h.status = 'SUBMITTED'\n");
+        appendAccessFilter(sql, params, accessScope, "h");
         String keyword = pattern(criteria.keyword());
         if (keyword != null) {
             sql.append("""
@@ -817,16 +871,50 @@ public class VoucherRepository {
     }
 
     private StatusVersion lockStatus(Long voucherHeaderId) {
+        return lockStatus(voucherHeaderId, new ReportAccessScope(false));
+    }
+
+    private StatusVersion lockStatus(Long voucherHeaderId, ReportAccessScope accessScope) {
+        MapSqlParameterSource params = new MapSqlParameterSource("voucherHeaderId", voucherHeaderId);
+        addAccessParam(params, accessScope);
         return jdbcTemplate.queryForObject(
             """
             SELECT status, version_number
-            FROM voucher_headers
-            WHERE voucher_header_id = :voucherHeaderId
+            FROM voucher_headers h
+            WHERE h.voucher_header_id = :voucherHeaderId
+              AND (
+                  :restricted = FALSE
+                  OR EXISTS (
+                      SELECT 1
+                      FROM users access_user
+                      WHERE access_user.user_id = h.updated_by
+                        AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+                  )
+              )
             FOR UPDATE
             """,
-            new MapSqlParameterSource("voucherHeaderId", voucherHeaderId),
+            params,
             (rs, rowNum) -> new StatusVersion(rs.getString("status"), rs.getObject("version_number", Integer.class))
         );
+    }
+
+    private void appendAccessFilter(StringBuilder sql, MapSqlParameterSource params, ReportAccessScope accessScope, String headerAlias) {
+        addAccessParam(params, accessScope);
+        sql.append(" AND (\n");
+        sql.append("     :restricted = FALSE\n");
+        sql.append("     OR EXISTS (\n");
+        sql.append("         SELECT 1\n");
+        sql.append("         FROM users access_user\n");
+        sql.append("         WHERE access_user.user_id = ").append(headerAlias).append(".updated_by\n");
+        sql.append("           AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'\n");
+        sql.append("     )\n");
+        sql.append(" )\n");
+    }
+
+    private void addAccessParam(MapSqlParameterSource params, ReportAccessScope accessScope) {
+        if (!params.hasValue("restricted")) {
+            params.addValue("restricted", accessScope != null && accessScope.restrictedToUserGroup());
+        }
     }
 
     private Long createHistorySnapshot(Long voucherHeaderId, StatusVersion current, Long userId, String reason) {

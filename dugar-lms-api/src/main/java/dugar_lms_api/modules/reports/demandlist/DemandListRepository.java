@@ -38,9 +38,12 @@ public class DemandListRepository {
                 COALESCE(c.total_contract_value, 0) AS total_contract_value,
                 c.first_emi_date,
                 COALESCE(NULLIF(TRIM(c.payment_frequency), ''), NULLIF(TRIM(c.repayment_terms), ''), NULLIF(TRIM(c.mode_of_payment), '')) AS payment_frequency,
-                NULLIF(TRIM(c.area_code), '') AS area,
+                NULLIF(TRIM(c.area_code), '') AS area_code,
+                NULLIF(TRIM(am.area_name), '') AS area_name,
                 COALESCE(NULLIF(TRIM(cd.branch_collection_tool_by), ''), NULLIF(TRIM(cd.ho_collection_tool_by), ''), NULLIF(TRIM(cd.loan_referred_by), '')) AS field_officer
             FROM contracts c
+            LEFT JOIN area_masters am
+              ON UPPER(TRIM(am.area_code)) = UPPER(TRIM(c.area_code))
             LEFT JOIN party_masters pm
               ON UPPER(TRIM(pm.party_code)) = UPPER(TRIM(c.borrower_code))
              AND pm.is_active = TRUE
@@ -157,7 +160,8 @@ public class DemandListRepository {
             cb.total_contract_value,
             cb.first_emi_date,
             cb.payment_frequency,
-            cb.area,
+            cb.area_code,
+            cb.area_name,
             cb.field_officer,
             COALESCE(ar.authorised_receipts, 0) AS authorised_receipts
         FROM contract_base cb
@@ -196,7 +200,8 @@ public class DemandListRepository {
         rs.getBigDecimal("total_contract_value"),
         rs.getObject("first_emi_date", java.time.LocalDate.class),
         rs.getString("payment_frequency"),
-        rs.getString("area"),
+        rs.getString("area_code"),
+        rs.getString("area_name"),
         rs.getString("field_officer"),
         rs.getBigDecimal("authorised_receipts")
     );

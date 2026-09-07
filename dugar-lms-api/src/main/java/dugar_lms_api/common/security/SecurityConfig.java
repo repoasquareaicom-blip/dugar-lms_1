@@ -86,9 +86,14 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(List.of(
             "http://localhost:*",
             "http://127.0.0.1:*",
-            "https://prolms.asquareai.com",
-            "https://www.prolms.asquareai.com",
-            "http://prolms.asquareai.com"
+
+            // "https://prolms.asquareai.com",
+            // "https://www.prolms.asquareai.com",
+            // "http://prolms.asquareai.com",
+
+            "https://corelms.asquareai.com",
+            "https://www.corelms.asquareai.com",
+            "http://corelms.asquareai.com"
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));

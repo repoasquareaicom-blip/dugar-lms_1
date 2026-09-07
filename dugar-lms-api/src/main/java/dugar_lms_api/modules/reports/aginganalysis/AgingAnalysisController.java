@@ -58,9 +58,10 @@ public class AgingAnalysisController {
     @GetMapping("/consolidated-portfolio")
     public ResponseEntity<ConsolidatedPortfolioResponse> getConsolidatedPortfolio(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOnDate,
-        @RequestParam(required = false) String areaCode
+        @RequestParam(required = false) String areaCode,
+        Authentication authentication
     ) {
-        return ResponseEntity.ok(agingAnalysisService.getConsolidatedPortfolio(asOnDate, areaCode));
+        return ResponseEntity.ok(agingAnalysisService.getConsolidatedPortfolio(asOnDate, areaCode, authentication));
     }
 
     @GetMapping("/contracts")

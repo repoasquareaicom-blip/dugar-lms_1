@@ -343,11 +343,12 @@ export default function DemandListPage() {
         <head><meta charset="utf-8" /></head>
         <body>
           <table border="1">
-            <tr><th colspan="8">${excelCell(title)}</th></tr>
+            <tr><th colspan="9">${excelCell(title)}</th></tr>
             <tr>
               <th>Sl. No</th>
               <th>Loan No.</th>
               <th>Name of Borrower<br/>Name of Guarantor</th>
+              <th>Area</th>
               <th>Product Type<br/>Make of Vehicle/<br/>Regn No./Location<br/>No .of Owner<br/>Product usage</th>
               <th>Contract Value<br/>Principal O/S<br/>Interest O/S<br/>Total O/S</th>
               <th>No.of Overdues<br/>O/D Amount<br/>From Date<br/>End Date</th>
@@ -359,6 +360,7 @@ export default function DemandListPage() {
                 <td>${index + 1}</td>
                 <td>${excelCell(row.loanNumber)}</td>
                 <td>${excelCell(row.borrowerName)}<br/>${excelCell(row.guarantorName)}</td>
+                <td>${excelCell(row.areaName ? `${row.areaCode} - ${row.areaName}` : (row.areaCode || row.area || ''))}</td>
                 <td>${excelCell(row.productType)}<br/>${excelCell(row.assetDescription)}<br/>${excelCell(row.registrationOrLocation)}<br/>${excelCell(row.ownerNumber)}<br/>${excelCell(row.vehicleTypeCode || row.usage)}</td>
                 <td style="text-align:right">${excelCell(row.contractValue)}<br/>${excelCell(row.principalOutstanding)}<br/>${excelCell(row.interestOutstanding)}<br/>${excelCell(row.totalOutstanding)}</td>
                 <td style="text-align:right">${excelCell(firstValue(row, ['overdueInstallmentCount', 'noOfOverdues', 'numberOfOverdues', 'overdue_count']))}<br/>${excelCell(firstValue(row, ['overdueAmount', 'odAmount', 'overdue_amount']))}<br/>${excelCell(firstValue(row, ['overdueFromDate', 'fromDate', 'overdue_from_date']))}<br/>${excelCell(firstValue(row, ['overdueEndDate', 'endDate', 'overdue_end_date']))}</td>

@@ -36,62 +36,61 @@ public class BranchWiseAgeingProcedureRepository {
         long startedAt = System.nanoTime();
         List<AgingAnalysisBranchRowDto> rows = jdbcTemplate.execute((ConnectionCallback<List<AgingAnalysisBranchRowDto>>) (connection) -> {
             String normalizedArea = clean(areaCode);
-            boolean restricted = accessScope != null && accessScope.restrictedToUserGroup();
-            try (var call = connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?)")) {
+            try (var call = connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?, ?)")) {
                 call.setObject(1, asOnDate);
                 call.setString(2, normalizedArea);
+                call.setString(3, userGroup(accessScope));
                 call.execute();
             }
 
-            String sql = """
-                SELECT
-                    r.area_code,
-                    COUNT(*) AS no_of_accounts,
-                    COALESCE(SUM(r.principal_outstanding), 0) AS aum,
-                    COALESCE(SUM(r.current_due), 0) AS current_amount,
-                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '1-30'), 0) AS days_1_30,
-                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '31-60'), 0) AS days_31_60,
-                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '61-90'), 0) AS days_61_90,
-                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '91-120'), 0) AS days_91_120,
-                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '121-150'), 0) AS days_121_150,
-                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = '151-180'), 0) AS days_151_180,
-                    COALESCE(SUM(r.overdue_amount) FILTER (WHERE r.ageing_bucket = 'ABOVE 180'), 0) AS days_above_180,
-                    COALESCE(SUM(r.current_due), 0) + COALESCE(SUM(r.overdue_amount), 0) AS total_outstanding,
-                    COALESCE(SUM(r.interest_outstanding), 0) AS interest_outstanding
-                FROM tmp_contract_report r
-                LEFT JOIN contracts c
-                  ON c.contract_id = r.contract_id
-                LEFT JOIN users created_user
-                  ON c.created_by = created_user.user_id::text
-                  OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
-                LEFT JOIN users updated_user
-                  ON c.updated_by = updated_user.user_id::text
-                  OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
-                WHERE (? IS NULL OR UPPER(TRIM(COALESCE(r.area_code, ''))) = ?)
-                  AND COALESCE(r.total_outstanding, 0) > 0
-                  AND (
-                      ? = FALSE
-                      OR (
-                          LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
-                          AND (
-                              NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
-                              OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
-                          )
-                      )
-                  )
-                GROUP BY r.area_code
-                ORDER BY r.area_code
-                """;
+           String sql = """
+            SELECT
+                bwa.area_code,
+                NULLIF(TRIM(am.area_name), '') AS area_name,
+                bwa.no_of_accounts,
+                bwa.aum,
+                bwa.current_amount,
+                bwa.days_1_30,
+                bwa.days_31_60,
+                bwa.days_61_90,
+                bwa.days_91_120,
+                bwa.days_121_150,
+                bwa.days_151_180,
+                bwa.days_above_180,
+                bwa.total_outstanding,
+                COALESCE(SUM(tcr.interest_outstanding), 0) AS interest_outstanding
+            FROM tmp_branch_wise_ageing bwa
+            LEFT JOIN area_masters am
+            ON UPPER(TRIM(am.area_code)) = UPPER(TRIM(bwa.area_code))
+            LEFT JOIN tmp_contract_report tcr
+            ON UPPER(TRIM(tcr.area_code)) = UPPER(TRIM(bwa.area_code))
+            WHERE (? IS NULL OR UPPER(TRIM(COALESCE(bwa.area_code, ''))) = ?)
+            GROUP BY
+                bwa.area_code,
+                NULLIF(TRIM(am.area_name), ''),
+                bwa.no_of_accounts,
+                bwa.aum,
+                bwa.current_amount,
+                bwa.days_1_30,
+                bwa.days_31_60,
+                bwa.days_61_90,
+                bwa.days_91_120,
+                bwa.days_121_150,
+                bwa.days_151_180,
+                bwa.days_above_180,
+                bwa.total_outstanding
+            ORDER BY bwa.area_code
+            """;
             try (var select = connection.prepareStatement(sql)) {
                 select.setString(1, normalizedArea);
                 select.setString(2, normalizedArea);
-                select.setBoolean(3, restricted);
                 try (ResultSet rs = select.executeQuery()) {
                     List<AgingAnalysisBranchRowDto> result = new ArrayList<>();
                     Set<String> columns = columns(rs);
                     while (rs.next()) {
                         result.add(new AgingAnalysisBranchRowDto(
                             rs.getString("area_code"),
+                            rs.getString("area_name"),
                             rs.getLong("no_of_accounts"),
                             money(rs.getBigDecimal("aum")),
                             money(rs.getBigDecimal("current_amount")),
@@ -123,10 +122,10 @@ public class BranchWiseAgeingProcedureRepository {
         long startedAt = System.nanoTime();
         List<ProcedureContractReportRow> rows = jdbcTemplate.execute((ConnectionCallback<List<ProcedureContractReportRow>>) (connection) -> {
             String normalizedArea = clean(areaCode);
-            boolean restricted = accessScope != null && accessScope.restrictedToUserGroup();
-            try (var call = connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?)")) {
+            try (var call = connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?, ?)")) {
                 call.setObject(1, asOnDate);
                 call.setString(2, normalizedArea);
+                call.setString(3, userGroup(accessScope));
                 call.execute();
             }
 
@@ -135,7 +134,8 @@ public class BranchWiseAgeingProcedureRepository {
                     r.contract_id,
                     r.contract_number,
                     r.contract_type,
-                    r.area_code,
+                    NULLIF(TRIM(c.area_code), '') AS area_code,
+                    NULLIF(TRIM(am.area_name), '') AS area_name,
                     r.borrower_code,
                     COALESCE(NULLIF(TRIM(pm.full_name), ''), NULLIF(TRIM(r.borrower_code), '')) AS borrower_name,
                     r.guarantor_code,
@@ -163,12 +163,8 @@ public class BranchWiseAgeingProcedureRepository {
                 FROM tmp_contract_report r
                 LEFT JOIN contracts c
                   ON c.contract_id = r.contract_id
-                LEFT JOIN users created_user
-                  ON c.created_by = created_user.user_id::text
-                  OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
-                LEFT JOIN users updated_user
-                  ON c.updated_by = updated_user.user_id::text
-                  OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
+                LEFT JOIN area_masters am
+                  ON UPPER(TRIM(am.area_code)) = UPPER(TRIM(c.area_code))
                 LEFT JOIN party_masters pm
                   ON UPPER(TRIM(pm.party_code)) = UPPER(TRIM(r.borrower_code))
                  AND pm.is_active = TRUE
@@ -176,22 +172,11 @@ public class BranchWiseAgeingProcedureRepository {
                   ON UPPER(TRIM(gm.party_code)) = UPPER(TRIM(r.guarantor_code))
                  AND gm.is_active = TRUE
                 WHERE (? IS NULL OR UPPER(TRIM(COALESCE(r.area_code, ''))) = ?)
-                  AND (
-                      ? = FALSE
-                      OR (
-                          LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
-                          AND (
-                              NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
-                              OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
-                          )
-                      )
-                  )
                 ORDER BY r.area_code, r.contract_number
                 """;
             try (var select = connection.prepareStatement(sql)) {
                 select.setString(1, normalizedArea);
                 select.setString(2, normalizedArea);
-                select.setBoolean(3, restricted);
                 try (ResultSet rs = select.executeQuery()) {
                     List<ProcedureContractReportRow> result = new ArrayList<>();
                     while (rs.next()) {
@@ -200,6 +185,7 @@ public class BranchWiseAgeingProcedureRepository {
                             rs.getString("contract_number"),
                             rs.getString("contract_type"),
                             rs.getString("area_code"),
+                            rs.getString("area_name"),
                             rs.getString("borrower_code"),
                             rs.getString("borrower_name"),
                             rs.getString("guarantor_code"),
@@ -239,6 +225,10 @@ public class BranchWiseAgeingProcedureRepository {
         return value == null || value.isBlank() ? null : value.trim().toUpperCase();
     }
 
+    private String userGroup(ReportAccessScope accessScope) {
+        return accessScope == null ? null : accessScope.userGroup();
+    }
+
     private BigDecimal money(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
     }
@@ -266,6 +256,7 @@ public class BranchWiseAgeingProcedureRepository {
         String contractNumber,
         String contractType,
         String areaCode,
+        String areaName,
         String borrowerCode,
         String borrowerName,
         String guarantorCode,

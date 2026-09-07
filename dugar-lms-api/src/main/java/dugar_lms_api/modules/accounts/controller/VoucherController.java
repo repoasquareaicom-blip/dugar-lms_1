@@ -9,6 +9,7 @@ import dugar_lms_api.modules.accounts.dto.VoucherSaveRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveResponse;
 import dugar_lms_api.modules.accounts.dto.VoucherSummaryDto;
 import dugar_lms_api.modules.accounts.service.VoucherService;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
@@ -51,9 +52,10 @@ public class VoucherController {
         @RequestParam(required = false) String transactionType,
         @RequestParam(required = false) String voucherNumber,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate voucherDate,
-        @RequestParam(required = false) String contractNumber
+        @RequestParam(required = false) String contractNumber,
+        Authentication authentication
     ) {
-        return ResponseEntity.ok(service.search(voucherType, transactionType, voucherNumber, voucherDate, contractNumber));
+        return ResponseEntity.ok(service.search(voucherType, transactionType, voucherNumber, voucherDate, contractNumber, ReportAccessScope.from(authentication)));
     }
 
     @GetMapping("/authorisation-queue")
@@ -68,7 +70,8 @@ public class VoucherController {
         @RequestParam(required = false) Integer page,
         @RequestParam(required = false) Integer size,
         @RequestParam(required = false) String sortColumn,
-        @RequestParam(required = false) String sortDirection
+        @RequestParam(required = false) String sortDirection,
+        Authentication authentication
     ) {
         return ResponseEntity.ok(service.authorisationQueue(new VoucherAuthorisationCriteria(
             keyword,
@@ -82,17 +85,17 @@ public class VoucherController {
             size,
             sortColumn,
             sortDirection
-        )));
+        ), ReportAccessScope.from(authentication)));
     }
 
     @GetMapping("/authorisation-queue/{voucherHeaderId}")
-    public ResponseEntity<VoucherReviewDto> review(@PathVariable Long voucherHeaderId) {
-        return ResponseEntity.ok(service.review(voucherHeaderId));
+    public ResponseEntity<VoucherReviewDto> review(@PathVariable Long voucherHeaderId, Authentication authentication) {
+        return ResponseEntity.ok(service.review(voucherHeaderId, ReportAccessScope.from(authentication)));
     }
 
     @GetMapping("/{voucherHeaderId}")
-    public ResponseEntity<VoucherDto> find(@PathVariable Long voucherHeaderId) {
-        return ResponseEntity.ok(service.find(voucherHeaderId));
+    public ResponseEntity<VoucherDto> find(@PathVariable Long voucherHeaderId, Authentication authentication) {
+        return ResponseEntity.ok(service.find(voucherHeaderId, ReportAccessScope.from(authentication)));
     }
 
     @PutMapping("/{voucherHeaderId}")
@@ -101,12 +104,12 @@ public class VoucherController {
         @Valid @RequestBody VoucherSaveRequest request,
         Authentication authentication
     ) {
-        return ResponseEntity.ok(service.update(voucherHeaderId, request, userId(authentication)));
+        return ResponseEntity.ok(service.update(voucherHeaderId, request, userId(authentication), ReportAccessScope.from(authentication)));
     }
 
     @PostMapping("/{voucherHeaderId}/authorise")
     public ResponseEntity<VoucherDto> authorise(@PathVariable Long voucherHeaderId, Authentication authentication) {
-        return ResponseEntity.ok(service.authorise(voucherHeaderId, userId(authentication)));
+        return ResponseEntity.ok(service.authorise(voucherHeaderId, userId(authentication), ReportAccessScope.from(authentication)));
     }
 
     @PostMapping("/{voucherHeaderId}/reject")
@@ -115,7 +118,7 @@ public class VoucherController {
         @RequestBody(required = false) VoucherActionRequest request,
         Authentication authentication
     ) {
-        return ResponseEntity.ok(service.reject(voucherHeaderId, userId(authentication), request == null ? null : request.reason()));
+        return ResponseEntity.ok(service.reject(voucherHeaderId, userId(authentication), request == null ? null : request.reason(), ReportAccessScope.from(authentication)));
     }
 
     @PostMapping("/{voucherHeaderId}/cancel")
@@ -124,7 +127,7 @@ public class VoucherController {
         @RequestBody(required = false) VoucherActionRequest request,
         Authentication authentication
     ) {
-        return ResponseEntity.ok(service.cancel(voucherHeaderId, userId(authentication), request == null ? null : request.reason()));
+        return ResponseEntity.ok(service.cancel(voucherHeaderId, userId(authentication), request == null ? null : request.reason(), ReportAccessScope.from(authentication)));
     }
 
     @PostMapping("/{voucherHeaderId}/reopen")
@@ -133,12 +136,12 @@ public class VoucherController {
         @RequestBody(required = false) VoucherActionRequest request,
         Authentication authentication
     ) {
-        return ResponseEntity.ok(service.reopen(voucherHeaderId, userId(authentication), request == null ? null : request.reason()));
+        return ResponseEntity.ok(service.reopen(voucherHeaderId, userId(authentication), request == null ? null : request.reason(), ReportAccessScope.from(authentication)));
     }
 
     @PostMapping("/{voucherHeaderId}/resubmit")
     public ResponseEntity<VoucherDto> resubmit(@PathVariable Long voucherHeaderId, Authentication authentication) {
-        return ResponseEntity.ok(service.resubmit(voucherHeaderId, userId(authentication)));
+        return ResponseEntity.ok(service.resubmit(voucherHeaderId, userId(authentication), ReportAccessScope.from(authentication)));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

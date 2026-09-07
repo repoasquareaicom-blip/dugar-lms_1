@@ -1,7 +1,9 @@
 package dugar_lms_api.modules.contracts.service;
 
 import dugar_lms_api.modules.contracts.dto.ContractCoLendingDraftDto;
+import dugar_lms_api.modules.contracts.repository.ContractAccessRepository;
 import dugar_lms_api.modules.contracts.repository.ContractCoLendingDraftRepository;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,12 +14,18 @@ import java.util.Map;
 public class ContractCoLendingDraftService {
 
     private final ContractCoLendingDraftRepository contractCoLendingDraftRepository;
+    private final ContractAccessRepository contractAccessRepository;
 
-    public ContractCoLendingDraftService(ContractCoLendingDraftRepository contractCoLendingDraftRepository) {
+    public ContractCoLendingDraftService(
+        ContractCoLendingDraftRepository contractCoLendingDraftRepository,
+        ContractAccessRepository contractAccessRepository
+    ) {
         this.contractCoLendingDraftRepository = contractCoLendingDraftRepository;
+        this.contractAccessRepository = contractAccessRepository;
     }
 
-    public ContractCoLendingDraftDto getCoLendingDetails(Long contractId) {
+    public ContractCoLendingDraftDto getCoLendingDetails(Long contractId, Authentication authentication) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         return contractCoLendingDraftRepository.findByContractId(contractId).orElse(null);
     }
 
@@ -27,6 +35,7 @@ public class ContractCoLendingDraftService {
         ContractCoLendingDraftDto request,
         Authentication authentication
     ) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         ContractCoLendingDraftDto coLending = withContractId(contractId, request);
         contractCoLendingDraftRepository.upsertContractDetail(coLending, auditUser(authentication));
         return contractCoLendingDraftRepository.findByContractId(contractId).orElse(coLending);

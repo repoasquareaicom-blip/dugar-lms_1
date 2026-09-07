@@ -1,6 +1,7 @@
 package dugar_lms_api.modules.contracts.controller;
 
 import dugar_lms_api.common.pagination.PageResponse;
+import dugar_lms_api.modules.contracts.dto.ContractAreaOptionDto;
 import dugar_lms_api.modules.contracts.dto.ContractListDto;
 import dugar_lms_api.modules.contracts.service.ContractListCriteria;
 import dugar_lms_api.modules.contracts.service.ContractListService;
@@ -67,7 +68,7 @@ public class ContractListController {
     }
 
     @GetMapping("/areas")
-    public ResponseEntity<java.util.List<String>> listAreas(
+    public ResponseEntity<java.util.List<ContractAreaOptionDto>> listAreas(
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) Integer limit,
         Authentication authentication

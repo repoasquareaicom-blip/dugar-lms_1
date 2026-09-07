@@ -23,7 +23,8 @@ record DemandListSourceRow(
     BigDecimal totalContractValue,
     LocalDate firstEmiDate,
     String paymentFrequency,
-    String area,
+    String areaCode,
+    String areaName,
     String fieldOfficer,
     BigDecimal authorisedReceipts
 ) {

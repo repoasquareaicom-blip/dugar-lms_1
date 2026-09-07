@@ -3,6 +3,7 @@ package dugar_lms_api.modules.reports.aginganalysis;
 import dugar_lms_api.modules.reports.demandlist.DemandListRequest;
 import dugar_lms_api.modules.reports.demandlist.DemandListRowDto;
 import dugar_lms_api.modules.reports.demandlist.DemandListService;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -12,6 +13,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -30,9 +32,9 @@ class AgingAnalysisServiceTest {
     void branchWiseReportUsesStoredProcedureRows() {
         BranchWiseAgeingProcedureRepository procedureRepository = mock(BranchWiseAgeingProcedureRepository.class);
         LocalDate asOnDate = LocalDate.now();
-        when(procedureRepository.getBranchWiseRows(asOnDate, "F0001"))
+        when(procedureRepository.getBranchWiseRows(eq(asOnDate), eq("F0001"), any(ReportAccessScope.class)))
             .thenReturn(List.of(
-                new AgingAnalysisBranchRowDto("F0001", 2, new BigDecimal("2000.00"), new BigDecimal("800.00"), new BigDecimal("1200.00"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("2000.00"), new BigDecimal("200.00"))
+                new AgingAnalysisBranchRowDto("F0001", "CHENNAI PARTHIBAN", 2, new BigDecimal("2000.00"), new BigDecimal("800.00"), new BigDecimal("1200.00"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("2000.00"), new BigDecimal("200.00"))
             ));
         AgingAnalysisService service = service(mock(DemandListService.class), procedureRepository, mock(AgingAnalysisDrilldownRepository.class));
 
@@ -66,7 +68,7 @@ class AgingAnalysisServiceTest {
     void matrixReportsGroupByLoanTicketAndInterestRate() {
         BranchWiseAgeingProcedureRepository procedureRepository = mock(BranchWiseAgeingProcedureRepository.class);
         LocalDate asOnDate = LocalDate.of(2026, 8, 11);
-        when(procedureRepository.getContractReportRows(asOnDate, "F0001"))
+        when(procedureRepository.getContractReportRows(eq(asOnDate), eq("F0001"), any(ReportAccessScope.class)))
             .thenReturn(List.of(
                 procedureRow(1L, "F0001", new BigDecimal("10000000.00"), new BigDecimal("12"), new BigDecimal("7500000.00"), new BigDecimal("1000.00"), LocalDate.of(2026, 7, 15)),
                 procedureRow(2L, "F0001", new BigDecimal("500000.00"), new BigDecimal("12"), new BigDecimal("400000.00"), BigDecimal.ZERO, null)
@@ -85,7 +87,7 @@ class AgingAnalysisServiceTest {
     void matrixReportsAllowBlankAreaAndReturnAllProcedureRows() {
         BranchWiseAgeingProcedureRepository procedureRepository = mock(BranchWiseAgeingProcedureRepository.class);
         LocalDate asOnDate = LocalDate.of(2026, 8, 11);
-        when(procedureRepository.getContractReportRows(asOnDate, null))
+        when(procedureRepository.getContractReportRows(eq(asOnDate), eq(null), any(ReportAccessScope.class)))
             .thenReturn(List.of(
                 procedureRow(1L, "F0001", new BigDecimal("500000.00"), new BigDecimal("12"), new BigDecimal("400000.00"), BigDecimal.ZERO, null),
                 procedureRow(2L, "F0002", new BigDecimal("1000000.00"), new BigDecimal("14"), new BigDecimal("700000.00"), BigDecimal.ZERO, null)
@@ -102,10 +104,10 @@ class AgingAnalysisServiceTest {
         ConsolidatedPortfolioRepository portfolioRepository = mock(ConsolidatedPortfolioRepository.class);
         LocalDate asOnDate = LocalDate.of(2026, 8, 22);
         ConsolidatedPortfolioResponse expected = new ConsolidatedPortfolioResponse(asOnDate, "", List.of(), List.of(), List.of());
-        when(portfolioRepository.getPortfolio(asOnDate, "")).thenReturn(expected);
+        when(portfolioRepository.getPortfolio(eq(asOnDate), eq(""), any(ReportAccessScope.class))).thenReturn(expected);
         AgingAnalysisService service = service(mock(DemandListService.class), mock(BranchWiseAgeingProcedureRepository.class), mock(AgingAnalysisDrilldownRepository.class), portfolioRepository);
 
-        ConsolidatedPortfolioResponse response = service.getConsolidatedPortfolio(asOnDate, " ");
+        ConsolidatedPortfolioResponse response = service.getConsolidatedPortfolio(asOnDate, " ", null);
 
         assertThat(response).isSameAs(expected);
     }
@@ -115,10 +117,10 @@ class AgingAnalysisServiceTest {
         ConsolidatedPortfolioRepository portfolioRepository = mock(ConsolidatedPortfolioRepository.class);
         LocalDate asOnDate = LocalDate.of(2026, 8, 22);
         ConsolidatedPortfolioResponse expected = new ConsolidatedPortfolioResponse(asOnDate, "F0001", List.of(), List.of(), List.of());
-        when(portfolioRepository.getPortfolio(asOnDate, "F0001")).thenReturn(expected);
+        when(portfolioRepository.getPortfolio(eq(asOnDate), eq("F0001"), any(ReportAccessScope.class))).thenReturn(expected);
         AgingAnalysisService service = service(mock(DemandListService.class), mock(BranchWiseAgeingProcedureRepository.class), mock(AgingAnalysisDrilldownRepository.class), portfolioRepository);
 
-        ConsolidatedPortfolioResponse response = service.getConsolidatedPortfolio(asOnDate, " F0001 ");
+        ConsolidatedPortfolioResponse response = service.getConsolidatedPortfolio(asOnDate, " F0001 ", null);
 
         assertThat(response).isSameAs(expected);
     }
@@ -127,7 +129,7 @@ class AgingAnalysisServiceTest {
     void consolidatedPortfolioRequiresAsOnDate() {
         AgingAnalysisService service = service(mock(DemandListService.class), mock(BranchWiseAgeingProcedureRepository.class), mock(AgingAnalysisDrilldownRepository.class));
 
-        assertThatThrownBy(() -> service.getConsolidatedPortfolio(null, "F0001"))
+        assertThatThrownBy(() -> service.getConsolidatedPortfolio(null, "F0001", null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("As On Date is required");
     }
@@ -180,6 +182,7 @@ class AgingAnalysisServiceTest {
             null,
             area,
             null,
+            null,
             null
         );
     }
@@ -199,6 +202,7 @@ class AgingAnalysisServiceTest {
             "LN" + contractId,
             "HP",
             area,
+            null,
             "B" + contractId,
             "Borrower " + contractId,
             "G" + contractId,

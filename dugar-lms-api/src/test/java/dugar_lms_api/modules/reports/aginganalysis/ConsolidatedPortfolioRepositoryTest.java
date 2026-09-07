@@ -1,5 +1,6 @@
 package dugar_lms_api.modules.reports.aginganalysis;
 
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,7 +36,7 @@ class ConsolidatedPortfolioRepositoryTest {
             ConnectionCallback<?> callback = invocation.getArgument(0);
             return callback.doInConnection(connection);
         });
-        when(connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?)")).thenReturn(call);
+        when(connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?, ?)")).thenReturn(call);
         when(connection.prepareStatement("SELECT * FROM tmp_portfolio_tenor ORDER BY sort_order")).thenReturn(tenorStatement);
         when(connection.prepareStatement("SELECT * FROM tmp_portfolio_ticket_size ORDER BY sort_order")).thenReturn(ticketStatement);
         when(connection.prepareStatement("SELECT * FROM tmp_portfolio_state ORDER BY state_name")).thenReturn(stateStatement);
@@ -50,7 +51,7 @@ class ConsolidatedPortfolioRepositoryTest {
         ConsolidatedPortfolioRepository repository = new ConsolidatedPortfolioRepository(jdbcTemplate);
         LocalDate asOnDate = LocalDate.of(2026, 8, 22);
 
-        ConsolidatedPortfolioResponse response = repository.getPortfolio(asOnDate, "");
+        ConsolidatedPortfolioResponse response = repository.getPortfolio(asOnDate, "", new ReportAccessScope(false));
 
         assertThat(response.asOnDate()).isEqualTo(asOnDate);
         assertThat(response.areaCode()).isEqualTo("");
@@ -63,8 +64,9 @@ class ConsolidatedPortfolioRepositoryTest {
 
         verify(call).setObject(1, asOnDate);
         verify(call).setString(2, "");
+        verify(call).setString(3, "admin");
         var inOrder = inOrder(connection);
-        inOrder.verify(connection).prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?)");
+        inOrder.verify(connection).prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?, ?)");
         inOrder.verify(connection).prepareStatement("SELECT * FROM tmp_portfolio_tenor ORDER BY sort_order");
         inOrder.verify(connection).prepareStatement("SELECT * FROM tmp_portfolio_ticket_size ORDER BY sort_order");
         inOrder.verify(connection).prepareStatement("SELECT * FROM tmp_portfolio_state ORDER BY state_name");
@@ -86,7 +88,7 @@ class ConsolidatedPortfolioRepositoryTest {
             ConnectionCallback<?> callback = invocation.getArgument(0);
             return callback.doInConnection(connection);
         });
-        when(connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?)")).thenReturn(call);
+        when(connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?, ?)")).thenReturn(call);
         when(connection.prepareStatement("SELECT * FROM tmp_portfolio_tenor ORDER BY sort_order")).thenReturn(tenorStatement);
         when(connection.prepareStatement("SELECT * FROM tmp_portfolio_ticket_size ORDER BY sort_order")).thenReturn(ticketStatement);
         when(connection.prepareStatement("SELECT * FROM tmp_portfolio_state ORDER BY state_name")).thenReturn(stateStatement);
@@ -97,12 +99,14 @@ class ConsolidatedPortfolioRepositoryTest {
         when(ticket.next()).thenReturn(false);
         when(state.next()).thenReturn(false);
 
-        ConsolidatedPortfolioResponse response = new ConsolidatedPortfolioRepository(jdbcTemplate).getPortfolio(LocalDate.of(2026, 8, 22), "F0001");
+        ConsolidatedPortfolioResponse response = new ConsolidatedPortfolioRepository(jdbcTemplate)
+            .getPortfolio(LocalDate.of(2026, 8, 22), "F0001", new ReportAccessScope(true));
 
         assertThat(response.tenorWise()).isEmpty();
         assertThat(response.ticketSizeWise()).isEmpty();
         assertThat(response.stateWise()).isEmpty();
         verify(call).setString(2, "F0001");
+        verify(call).setString(3, "user");
     }
 
     private void stubPortfolioRow(ResultSet rs, String labelColumn, String label, BigDecimal principalOutstanding) throws Exception {

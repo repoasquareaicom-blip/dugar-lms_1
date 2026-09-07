@@ -10,6 +10,7 @@ import dugar_lms_api.modules.accounts.dto.VoucherSaveRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveResponse;
 import dugar_lms_api.modules.accounts.dto.VoucherSummaryDto;
 import dugar_lms_api.modules.accounts.repository.VoucherRepository;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,25 +37,46 @@ public class VoucherService {
     }
 
     public List<VoucherSummaryDto> search(String voucherType, String transactionType, String voucherNumber, LocalDate voucherDate, String contractNumber) {
-        return repository.search(voucherType, transactionType, voucherNumber, voucherDate, contractNumber);
+        return search(voucherType, transactionType, voucherNumber, voucherDate, contractNumber, new ReportAccessScope(false));
+    }
+
+    public List<VoucherSummaryDto> search(String voucherType, String transactionType, String voucherNumber, LocalDate voucherDate, String contractNumber, ReportAccessScope accessScope) {
+        return repository.search(voucherType, transactionType, voucherNumber, voucherDate, contractNumber, accessScope);
     }
 
     public PageResponse<VoucherSummaryDto> authorisationQueue(VoucherAuthorisationCriteria criteria) {
-        return repository.authorisationQueue(criteria);
+        return authorisationQueue(criteria, new ReportAccessScope(false));
+    }
+
+    public PageResponse<VoucherSummaryDto> authorisationQueue(VoucherAuthorisationCriteria criteria, ReportAccessScope accessScope) {
+        return repository.authorisationQueue(criteria, accessScope);
     }
 
     public VoucherDto find(Long voucherHeaderId) {
-        return repository.find(voucherHeaderId);
+        return find(voucherHeaderId, new ReportAccessScope(false));
+    }
+
+    public VoucherDto find(Long voucherHeaderId, ReportAccessScope accessScope) {
+        return repository.find(voucherHeaderId, accessScope);
     }
 
     public VoucherReviewDto review(Long voucherHeaderId) {
         return repository.review(voucherHeaderId);
     }
 
+    public VoucherReviewDto review(Long voucherHeaderId, ReportAccessScope accessScope) {
+        return repository.review(voucherHeaderId, accessScope);
+    }
+
     @Transactional
     public VoucherSaveResponse update(Long voucherHeaderId, VoucherSaveRequest request, Long userId) {
+        return update(voucherHeaderId, request, userId, new ReportAccessScope(false));
+    }
+
+    @Transactional
+    public VoucherSaveResponse update(Long voucherHeaderId, VoucherSaveRequest request, Long userId, ReportAccessScope accessScope) {
         validate(request);
-        return repository.update(voucherHeaderId, request, userId);
+        return repository.update(voucherHeaderId, request, userId, accessScope);
     }
 
     @Transactional
@@ -64,26 +86,53 @@ public class VoucherService {
     }
 
     @Transactional
+    public VoucherDto authorise(Long voucherHeaderId, Long userId, ReportAccessScope accessScope) {
+        validateReview(repository.review(voucherHeaderId, accessScope));
+        return repository.authorise(voucherHeaderId, userId, accessScope);
+    }
+
+    @Transactional
     public VoucherDto reject(Long voucherHeaderId, Long userId, String reason) {
+        return reject(voucherHeaderId, userId, reason, new ReportAccessScope(false));
+    }
+
+    @Transactional
+    public VoucherDto reject(Long voucherHeaderId, Long userId, String reason, ReportAccessScope accessScope) {
         requireReason(reason, "Rejection reason is mandatory.");
-        return repository.reject(voucherHeaderId, userId, reason);
+        return repository.reject(voucherHeaderId, userId, reason, accessScope);
     }
 
     @Transactional
     public VoucherDto cancel(Long voucherHeaderId, Long userId, String reason) {
+        return cancel(voucherHeaderId, userId, reason, new ReportAccessScope(false));
+    }
+
+    @Transactional
+    public VoucherDto cancel(Long voucherHeaderId, Long userId, String reason, ReportAccessScope accessScope) {
         requireReason(reason, "Cancellation reason is mandatory.");
-        return repository.cancel(voucherHeaderId, userId, reason);
+        return repository.cancel(voucherHeaderId, userId, reason, accessScope);
     }
 
     @Transactional
     public VoucherDto reopen(Long voucherHeaderId, Long userId, String reason) {
-        return repository.reopen(voucherHeaderId, userId, reason);
+        return reopen(voucherHeaderId, userId, reason, new ReportAccessScope(false));
+    }
+
+    @Transactional
+    public VoucherDto reopen(Long voucherHeaderId, Long userId, String reason, ReportAccessScope accessScope) {
+        return repository.reopen(voucherHeaderId, userId, reason, accessScope);
     }
 
     @Transactional
     public VoucherDto resubmit(Long voucherHeaderId, Long userId) {
         validateReview(repository.review(voucherHeaderId));
         return repository.resubmit(voucherHeaderId, userId);
+    }
+
+    @Transactional
+    public VoucherDto resubmit(Long voucherHeaderId, Long userId, ReportAccessScope accessScope) {
+        validateReview(repository.review(voucherHeaderId, accessScope));
+        return repository.resubmit(voucherHeaderId, userId, accessScope);
     }
 
     private void validate(VoucherSaveRequest request) {

@@ -2,7 +2,7 @@ import { Printer, RotateCcw, Search, Sheet } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import AgingDrilldownDrawer from '../../../components/aging-analysis/AgingDrilldownDrawer';
 import { fetchAgingAnalysis, fetchAgingContractDetail, fetchAgingContractEmis, fetchAgingContractReceipts, fetchAgingContracts, fetchAgingRawVoucher } from '../../../services/agingAnalysisService';
-import { fetchContractAreas } from '../../../services/contractsService';
+import { fetchContractAreaOptions } from '../../../services/contractsService';
 
 const today = new Date().toISOString().slice(0, 10);
 const defaultFilters = { asOnDate: today, areaCode: '' };
@@ -63,6 +63,7 @@ function errorMessage(error, fallback) {
 }
 
 function displayValue(row, key, format) {
+  if (key === 'area') return areaDisplay(row);
   if (key === 'portfolioPercent') return formatPercent(row[key]);
   if (format === 'lakhs') return formatLakhs(row[key]);
   if (key !== 'area' && key !== 'label' && key !== 'noOfAccounts') return formatMoney(row[key]);
@@ -71,6 +72,17 @@ function displayValue(row, key, format) {
     return Number(row[key] || 0).toLocaleString('en-IN');
   }
   return row[key] || '';
+}
+
+function areaLabel(area) {
+  if (!area?.areaCode) return '';
+  return area.areaName ? `${area.areaCode} - ${area.areaName}` : area.areaCode;
+}
+
+function areaDisplay(row) {
+  const areaCode = row?.areaCode || row?.area || row?.branchCode || row?.fieldCode || '';
+  const areaName = row?.areaName || row?.branchName || row?.fieldName || '';
+  return areaName ? `${areaCode} - ${areaName}` : areaCode;
 }
 
 const branchBucketByKey = {
@@ -90,9 +102,11 @@ const branchBucketByKey = {
 function AgingFilters({ filters, loading, onChange, onExportExcel, onGenerate, onPrint, onReset }) {
   const [areaOpen, setAreaOpen] = useState(false);
   const [areaOptions, setAreaOptions] = useState([]);
+  const [selectedArea, setSelectedArea] = useState(null);
   const [areaLoading, setAreaLoading] = useState(false);
   const areaRef = useRef(null);
   const setField = (field, value) => onChange({ ...filters, [field]: value });
+  const areaInputValue = selectedArea?.areaCode === filters.areaCode ? areaLabel(selectedArea) : filters.areaCode;
 
   useEffect(() => {
     if (!areaOpen) return undefined;
@@ -100,7 +114,7 @@ function AgingFilters({ filters, loading, onChange, onExportExcel, onGenerate, o
     const timer = window.setTimeout(async () => {
       setAreaLoading(true);
       try {
-        const options = await fetchContractAreas({ keyword: filters.areaCode, limit: 20 });
+        const options = await fetchContractAreaOptions({ keyword: filters.areaCode, limit: 20 });
         if (active) setAreaOptions(options);
       } catch {
         if (active) setAreaOptions([]);
@@ -139,9 +153,10 @@ function AgingFilters({ filters, loading, onChange, onExportExcel, onGenerate, o
             <td ref={areaRef} className="relative border border-black/30">
               <input
                 className={fieldClass}
-                value={filters.areaCode}
+                value={areaInputValue}
                 onFocus={() => setAreaOpen(true)}
                 onChange={(event) => {
+                  setSelectedArea(null);
                   setAreaOpen(true);
                   setField('areaCode', event.target.value);
                 }}
@@ -153,16 +168,17 @@ function AgingFilters({ filters, loading, onChange, onExportExcel, onGenerate, o
                   {!areaLoading && areaOptions.length === 0 && <div className="px-2 py-2 text-[11px] font-bold text-black/60">No areas found</div>}
                   {!areaLoading && areaOptions.map((area) => (
                     <button
-                      key={area}
+                      key={area.areaCode}
                       type="button"
                       className="block w-full border-b border-black/10 px-2 py-1 text-left font-bold hover:bg-blue-50"
                       onMouseDown={(event) => {
                         event.preventDefault();
-                        setField('areaCode', area);
+                        setSelectedArea(area);
+                        setField('areaCode', area.areaCode);
                         setAreaOpen(false);
                       }}
                     >
-                      {area}
+                      {areaLabel(area)}
                     </button>
                   ))}
                 </div>
@@ -202,7 +218,7 @@ function ReportTable({ columns, rows, footerRow, onCellClick }) {
         </thead>
         <tbody>
           {rows.map((row, index) => (
-            <tr key={`${row.area || row.bucket || row.label}-${index}`} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-blue-50`}>
+            <tr key={`${row.areaCode || row.area || row.bucket || row.label}-${index}`} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-blue-50`}>
               {columns.map(([key, , align, format]) => (
                 <td key={key} className={`border border-black/30 px-2 py-1 ${align === 'right' ? 'text-right' : 'text-left'}`}>
                   {onCellClick && branchBucketByKey[key] ? (
@@ -336,11 +352,12 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
 
   const openBranchDrilldown = async (row, key) => {
     const bucket = branchBucketByKey[key] || 'all';
-    const title = `Contracts - ${row.area || filters.areaCode}`;
+    const drilldownAreaCode = row.areaCode || row.area || filters.areaCode;
+    const title = `Contracts - ${areaDisplay(row) || filters.areaCode}`;
     const nextState = { open: true, loading: true, title, bucketLabel: key === 'area' ? 'All' : branchColumns.find(([columnKey]) => columnKey === key)?.[1], contracts: [], detail: null, emis: [], receipts: [], message: '', rawVoucher: null, rawVoucherKey: null };
     setDrilldown(nextState);
     try {
-      const contracts = await fetchAgingContracts({ areaCode: row.area || filters.areaCode, bucket, asOnDate: titleDate });
+      const contracts = await fetchAgingContracts({ areaCode: drilldownAreaCode, bucket, asOnDate: titleDate });
       setDrilldown({ ...nextState, loading: false, contracts });
     } catch (error) {
       setDrilldown({ ...nextState, loading: false, message: error?.response?.data?.message || error?.message || 'Unable to load contracts.' });

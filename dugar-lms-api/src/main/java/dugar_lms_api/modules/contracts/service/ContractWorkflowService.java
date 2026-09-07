@@ -1,6 +1,8 @@
 package dugar_lms_api.modules.contracts.service;
 
+import dugar_lms_api.modules.contracts.repository.ContractAccessRepository;
 import dugar_lms_api.modules.contracts.repository.ContractWorkflowRepository;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,9 +13,14 @@ import java.util.Map;
 public class ContractWorkflowService {
 
     private final ContractWorkflowRepository contractWorkflowRepository;
+    private final ContractAccessRepository contractAccessRepository;
 
-    public ContractWorkflowService(ContractWorkflowRepository contractWorkflowRepository) {
+    public ContractWorkflowService(
+        ContractWorkflowRepository contractWorkflowRepository,
+        ContractAccessRepository contractAccessRepository
+    ) {
         this.contractWorkflowRepository = contractWorkflowRepository;
+        this.contractAccessRepository = contractAccessRepository;
     }
 
     @Transactional
@@ -28,6 +35,7 @@ public class ContractWorkflowService {
 
     @Transactional
     public void updateStatus(Long contractId, String requestedStatus, Authentication authentication) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         String status = normalizeStatus(requestedStatus);
         contractWorkflowRepository.updateWorkflow(contractId, status, isDraftStatus(status), auditUser(authentication));
     }

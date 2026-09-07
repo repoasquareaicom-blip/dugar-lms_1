@@ -45,16 +45,29 @@ export async function saveContractPartyDraft({ contractId, contractNumber, contr
 }
 
 export async function fetchContractAreas({ keyword = '', limit = 20 } = {}) {
+  const options = await fetchContractAreaOptions({ keyword, limit });
+  return options.map((area) => area.areaCode);
+}
+
+export async function fetchContractAreaOptions({ keyword = '', limit = 20 } = {}) {
   const params = {};
   addParam(params, 'keyword', keyword);
   addParam(params, 'limit', limit);
   const response = await apiClient.get('/contracts/areas', { params });
   const rows = Array.isArray(response.data) ? response.data : response.data?.content || [];
   const areas = rows
-    .map((area) => String(area || '').trim())
+    .map((area) => {
+      if (area && typeof area === 'object') {
+        const areaCode = String(area.areaCode || area.area_code || '').trim();
+        const areaName = String(area.areaName || area.area_name || '').trim();
+        return areaCode ? { areaCode, areaName } : null;
+      }
+      const areaCode = String(area || '').trim();
+      return areaCode ? { areaCode, areaName: '' } : null;
+    })
     .filter(Boolean)
-    .filter((area, index, list) => list.indexOf(area) === index)
-    .sort((left, right) => String(left).localeCompare(String(right)));
+    .filter((area, index, list) => list.findIndex((item) => item.areaCode === area.areaCode) === index)
+    .sort((left, right) => left.areaCode.localeCompare(right.areaCode));
   return areas.slice(0, Math.max(1, Math.min(limit, 50)));
 }
 

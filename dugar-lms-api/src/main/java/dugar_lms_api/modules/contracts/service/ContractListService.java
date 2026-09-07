@@ -1,6 +1,7 @@
 package dugar_lms_api.modules.contracts.service;
 
 import dugar_lms_api.common.pagination.PageResponse;
+import dugar_lms_api.modules.contracts.dto.ContractAreaOptionDto;
 import dugar_lms_api.modules.contracts.dto.ContractListDto;
 import dugar_lms_api.modules.contracts.repository.ContractListRepository;
 import dugar_lms_api.modules.reports.ReportAccessScope;
@@ -50,11 +51,11 @@ public class ContractListService {
         );
     }
 
-    public List<String> getAreas(String keyword, Integer limit) {
+    public List<ContractAreaOptionDto> getAreas(String keyword, Integer limit) {
         return getAreas(keyword, limit, null);
     }
 
-    public List<String> getAreas(String keyword, Integer limit, Authentication authentication) {
+    public List<ContractAreaOptionDto> getAreas(String keyword, Integer limit, Authentication authentication) {
         ReportAccessScope accessScope = ReportAccessScope.from(authentication);
         if (accessScope.restrictedToUserGroup()) {
             return contractListRepository.findAreas(normalize(keyword), limit == null ? 20 : limit, accessScope);

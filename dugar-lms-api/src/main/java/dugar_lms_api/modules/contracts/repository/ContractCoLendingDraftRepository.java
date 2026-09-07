@@ -81,6 +81,13 @@ public class ContractCoLendingDraftRepository {
         WHERE contract_detail_id = :contractDetailId
         """;
 
+    private static final String TOUCH_CONTRACT_SQL = """
+        UPDATE contracts
+        SET updated_by = :updatedBy,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE contract_id = :contractId
+        """;
+
     private static final RowMapper<ContractCoLendingDraftDto> ROW_MAPPER = (rs, rowNum) -> new ContractCoLendingDraftDto(
         rs.getLong("contract_id"),
         rs.getString("co_lending_type"),
@@ -114,12 +121,23 @@ public class ContractCoLendingDraftRepository {
         MapSqlParameterSource params = params(coLending).addValue("updatedBy", updatedBy);
         if (detailIds.isEmpty()) {
             namedParameterJdbcTemplate.update(INSERT_CONTRACT_DETAIL_SQL, params);
+            touchContract(coLending.contractId(), updatedBy);
             return;
         }
 
         namedParameterJdbcTemplate.update(
             UPDATE_CONTRACT_DETAIL_SQL,
             params.addValue("contractDetailId", detailIds.get(0))
+        );
+        touchContract(coLending.contractId(), updatedBy);
+    }
+
+    private void touchContract(Long contractId, String updatedBy) {
+        namedParameterJdbcTemplate.update(
+            TOUCH_CONTRACT_SQL,
+            new MapSqlParameterSource()
+                .addValue("contractId", contractId)
+                .addValue("updatedBy", updatedBy)
         );
     }
 

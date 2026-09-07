@@ -6,6 +6,7 @@ import apiClient, { saveCleanAuthToken } from '../api/apiClient';
 import { normalizeMenuTree } from '../utils/menuNormalizer';
 
 const Login = () => {
+    const lmsName = import.meta.env.VITE_LMS_NAME || 'PROLMS';
     const [isSplash, setIsSplash] = useState(true);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -88,7 +89,7 @@ const Login = () => {
                                 className="mb-16"
                             >
                                 <div className="text-5xl font-black tracking-[0.18em] uppercase text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-white to-emerald-300 drop-shadow-[0_0_24px_rgba(34,211,238,0.45)]">
-                                    ProLMS
+                                      {lmsName}
                                 </div>
                                 <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-emerald-400/60 to-transparent mt-4" />
                             </Motion.div>
@@ -146,7 +147,7 @@ const Login = () => {
                             
                             <div className="relative z-10">
                                 <div className="mb-8 text-3xl font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-white to-emerald-300">
-                                    ProLMS
+                                      {lmsName}
                                 </div>
                                 <p className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.3em] mb-8">Access Portal</p>
                                 <h2 className="text-4xl font-light text-white leading-tight">
@@ -162,7 +163,7 @@ const Login = () => {
                         {/* Login Form Section */}
                         <div className="flex-1 p-10 lg:p-14 flex flex-col justify-center bg-white">
                             <div className="mb-8 self-start text-2xl font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-slate-900 via-cyan-700 to-emerald-600 md:hidden">
-                                ProLMS
+                                  {lmsName}
                             </div>
                             <div className="mb-10 flex items-center justify-between">
                                 <div>

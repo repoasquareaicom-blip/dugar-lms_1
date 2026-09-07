@@ -131,6 +131,8 @@ public class ContractPartyDraftRepository {
             status,
             is_draft,
             created_by,
+            updated_by,
+            updated_at,
             is_active
         )
         VALUES (
@@ -147,6 +149,8 @@ public class ContractPartyDraftRepository {
             'D',
             TRUE,
             :updatedBy,
+            :updatedBy,
+            CURRENT_TIMESTAMP,
             TRUE
         )
         """;

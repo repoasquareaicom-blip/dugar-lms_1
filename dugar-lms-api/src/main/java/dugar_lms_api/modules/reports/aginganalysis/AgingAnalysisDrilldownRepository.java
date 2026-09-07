@@ -19,6 +19,7 @@ public class AgingAnalysisDrilldownRepository {
             c.contract_id,
             COALESCE(NULLIF(TRIM(c.contract_number), ''), NULLIF(TRIM(c.legacy_contract_number), ''), c.contract_id::text) AS contract_number,
             NULLIF(TRIM(c.area_code), '') AS area_code,
+            NULLIF(TRIM(am.area_name), '') AS area_name,
             c.contract_date,
             c.first_emi_date,
             COALESCE(c.total_contract_value, 0) AS total_contract_value,
@@ -26,23 +27,18 @@ public class AgingAnalysisDrilldownRepository {
             COALESCE(c.loan_amount, 0) AS loan_amount,
             COALESCE(NULLIF(TRIM(c.payment_frequency), ''), NULLIF(TRIM(c.repayment_terms), ''), NULLIF(TRIM(c.mode_of_payment), '')) AS payment_frequency
         FROM contracts c
-        LEFT JOIN users created_user
-          ON c.created_by = created_user.user_id::text
-          OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
-        LEFT JOIN users updated_user
-          ON c.updated_by = updated_user.user_id::text
-          OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
+        LEFT JOIN area_masters am
+          ON UPPER(TRIM(am.area_code)) = UPPER(TRIM(c.area_code))
         WHERE c.is_active = TRUE
           AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
           AND c.contract_id = :contractId
           AND (
               :restricted = FALSE
-              OR (
-                  LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
-                  AND (
-                      NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
-                      OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
-                  )
+              OR EXISTS (
+                  SELECT 1
+                  FROM users access_user
+                  WHERE access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))
+                    AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
               )
           )
         """;
@@ -124,6 +120,7 @@ public class AgingAnalysisDrilldownRepository {
         rs.getLong("contract_id"),
         rs.getString("contract_number"),
         rs.getString("area_code"),
+        rs.getString("area_name"),
         rs.getObject("contract_date", LocalDate.class),
         rs.getObject("first_emi_date", LocalDate.class),
         rs.getBigDecimal("total_contract_value"),
@@ -286,6 +283,7 @@ public class AgingAnalysisDrilldownRepository {
         Long contractId,
         String contractNumber,
         String areaCode,
+        String areaName,
         LocalDate contractDate,
         LocalDate firstEmiDate,
         BigDecimal totalContractValue,

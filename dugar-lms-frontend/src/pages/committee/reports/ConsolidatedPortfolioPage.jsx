@@ -1,7 +1,7 @@
 import { RotateCcw, Search, Sheet } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { fetchConsolidatedPortfolio } from '../../../services/agingAnalysisService';
-import { fetchContractAreas } from '../../../services/contractsService';
+import { fetchContractAreaOptions } from '../../../services/contractsService';
 
 const today = new Date().toISOString().slice(0, 10);
 const defaultFilters = { asOnDate: today, areaCode: '' };
@@ -50,6 +50,11 @@ function excelCell(value) {
     .replace(/"/g, '&quot;');
 }
 
+function areaLabel(area) {
+  if (!area?.areaCode) return '';
+  return area.areaName ? `${area.areaCode} - ${area.areaName}` : area.areaCode;
+}
+
 function totalRow(rows, labelKey) {
   if (!rows.length) return null;
   return {
@@ -69,9 +74,11 @@ function totalRow(rows, labelKey) {
 function AreaInput({ filters, onChange }) {
   const [areaOpen, setAreaOpen] = useState(false);
   const [areaOptions, setAreaOptions] = useState([]);
+  const [selectedArea, setSelectedArea] = useState(null);
   const [areaLoading, setAreaLoading] = useState(false);
   const areaRef = useRef(null);
   const setField = (field, value) => onChange({ ...filters, [field]: value });
+  const areaInputValue = selectedArea?.areaCode === filters.areaCode ? areaLabel(selectedArea) : filters.areaCode;
 
   useEffect(() => {
     if (!areaOpen) return undefined;
@@ -79,7 +86,7 @@ function AreaInput({ filters, onChange }) {
     const timer = window.setTimeout(async () => {
       setAreaLoading(true);
       try {
-        const options = await fetchContractAreas({ keyword: filters.areaCode, limit: 20 });
+        const options = await fetchContractAreaOptions({ keyword: filters.areaCode, limit: 20 });
         if (active) setAreaOptions(options);
       } catch {
         if (active) setAreaOptions([]);
@@ -105,9 +112,10 @@ function AreaInput({ filters, onChange }) {
     <td ref={areaRef} className="relative border border-black/30">
       <input
         className={fieldClass}
-        value={filters.areaCode}
+        value={areaInputValue}
         onFocus={() => setAreaOpen(true)}
         onChange={(event) => {
+          setSelectedArea(null);
           setAreaOpen(true);
           setField('areaCode', event.target.value);
         }}
@@ -120,6 +128,7 @@ function AreaInput({ filters, onChange }) {
             className="block w-full border-b border-black/10 px-2 py-1 text-left font-bold hover:bg-blue-50"
             onMouseDown={(event) => {
               event.preventDefault();
+              setSelectedArea(null);
               setField('areaCode', '');
               setAreaOpen(false);
             }}
@@ -130,16 +139,17 @@ function AreaInput({ filters, onChange }) {
           {!areaLoading && areaOptions.length === 0 && <div className="px-2 py-2 text-[11px] font-bold text-black/60">No areas found</div>}
           {!areaLoading && areaOptions.map((area) => (
             <button
-              key={area}
+              key={area.areaCode}
               type="button"
               className="block w-full border-b border-black/10 px-2 py-1 text-left font-bold hover:bg-blue-50"
               onMouseDown={(event) => {
                 event.preventDefault();
-                setField('areaCode', area);
+                setSelectedArea(area);
+                setField('areaCode', area.areaCode);
                 setAreaOpen(false);
               }}
             >
-              {area}
+              {areaLabel(area)}
             </button>
           ))}
         </div>

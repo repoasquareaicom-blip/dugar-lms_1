@@ -3,7 +3,8 @@ package dugar_lms_api.modules.reports.aginganalysis;
 import java.math.BigDecimal;
 
 public record AgingAnalysisBranchRowDto(
-    String area,
+    String areaCode,
+    String areaName,
     long noOfAccounts,
     BigDecimal aum,
     BigDecimal current,

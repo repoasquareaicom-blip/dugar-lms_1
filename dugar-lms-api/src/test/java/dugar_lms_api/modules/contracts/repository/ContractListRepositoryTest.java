@@ -1,6 +1,7 @@
 package dugar_lms_api.modules.contracts.repository;
 
 import dugar_lms_api.modules.contracts.service.ContractListCriteria;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -185,5 +186,45 @@ class ContractListRepositoryTest {
         assertThat(params.getValue("minimumLoanAmount")).isEqualTo(new BigDecimal("100000"));
         assertThat(params.getValue("maximumLoanAmount")).isEqualTo(new BigDecimal("500000"));
         assertThat(params.getValue("offset")).isEqualTo(25L);
+    }
+
+    @Test
+    void restrictedAccessUsesUpdatedByUserGroupOnly() {
+        ContractListRepository repository = new ContractListRepository(namedParameterJdbcTemplate);
+        when(namedParameterJdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class)))
+            .thenReturn(List.of());
+
+        repository.find(new ContractListCriteria(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            0,
+            25,
+            "contractId",
+            "desc"
+        ), new ReportAccessScope(true));
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<SqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(SqlParameterSource.class);
+        org.mockito.Mockito.verify(namedParameterJdbcTemplate).query(
+            sqlCaptor.capture(),
+            paramsCaptor.capture(),
+            any(RowMapper.class)
+        );
+
+        String sql = sqlCaptor.getValue();
+        assertThat(sql).contains("access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))");
+        assertThat(sql).contains("LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'");
+        assertThat(sql).doesNotContain("created_user");
+        assertThat(sql).doesNotContain("c.created_by");
+        assertThat(((MapSqlParameterSource) paramsCaptor.getValue()).getValue("restricted")).isEqualTo(true);
     }
 }

@@ -65,8 +65,8 @@ public class ContractPartyDraftController {
     }
 
     @GetMapping("/{contractId}/parties")
-    public ResponseEntity<List<PartyDraftDto>> getParties(@PathVariable Long contractId) {
-        return ResponseEntity.ok(contractPartyDraftService.getPartyDetails(contractId));
+    public ResponseEntity<List<PartyDraftDto>> getParties(@PathVariable Long contractId, Authentication authentication) {
+        return ResponseEntity.ok(contractPartyDraftService.getPartyDetails(contractId, authentication));
     }
 
     @PostMapping("/{contractId}/header")
@@ -79,8 +79,8 @@ public class ContractPartyDraftController {
     }
 
     @GetMapping("/{contractId}/asset")
-    public ResponseEntity<ContractAssetDraftDto> getAsset(@PathVariable Long contractId) {
-        ContractAssetDraftDto asset = contractAssetDraftService.getAssetDetails(contractId);
+    public ResponseEntity<ContractAssetDraftDto> getAsset(@PathVariable Long contractId, Authentication authentication) {
+        ContractAssetDraftDto asset = contractAssetDraftService.getAssetDetails(contractId, authentication);
         return asset == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(asset);
     }
 
@@ -94,8 +94,8 @@ public class ContractPartyDraftController {
     }
 
     @GetMapping("/{contractId}/financial")
-    public ResponseEntity<ContractFinancialDraftDto> getFinancial(@PathVariable Long contractId) {
-        ContractFinancialDraftDto financial = contractFinancialDraftService.getFinancialDetails(contractId);
+    public ResponseEntity<ContractFinancialDraftDto> getFinancial(@PathVariable Long contractId, Authentication authentication) {
+        ContractFinancialDraftDto financial = contractFinancialDraftService.getFinancialDetails(contractId, authentication);
         return financial == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(financial);
     }
 
@@ -109,8 +109,8 @@ public class ContractPartyDraftController {
     }
 
     @GetMapping("/{contractId}/documentation")
-    public ResponseEntity<ContractDocumentationDraftDto> getDocumentation(@PathVariable Long contractId) {
-        ContractDocumentationDraftDto documentation = contractDocumentationDraftService.getDocumentationDetails(contractId);
+    public ResponseEntity<ContractDocumentationDraftDto> getDocumentation(@PathVariable Long contractId, Authentication authentication) {
+        ContractDocumentationDraftDto documentation = contractDocumentationDraftService.getDocumentationDetails(contractId, authentication);
         return documentation == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(documentation);
     }
 
@@ -124,8 +124,8 @@ public class ContractPartyDraftController {
     }
 
     @GetMapping("/{contractId}/co-lending")
-    public ResponseEntity<ContractCoLendingDraftDto> getCoLending(@PathVariable Long contractId) {
-        ContractCoLendingDraftDto coLending = contractCoLendingDraftService.getCoLendingDetails(contractId);
+    public ResponseEntity<ContractCoLendingDraftDto> getCoLending(@PathVariable Long contractId, Authentication authentication) {
+        ContractCoLendingDraftDto coLending = contractCoLendingDraftService.getCoLendingDetails(contractId, authentication);
         return coLending == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(coLending);
     }
 

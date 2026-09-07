@@ -7,6 +7,7 @@ public record AgingAnalysisContractDetailDto(
     Long contractId,
     String contractNumber,
     String areaCode,
+    String areaName,
     LocalDate contractDate,
     LocalDate firstEmiDate,
     BigDecimal totalContractValue,

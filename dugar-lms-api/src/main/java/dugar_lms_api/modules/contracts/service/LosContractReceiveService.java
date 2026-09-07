@@ -3,14 +3,13 @@ package dugar_lms_api.modules.contracts.service;
 import dugar_lms_api.modules.contracts.dto.LosContractReceiveRequest;
 import dugar_lms_api.modules.contracts.dto.LosContractReceiveResponse;
 import dugar_lms_api.modules.contracts.repository.LosContractReceiveRepository;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
-
 @Service
 public class LosContractReceiveService {
+
+    private static final String LOS_USERNAME = "los";
 
     private final LosContractReceiveRepository losContractReceiveRepository;
 
@@ -19,7 +18,7 @@ public class LosContractReceiveService {
     }
 
     @Transactional
-    public LosContractReceiveResponse receive(LosContractReceiveRequest request, Authentication authentication) {
+    public LosContractReceiveResponse receive(LosContractReceiveRequest request) {
         if (request == null || request.id() == null) {
             throw new IllegalArgumentException("LOS proposal id is required");
         }
@@ -27,7 +26,8 @@ public class LosContractReceiveService {
             throw new IllegalArgumentException("borrower_name is required");
         }
 
-        String updatedBy = auditUser(authentication);
+        String updatedBy = String.valueOf(losContractReceiveRepository.findUserIdByUsername(LOS_USERNAME)
+            .orElseThrow(() -> new IllegalArgumentException("LOS integration user not found or inactive")));
         String borrowerCode = "LOSB" + String.format("%06d", request.id());
         String coApplicantCode = isBlank(request.coApplicantName()) ? null : "LOSC" + String.format("%06d", request.id());
 
@@ -57,16 +57,6 @@ public class LosContractReceiveService {
             "D",
             true
         );
-    }
-
-    private String auditUser(Authentication authentication) {
-        if (authentication != null && authentication.getDetails() instanceof Map<?, ?> details) {
-            Object userId = details.get("userId");
-            if (userId != null) {
-                return String.valueOf(userId);
-            }
-        }
-        return authentication != null && authentication.getName() != null ? authentication.getName() : "los";
     }
 
     private boolean isBlank(String value) {

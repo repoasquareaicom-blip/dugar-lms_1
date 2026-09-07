@@ -1,7 +1,9 @@
 package dugar_lms_api.modules.contracts.service;
 
 import dugar_lms_api.modules.contracts.dto.ContractDocumentationDraftDto;
+import dugar_lms_api.modules.contracts.repository.ContractAccessRepository;
 import dugar_lms_api.modules.contracts.repository.ContractDocumentationDraftRepository;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,12 +15,18 @@ import java.util.Map;
 public class ContractDocumentationDraftService {
 
     private final ContractDocumentationDraftRepository contractDocumentationDraftRepository;
+    private final ContractAccessRepository contractAccessRepository;
 
-    public ContractDocumentationDraftService(ContractDocumentationDraftRepository contractDocumentationDraftRepository) {
+    public ContractDocumentationDraftService(
+        ContractDocumentationDraftRepository contractDocumentationDraftRepository,
+        ContractAccessRepository contractAccessRepository
+    ) {
         this.contractDocumentationDraftRepository = contractDocumentationDraftRepository;
+        this.contractAccessRepository = contractAccessRepository;
     }
 
-    public ContractDocumentationDraftDto getDocumentationDetails(Long contractId) {
+    public ContractDocumentationDraftDto getDocumentationDetails(Long contractId, Authentication authentication) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         return contractDocumentationDraftRepository.findByContractId(contractId).orElse(null);
     }
 
@@ -28,6 +36,7 @@ public class ContractDocumentationDraftService {
         ContractDocumentationDraftDto request,
         Authentication authentication
     ) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         ContractDocumentationDraftDto documentation = withContractId(contractId, request);
         String updatedBy = auditUser(authentication);
         contractDocumentationDraftRepository.updateContract(documentation, updatedBy);

@@ -5,7 +5,6 @@ import dugar_lms_api.modules.contracts.dto.LosContractReceiveResponse;
 import dugar_lms_api.modules.contracts.service.LosContractReceiveService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,11 +24,8 @@ public class LosContractReceiveController {
     }
 
     @PostMapping("/receive")
-    public ResponseEntity<LosContractReceiveResponse> receive(
-        @RequestBody LosContractReceiveRequest request,
-        Authentication authentication
-    ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(losContractReceiveService.receive(request, authentication));
+    public ResponseEntity<LosContractReceiveResponse> receive(@RequestBody LosContractReceiveRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(losContractReceiveService.receive(request));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

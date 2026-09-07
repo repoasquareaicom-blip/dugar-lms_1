@@ -9,6 +9,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -84,7 +86,7 @@ class DemandListServiceTest {
 
     private DemandListService service(List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> rows) {
         BranchWiseAgeingProcedureRepository procedureRepository = mock(BranchWiseAgeingProcedureRepository.class);
-        when(procedureRepository.getContractReportRows(LocalDate.of(2026, 1, 1), "AREA")).thenReturn(rows);
+        when(procedureRepository.getContractReportRows(eq(LocalDate.of(2026, 1, 1)), eq("AREA"), any())).thenReturn(rows);
         return new DemandListService(mock(DemandListRepository.class), new DemandListCalculationService(), procedureRepository);
     }
 
@@ -94,6 +96,7 @@ class DemandListServiceTest {
             loanNumber,
             "HP",
             "AREA",
+            null,
             "B" + loanNumber,
             "Borrower " + loanNumber,
             "G" + loanNumber,
@@ -127,6 +130,7 @@ class DemandListServiceTest {
             loanNumber,
             "HP",
             "AREA",
+            null,
             "B" + loanNumber,
             "Borrower " + loanNumber,
             "G" + loanNumber,

@@ -26,6 +26,13 @@ public class LosContractReceiveRepository {
         WHERE contract_id = :contractId
         """;
 
+    private static final String FIND_USER_ID_BY_USERNAME_SQL = """
+        SELECT user_id
+        FROM users
+        WHERE username = :username
+          AND is_active = TRUE
+        """;
+
     private static final String UPSERT_PARTY_SQL = """
         INSERT INTO party_masters (
             party_code,
@@ -386,6 +393,14 @@ public class LosContractReceiveRepository {
             new MapSqlParameterSource().addValue("contractId", contractId),
             String.class
         );
+    }
+
+    public Optional<Long> findUserIdByUsername(String username) {
+        return namedParameterJdbcTemplate.queryForList(
+            FIND_USER_ID_BY_USERNAME_SQL,
+            new MapSqlParameterSource().addValue("username", username),
+            Long.class
+        ).stream().findFirst();
     }
 
     public void upsertBorrower(String partyCode, LosContractReceiveRequest request, String updatedBy) {

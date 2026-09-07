@@ -74,9 +74,8 @@ public class DemandListService {
     }
 
     private List<DemandListRowDto> procedureRows(DemandListRequest request, ReportAccessScope accessScope) {
-        List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> sourceRows = accessScope != null && accessScope.restrictedToUserGroup()
-            ? branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode(), accessScope)
-            : branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode());
+        List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> sourceRows =
+            branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode(), accessScope);
         return sourceRows.stream()
             .filter(row -> contractNumberMatches(row, request.contractNumber()))
             .filter(row -> overdueCountMatches(row, request.overdueInstallmentCount()))
@@ -149,6 +148,7 @@ public class DemandListService {
             money(row.currentDue()),
             row.currentDueDate(),
             row.areaCode(),
+            row.areaName(),
             null,
             null
         );

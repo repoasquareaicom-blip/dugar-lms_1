@@ -24,24 +24,14 @@ public class ContractDashboardRepository {
           )
         """;
 
-    private static final String ACCESS_JOIN = """
-        LEFT JOIN users created_user
-          ON c.created_by = created_user.user_id::text
-          OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
-        LEFT JOIN users updated_user
-          ON c.updated_by = updated_user.user_id::text
-          OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
-        """;
-
     private static final String ACCESS_FILTER = """
           AND (
               :restricted = FALSE
-              OR (
-                  LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
-                  AND (
-                      NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
-                      OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
-                  )
+              OR EXISTS (
+                  SELECT 1
+                  FROM users access_user
+                  WHERE access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))
+                    AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
               )
           )
         """;
@@ -52,7 +42,6 @@ public class ContractDashboardRepository {
             COUNT(*)::BIGINT AS loans,
             COALESCE(SUM(c.total_contract_value), 0) / 100000 AS aum_lakhs
         FROM contracts c
-        """ + ACCESS_JOIN + """
         """ + ACTIVE_FILTER + """
         """ + ACCESS_FILTER + """
         GROUP BY COALESCE(NULLIF(TRIM(c.area_code), ''), 'Unassigned')
@@ -64,7 +53,6 @@ public class ContractDashboardRepository {
             COUNT(*)::BIGINT AS total_active_contracts,
             COALESCE(SUM(c.total_contract_value), 0) / 100000 AS total_aum_lakhs
         FROM contracts c
-        """ + ACCESS_JOIN + """
         """ + ACTIVE_FILTER + """
         """ + ACCESS_FILTER + """
         """;
@@ -72,7 +60,6 @@ public class ContractDashboardRepository {
     private static final String AVAILABLE_YEARS_SQL = """
         SELECT DISTINCT EXTRACT(YEAR FROM c.contract_date)::INTEGER AS account_year
         FROM contracts c
-        """ + ACCESS_JOIN + """
         """ + ACTIVE_FILTER + """
           """ + ACCESS_FILTER + """
           AND c.contract_date IS NOT NULL
@@ -83,7 +70,6 @@ public class ContractDashboardRepository {
         WITH latest_contract AS (
             SELECT MAX(c.contract_date) AS latest_date
             FROM contracts c
-            """ + ACCESS_JOIN + """
             """ + ACTIVE_FILTER + """
               """ + ACCESS_FILTER + """
               AND c.contract_date IS NOT NULL
@@ -103,7 +89,6 @@ public class ContractDashboardRepository {
             COALESCE(SUM(c.total_contract_value), 0) / 100000 AS disbursement_lakhs
         FROM contracts c
         CROSS JOIN latest_contract lc
-        """ + ACCESS_JOIN + """
         """ + ACTIVE_FILTER + """
           """ + ACCESS_FILTER + """
           AND (

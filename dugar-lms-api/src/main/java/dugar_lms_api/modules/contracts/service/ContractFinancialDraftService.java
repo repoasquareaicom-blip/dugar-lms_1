@@ -1,7 +1,9 @@
 package dugar_lms_api.modules.contracts.service;
 
 import dugar_lms_api.modules.contracts.dto.ContractFinancialDraftDto;
+import dugar_lms_api.modules.contracts.repository.ContractAccessRepository;
 import dugar_lms_api.modules.contracts.repository.ContractFinancialDraftRepository;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,12 +15,18 @@ import java.util.Map;
 public class ContractFinancialDraftService {
 
     private final ContractFinancialDraftRepository contractFinancialDraftRepository;
+    private final ContractAccessRepository contractAccessRepository;
 
-    public ContractFinancialDraftService(ContractFinancialDraftRepository contractFinancialDraftRepository) {
+    public ContractFinancialDraftService(
+        ContractFinancialDraftRepository contractFinancialDraftRepository,
+        ContractAccessRepository contractAccessRepository
+    ) {
         this.contractFinancialDraftRepository = contractFinancialDraftRepository;
+        this.contractAccessRepository = contractAccessRepository;
     }
 
-    public ContractFinancialDraftDto getFinancialDetails(Long contractId) {
+    public ContractFinancialDraftDto getFinancialDetails(Long contractId, Authentication authentication) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         return contractFinancialDraftRepository.findByContractId(contractId).orElse(null);
     }
 
@@ -28,6 +36,7 @@ public class ContractFinancialDraftService {
         ContractFinancialDraftDto request,
         Authentication authentication
     ) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         ContractFinancialDraftDto financial = withContractId(contractId, request);
         validate(financial, contractFinancialDraftRepository.findContractDate(contractId));
         String updatedBy = auditUser(authentication);

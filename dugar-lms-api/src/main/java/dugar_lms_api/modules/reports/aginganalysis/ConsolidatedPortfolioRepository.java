@@ -1,5 +1,6 @@
 package dugar_lms_api.modules.reports.aginganalysis;
 
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -25,11 +26,11 @@ public class ConsolidatedPortfolioRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public ConsolidatedPortfolioResponse getPortfolio(LocalDate asOnDate, String areaCode) {
+    public ConsolidatedPortfolioResponse getPortfolio(LocalDate asOnDate, String areaCode, ReportAccessScope accessScope) {
         String normalizedArea = clean(areaCode);
         long startedAt = System.nanoTime();
         ConsolidatedPortfolioResponse response = jdbcTemplate.execute((ConnectionCallback<ConsolidatedPortfolioResponse>) connection -> {
-            callProcedure(connection, asOnDate, normalizedArea);
+            callProcedure(connection, asOnDate, normalizedArea, accessScope);
             return new ConsolidatedPortfolioResponse(
                 asOnDate,
                 normalizedArea,
@@ -45,10 +46,11 @@ public class ConsolidatedPortfolioRepository {
             : response;
     }
 
-    private void callProcedure(Connection connection, LocalDate asOnDate, String areaCode) throws SQLException {
-        try (var call = connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?)")) {
+    private void callProcedure(Connection connection, LocalDate asOnDate, String areaCode, ReportAccessScope accessScope) throws SQLException {
+        try (var call = connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?, ?)")) {
             call.setObject(1, asOnDate);
             call.setString(2, areaCode);
+            call.setString(3, accessScope == null ? null : accessScope.userGroup());
             call.execute();
         }
     }

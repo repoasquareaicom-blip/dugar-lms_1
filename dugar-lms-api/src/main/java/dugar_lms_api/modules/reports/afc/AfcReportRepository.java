@@ -35,12 +35,6 @@ public class AfcReportRepository {
             ORDER BY asset.asset_id
             LIMIT 1
         ) a ON TRUE
-        LEFT JOIN users created_user
-          ON c.created_by = created_user.user_id::text
-          OR LOWER(TRIM(COALESCE(c.created_by, ''))) = LOWER(TRIM(created_user.username))
-        LEFT JOIN users updated_user
-          ON c.updated_by = updated_user.user_id::text
-          OR LOWER(TRIM(COALESCE(c.updated_by, ''))) = LOWER(TRIM(updated_user.username))
         WHERE c.is_active = TRUE
           AND (
               UPPER(TRIM(COALESCE(c.contract_number, ''))) = UPPER(TRIM(:loanNumber))
@@ -49,12 +43,11 @@ public class AfcReportRepository {
           AND (:areaCode IS NULL OR UPPER(TRIM(COALESCE(c.area_code, ''))) = UPPER(TRIM(:areaCode)))
           AND (
               :restricted = FALSE
-              OR (
-                  LOWER(TRIM(COALESCE(created_user.user_group, ''))) = 'user'
-                  AND (
-                      NULLIF(TRIM(COALESCE(c.updated_by, '')), '') IS NULL
-                      OR LOWER(TRIM(COALESCE(updated_user.user_group, ''))) = 'user'
-                  )
+              OR EXISTS (
+                  SELECT 1
+                  FROM users access_user
+                  WHERE access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))
+                    AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
               )
           )
         ORDER BY c.contract_id DESC

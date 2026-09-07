@@ -2,6 +2,7 @@ const groupedColumns = [
   { key: 'serialNumber', label: ['Sl. No'], align: 'right', sortField: 'serialNumber', width: 'w-[70px]' },
   { key: 'loanNumber', label: ['Loan No.'], sortField: 'loanNumber', width: 'w-[110px]' },
   { key: 'party', label: ['Name of Borrower', 'Name of Guarantor'], sortField: 'borrowerName', width: 'w-[260px]' },
+  { key: 'area', label: ['Area'], sortField: 'areaCode', width: 'w-[150px]' },
   {
     key: 'asset',
     label: ['Product Type', 'Make of Vehicle/', 'Regn No./Location', 'No .of Owner', 'Product usage'],
@@ -45,6 +46,12 @@ function firstValue(row, keys) {
   return '';
 }
 
+function areaDisplay(row) {
+  const areaCode = firstValue(row, ['areaCode', 'area']);
+  const areaName = firstValue(row, ['areaName']);
+  return areaName ? `${areaCode} - ${areaName}` : areaCode;
+}
+
 function lineValues(row, key) {
   switch (key) {
     case 'serialNumber':
@@ -56,6 +63,8 @@ function lineValues(row, key) {
         row.borrowerName || '',
         row.guarantorName || '',
       ];
+    case 'area':
+      return [areaDisplay(row)];
     case 'asset':
       return [
         row.productType || '',

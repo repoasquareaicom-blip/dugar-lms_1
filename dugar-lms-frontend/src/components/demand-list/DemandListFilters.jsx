@@ -1,8 +1,13 @@
 import { Printer, RotateCcw, Search, Sheet } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { fetchContractAreas } from '../../services/contractsService';
+import { fetchContractAreaOptions } from '../../services/contractsService';
 
 const fieldClass = 'h-8 w-full border-0 bg-white px-2 text-[12px] text-black outline-none focus:bg-blue-50';
+
+function areaLabel(area) {
+  if (!area?.areaCode) return '';
+  return area.areaName ? `${area.areaCode} - ${area.areaName}` : area.areaCode;
+}
 
 export default function DemandListFilters({
   filters,
@@ -15,9 +20,11 @@ export default function DemandListFilters({
 }) {
   const [areaOpen, setAreaOpen] = useState(false);
   const [areaOptions, setAreaOptions] = useState([]);
+  const [selectedArea, setSelectedArea] = useState(null);
   const [areaLoading, setAreaLoading] = useState(false);
   const areaRef = useRef(null);
   const setField = (field, value) => onChange({ ...filters, [field]: value });
+  const areaInputValue = selectedArea?.areaCode === filters.areaCode ? areaLabel(selectedArea) : filters.areaCode;
 
   useEffect(() => {
     if (!areaOpen) return undefined;
@@ -25,7 +32,7 @@ export default function DemandListFilters({
     const timer = window.setTimeout(async () => {
       setAreaLoading(true);
       try {
-        const options = await fetchContractAreas({ keyword: filters.areaCode, limit: 20 });
+        const options = await fetchContractAreaOptions({ keyword: filters.areaCode, limit: 20 });
         if (active) setAreaOptions(options);
       } catch {
         if (active) setAreaOptions([]);
@@ -66,9 +73,10 @@ export default function DemandListFilters({
             <td ref={areaRef} className="relative border border-black/30">
               <input
                 className={fieldClass}
-                value={filters.areaCode}
+                value={areaInputValue}
                 onFocus={() => setAreaOpen(true)}
                 onChange={(event) => {
+                  setSelectedArea(null);
                   setAreaOpen(true);
                   setField('areaCode', event.target.value);
                 }}
@@ -80,16 +88,17 @@ export default function DemandListFilters({
                   {!areaLoading && areaOptions.length === 0 && <div className="px-2 py-2 text-[11px] font-bold text-black/60">No areas found</div>}
                   {!areaLoading && areaOptions.map((area) => (
                     <button
-                      key={area}
+                      key={area.areaCode}
                       type="button"
                       className="block w-full border-b border-black/10 px-2 py-1 text-left font-bold hover:bg-blue-50"
                       onMouseDown={(event) => {
                         event.preventDefault();
-                        setField('areaCode', area);
+                        setSelectedArea(area);
+                        setField('areaCode', area.areaCode);
                         setAreaOpen(false);
                       }}
                     >
-                      {area}
+                      {areaLabel(area)}
                     </button>
                   ))}
                 </div>

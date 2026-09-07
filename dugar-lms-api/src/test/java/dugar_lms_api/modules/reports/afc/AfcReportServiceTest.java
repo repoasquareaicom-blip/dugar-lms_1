@@ -1,5 +1,6 @@
 package dugar_lms_api.modules.reports.afc;
 
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -56,6 +57,11 @@ class AfcReportServiceTest {
 
         @Override
         public Optional<AfcReportSource> findSource(String loanNumber, String areaCode) {
+            return Optional.ofNullable(source);
+        }
+
+        @Override
+        public Optional<AfcReportSource> findSource(String loanNumber, String areaCode, ReportAccessScope accessScope) {
             return Optional.ofNullable(source);
         }
 

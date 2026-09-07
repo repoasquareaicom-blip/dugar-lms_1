@@ -1,7 +1,9 @@
 package dugar_lms_api.modules.contracts.service;
 
 import dugar_lms_api.modules.contracts.dto.ContractAssetDraftDto;
+import dugar_lms_api.modules.contracts.repository.ContractAccessRepository;
 import dugar_lms_api.modules.contracts.repository.ContractAssetDraftRepository;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,17 +14,24 @@ import java.util.Map;
 public class ContractAssetDraftService {
 
     private final ContractAssetDraftRepository contractAssetDraftRepository;
+    private final ContractAccessRepository contractAccessRepository;
 
-    public ContractAssetDraftService(ContractAssetDraftRepository contractAssetDraftRepository) {
+    public ContractAssetDraftService(
+        ContractAssetDraftRepository contractAssetDraftRepository,
+        ContractAccessRepository contractAccessRepository
+    ) {
         this.contractAssetDraftRepository = contractAssetDraftRepository;
+        this.contractAccessRepository = contractAccessRepository;
     }
 
-    public ContractAssetDraftDto getAssetDetails(Long contractId) {
+    public ContractAssetDraftDto getAssetDetails(Long contractId, Authentication authentication) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         return contractAssetDraftRepository.findByContractId(contractId).orElse(null);
     }
 
     @Transactional
     public ContractAssetDraftDto saveAssetDetails(Long contractId, ContractAssetDraftDto request, Authentication authentication) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         ContractAssetDraftDto existing = contractAssetDraftRepository.findByContractId(contractId).orElse(null);
         Long assetId = existing == null ? null : existing.assetId();
         Long assetInsuranceId = existing == null ? null : existing.assetInsuranceId();

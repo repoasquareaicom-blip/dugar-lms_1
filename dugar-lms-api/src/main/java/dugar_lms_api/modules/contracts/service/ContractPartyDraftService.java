@@ -5,7 +5,9 @@ import dugar_lms_api.modules.contracts.dto.ContractPartyDraftResponse;
 import dugar_lms_api.modules.contracts.dto.ContractHeaderDraftDto;
 import dugar_lms_api.modules.contracts.dto.PartyDraftDto;
 import dugar_lms_api.modules.contracts.dto.PartyDraftSaveResult;
+import dugar_lms_api.modules.contracts.repository.ContractAccessRepository;
 import dugar_lms_api.modules.contracts.repository.ContractPartyDraftRepository;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +21,14 @@ import java.util.Map;
 public class ContractPartyDraftService {
 
     private final ContractPartyDraftRepository contractPartyDraftRepository;
+    private final ContractAccessRepository contractAccessRepository;
 
-    public ContractPartyDraftService(ContractPartyDraftRepository contractPartyDraftRepository) {
+    public ContractPartyDraftService(
+        ContractPartyDraftRepository contractPartyDraftRepository,
+        ContractAccessRepository contractAccessRepository
+    ) {
         this.contractPartyDraftRepository = contractPartyDraftRepository;
+        this.contractAccessRepository = contractAccessRepository;
     }
 
     @Transactional
@@ -79,6 +86,7 @@ public class ContractPartyDraftService {
             );
             contractCreated = true;
         } else {
+            contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
             if (contractNumber == null) {
                 contractNumber = contractPartyDraftRepository.findContractNumber(contractId);
             }
@@ -98,7 +106,8 @@ public class ContractPartyDraftService {
         return new ContractPartyDraftResponse(contractId, contractNumber, contractDate, contractCreated, results);
     }
 
-    public ContractPartyDraftResponse getParties(Long contractId) {
+    public ContractPartyDraftResponse getParties(Long contractId, Authentication authentication) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         String contractNumber = contractPartyDraftRepository.findContractNumber(contractId);
         java.time.LocalDate contractDate = contractPartyDraftRepository.findContractDate(contractId);
         List<PartyDraftSaveResult> parties = contractPartyDraftRepository.findContractParties(contractId)
@@ -109,7 +118,8 @@ public class ContractPartyDraftService {
         return new ContractPartyDraftResponse(contractId, contractNumber, contractDate, false, parties);
     }
 
-    public List<PartyDraftDto> getPartyDetails(Long contractId) {
+    public List<PartyDraftDto> getPartyDetails(Long contractId, Authentication authentication) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         return contractPartyDraftRepository.findContractParties(contractId);
     }
 
@@ -118,6 +128,7 @@ public class ContractPartyDraftService {
         if (contractId == null) {
             throw new IllegalArgumentException("Save borrower details before contract header.");
         }
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
         String contractNumber = clean(request == null ? null : request.contractNumber());
         if (contractNumber == null) {
             throw new IllegalArgumentException("Contract number is required.");
