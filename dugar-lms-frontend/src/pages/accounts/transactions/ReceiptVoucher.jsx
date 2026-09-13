@@ -68,6 +68,10 @@ function cleanAmountInput(value) {
   return parts.length <= 1 ? parts[0] : `${parts[0]}.${parts.slice(1).join('')}`;
 }
 
+function cleanDigitsInput(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
 function blockNegativeNumberKeys(event) {
   if (['-', '+', 'e', 'E'].includes(event.key)) {
     event.preventDefault();
@@ -215,7 +219,7 @@ const ReceiptVoucher = () => {
   const [category, setCategory] = useState(selectedContract ? 'LOAN' : 'GENERAL');
   const [systemDate, setSystemDate] = useState(today);
   const [voucherDate, setVoucherDate] = useState(today);
-  const [voucherNo, setVoucherNo] = useState('Auto');
+  const [voucherNo, setVoucherNo] = useState('');
   const [voucherStatus, setVoucherStatus] = useState('');
   const [headerControlCode, setHeaderControlCode] = useState(null);
   const [voucherAmount, setVoucherAmount] = useState('');
@@ -290,7 +294,7 @@ const ReceiptVoucher = () => {
     return {
       voucherType: code,
       voucherTypeDescription: null,
-      voucherNumber: editMode ? voucherNo : voucherNo,
+      voucherNumber: voucherNo.trim(),
       voucherDate,
       systemDate,
       transactionType: null,
@@ -323,6 +327,9 @@ const ReceiptVoucher = () => {
   };
 
   const validate = () => {
+    const cleanVoucherNo = voucherNo.trim();
+    if (!cleanVoucherNo) return 'Voucher No is required.';
+    if (!/^\d+$/.test(cleanVoucherNo)) return 'Voucher No must contain digits only.';
     if (!isJournal && !headerControlCode) return 'Header control code is required.';
     if (!isJournal && amount(voucherAmount) <= 0) return 'Voucher amount is required.';
     if (!voucherDate) return 'Voucher date is required.';
@@ -345,7 +352,7 @@ const ReceiptVoucher = () => {
     setCategory('GENERAL');
     setSystemDate(today);
     setVoucherDate(today);
-    setVoucherNo('Auto');
+    setVoucherNo('');
     setVoucherStatus('');
     setHeaderControlCode(null);
     setVoucherAmount('');
@@ -428,7 +435,7 @@ const ReceiptVoucher = () => {
 
   const loadVoucherForEdit = (voucher) => {
     setEditingVoucherId(voucher.voucherHeaderId);
-    setVoucherNo(voucher.voucherNumber || 'Auto');
+    setVoucherNo(voucher.voucherNumber || '');
     setVoucherDate(voucher.voucherDate || today);
     setSystemDate(voucher.systemDate || today);
     setVoucherStatus(voucher.status || '');
@@ -539,7 +546,24 @@ const ReceiptVoucher = () => {
               </thead>
               <tbody>
                 <tr className="align-middle">
-                  <td className="w-32 border-r border-gray-300 px-2 py-1 text-[14px] text-black">{voucherNo}</td>
+                  <td className="w-32 border-r border-gray-300 px-2 py-1">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={voucherNo}
+                      onKeyDown={moveNextOnEnter}
+                      onPaste={(event) => {
+                        const cleaned = cleanDigitsInput(event.clipboardData.getData('text'));
+                        event.preventDefault();
+                        setVoucherNo(cleaned);
+                      }}
+                      onChange={(event) => setVoucherNo(cleanDigitsInput(event.target.value))}
+                      className="h-7 w-full border border-gray-300 bg-white px-2 text-right text-[13px] font-black text-black outline-none focus:border-blue-700"
+                      placeholder="Required"
+                      required
+                    />
+                  </td>
                   <td className="w-36 border-r border-gray-300 px-2 py-1 text-[14px] text-black">{displayDate(systemDate)}</td>
                   <td className="w-44 px-2 py-1">
                     <VoucherDateInput value={voucherDate} onChange={setVoucherDate} />

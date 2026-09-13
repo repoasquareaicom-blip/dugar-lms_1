@@ -11,6 +11,7 @@ import dugar_lms_api.modules.accounts.dto.VoucherSaveRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveResponse;
 import dugar_lms_api.modules.accounts.dto.VoucherSummaryDto;
 import dugar_lms_api.modules.reports.ReportAccessScope;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -99,77 +100,84 @@ public class VoucherRepository {
             Long.class
         );
         String voucherType = voucherCode(request.voucherType(), request.transactionType());
-        String voucherNumber = voucherNumber(request.voucherNumber(), voucherType, headerId);
+        String voucherNumber = clean(request.voucherNumber());
 
-        jdbcTemplate.update(
-            """
-            INSERT INTO voucher_headers (
-                voucher_header_id,
-                voucher_type,
-                voucher_type_description,
-                voucher_number,
-                voucher_date,
-                system_date,
-                transaction_type,
-                voucher_amount,
-                contract_number,
-                contract_type,
-                contract_id,
-                bank_code,
-                header_control_code,
-                header_control_name,
-                remarks,
-                created_by,
-                updated_by,
-                status,
-                submitted_by,
-                submitted_at,
-                version_number,
-                updated_at
-            )
-            VALUES (
-                :headerId,
-                :voucherType,
-                :voucherTypeDescription,
-                :voucherNumber,
-                :voucherDate,
-                :systemDate,
-                :transactionType,
-                :voucherAmount,
-                :contractNumber,
-                :contractType,
-                :contractId,
-                :bankCode,
-                :headerControlCode,
-                :headerControlName,
-                :remarks,
-                :userId,
-                :userId,
-                'SUBMITTED',
-                :userId,
-                CURRENT_TIMESTAMP,
-                1,
-                CURRENT_TIMESTAMP
-            )
-            """,
-            new MapSqlParameterSource()
-                .addValue("headerId", headerId)
-                .addValue("voucherType", voucherType)
-                .addValue("voucherTypeDescription", null)
-                .addValue("voucherNumber", voucherNumber)
-                .addValue("voucherDate", request.voucherDate())
-                .addValue("systemDate", request.systemDate())
-                .addValue("transactionType", null)
-                .addValue("voucherAmount", request.voucherAmount())
-                .addValue("contractNumber", clean(request.contractNumber()))
-                .addValue("contractType", clean(request.contractType()))
-                .addValue("contractId", request.contractId())
-                .addValue("bankCode", clean(request.bankCode()))
-                .addValue("headerControlCode", clean(request.headerControlCode()))
-                .addValue("headerControlName", clean(request.headerControlName()))
-                .addValue("remarks", clean(request.remarks()))
-                .addValue("userId", userId)
-        );
+        try {
+            jdbcTemplate.update(
+                """
+                INSERT INTO voucher_headers (
+                    voucher_header_id,
+                    voucher_type,
+                    voucher_type_description,
+                    voucher_number,
+                    voucher_date,
+                    system_date,
+                    transaction_type,
+                    voucher_amount,
+                    contract_number,
+                    contract_type,
+                    contract_id,
+                    bank_code,
+                    header_control_code,
+                    header_control_name,
+                    remarks,
+                    created_by,
+                    updated_by,
+                    status,
+                    submitted_by,
+                    submitted_at,
+                    version_number,
+                    updated_at
+                )
+                VALUES (
+                    :headerId,
+                    :voucherType,
+                    :voucherTypeDescription,
+                    :voucherNumber,
+                    :voucherDate,
+                    :systemDate,
+                    :transactionType,
+                    :voucherAmount,
+                    :contractNumber,
+                    :contractType,
+                    :contractId,
+                    :bankCode,
+                    :headerControlCode,
+                    :headerControlName,
+                    :remarks,
+                    :userId,
+                    :userId,
+                    'SUBMITTED',
+                    :userId,
+                    CURRENT_TIMESTAMP,
+                    1,
+                    CURRENT_TIMESTAMP
+                )
+                """,
+                new MapSqlParameterSource()
+                    .addValue("headerId", headerId)
+                    .addValue("voucherType", voucherType)
+                    .addValue("voucherTypeDescription", null)
+                    .addValue("voucherNumber", voucherNumber)
+                    .addValue("voucherDate", request.voucherDate())
+                    .addValue("systemDate", request.systemDate())
+                    .addValue("transactionType", null)
+                    .addValue("voucherAmount", request.voucherAmount())
+                    .addValue("contractNumber", clean(request.contractNumber()))
+                    .addValue("contractType", clean(request.contractType()))
+                    .addValue("contractId", request.contractId())
+                    .addValue("bankCode", clean(request.bankCode()))
+                    .addValue("headerControlCode", clean(request.headerControlCode()))
+                    .addValue("headerControlName", clean(request.headerControlName()))
+                    .addValue("remarks", clean(request.remarks()))
+                    .addValue("userId", userId)
+            );
+        } catch (DataIntegrityViolationException exception) {
+            if (isVoucherNumberConflict(exception)) {
+                throw new IllegalArgumentException("Voucher number " + voucherNumber + " already exists.");
+            }
+            throw exception;
+        }
 
         for (VoucherDetailRequest detail : request.details()) {
             insertDetail(headerId, request.category(), voucherType, detail, userId);
@@ -287,12 +295,43 @@ public class VoucherRepository {
             FROM voucher_headers h
             WHERE h.voucher_header_id = :voucherHeaderId
               AND (
-                  :restricted = FALSE
-                  OR EXISTS (
-                      SELECT 1
-                      FROM users access_user
-                      WHERE access_user.user_id = h.updated_by
-                        AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+                  :fullAccess = TRUE
+                  OR (
+                      EXISTS (
+                          SELECT 1
+                          FROM users access_user
+                          WHERE access_user.user_id = h.updated_by
+                            AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+                      )
+                      AND (
+                          EXISTS (SELECT 1 FROM users scope_user WHERE scope_user.user_id = :scopeUserId AND UPPER(TRIM(COALESCE(scope_user.user_type, 'USER'))) = 'USER')
+                          OR EXISTS (
+                              SELECT 1
+                              FROM contracts scope_contract
+                              WHERE (
+                                  scope_contract.contract_id = h.contract_id
+                                  OR UPPER(TRIM(scope_contract.contract_number)) = UPPER(TRIM(COALESCE(h.contract_number, '')))
+                              )
+                              AND (
+                                  EXISTS (
+                                      SELECT 1
+                                      FROM user_areas scope_area
+                                      JOIN users scope_user ON scope_user.user_id = scope_area.user_id
+                                      WHERE scope_area.user_id = :scopeUserId
+                                        AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) IN ('BRANCH', 'STATE')
+                                        AND UPPER(TRIM(scope_area.area_code)) = UPPER(TRIM(COALESCE(scope_contract.area_code, '')))
+                                  )
+                                  OR EXISTS (
+                                      SELECT 1
+                                      FROM user_contracts scope_user_contract
+                                      JOIN users scope_user ON scope_user.user_id = scope_user_contract.user_id
+                                      WHERE scope_user_contract.user_id = :scopeUserId
+                                        AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) = 'CUSTOMER'
+                                        AND UPPER(TRIM(scope_user_contract.contract_number)) = UPPER(TRIM(COALESCE(scope_contract.contract_number, '')))
+                                  )
+                              )
+                          )
+                      )
                   )
               )
             """,
@@ -352,46 +391,56 @@ public class VoucherRepository {
         }
         String beforeSnapshot = snapshot(voucherHeaderId);
         String voucherType = voucherCode(request.voucherType(), request.transactionType());
-        jdbcTemplate.update(
-            """
-            UPDATE voucher_headers
-            SET
-                voucher_type = :voucherType,
-                voucher_type_description = :voucherTypeDescription,
-                voucher_date = :voucherDate,
-                system_date = :systemDate,
-                transaction_type = :transactionType,
-                voucher_amount = :voucherAmount,
-                contract_number = :contractNumber,
-                contract_type = :contractType,
-                contract_id = :contractId,
-                bank_code = :bankCode,
-                header_control_code = :headerControlCode,
-                header_control_name = :headerControlName,
-                remarks = :remarks,
-                updated_by = :userId,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE voucher_header_id = :voucherHeaderId
-              AND version_number = :versionNumber
-            """,
-            new MapSqlParameterSource()
-                .addValue("voucherHeaderId", voucherHeaderId)
-                .addValue("voucherType", voucherType)
-                .addValue("voucherTypeDescription", null)
-                .addValue("voucherDate", request.voucherDate())
-                .addValue("systemDate", request.systemDate())
-                .addValue("transactionType", null)
-                .addValue("voucherAmount", request.voucherAmount())
-                .addValue("contractNumber", clean(request.contractNumber()))
-                .addValue("contractType", clean(request.contractType()))
-                .addValue("contractId", request.contractId())
-                .addValue("bankCode", clean(request.bankCode()))
-                .addValue("headerControlCode", clean(request.headerControlCode()))
-                .addValue("headerControlName", clean(request.headerControlName()))
-                .addValue("remarks", clean(request.remarks()))
-                .addValue("userId", userId)
-                .addValue("versionNumber", current.versionNumber())
-        );
+        String voucherNumber = clean(request.voucherNumber());
+        try {
+            jdbcTemplate.update(
+                """
+                UPDATE voucher_headers
+                SET
+                    voucher_type = :voucherType,
+                    voucher_type_description = :voucherTypeDescription,
+                    voucher_number = :voucherNumber,
+                    voucher_date = :voucherDate,
+                    system_date = :systemDate,
+                    transaction_type = :transactionType,
+                    voucher_amount = :voucherAmount,
+                    contract_number = :contractNumber,
+                    contract_type = :contractType,
+                    contract_id = :contractId,
+                    bank_code = :bankCode,
+                    header_control_code = :headerControlCode,
+                    header_control_name = :headerControlName,
+                    remarks = :remarks,
+                    updated_by = :userId,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE voucher_header_id = :voucherHeaderId
+                  AND version_number = :versionNumber
+                """,
+                new MapSqlParameterSource()
+                    .addValue("voucherHeaderId", voucherHeaderId)
+                    .addValue("voucherType", voucherType)
+                    .addValue("voucherTypeDescription", null)
+                    .addValue("voucherNumber", voucherNumber)
+                    .addValue("voucherDate", request.voucherDate())
+                    .addValue("systemDate", request.systemDate())
+                    .addValue("transactionType", null)
+                    .addValue("voucherAmount", request.voucherAmount())
+                    .addValue("contractNumber", clean(request.contractNumber()))
+                    .addValue("contractType", clean(request.contractType()))
+                    .addValue("contractId", request.contractId())
+                    .addValue("bankCode", clean(request.bankCode()))
+                    .addValue("headerControlCode", clean(request.headerControlCode()))
+                    .addValue("headerControlName", clean(request.headerControlName()))
+                    .addValue("remarks", clean(request.remarks()))
+                    .addValue("userId", userId)
+                    .addValue("versionNumber", current.versionNumber())
+            );
+        } catch (DataIntegrityViolationException exception) {
+            if (isVoucherNumberConflict(exception)) {
+                throw new IllegalArgumentException("Voucher number " + voucherNumber + " already exists.");
+            }
+            throw exception;
+        }
         jdbcTemplate.update(
             "DELETE FROM voucher_details WHERE voucher_header_id = :voucherHeaderId",
             new MapSqlParameterSource("voucherHeaderId", voucherHeaderId)
@@ -403,6 +452,25 @@ public class VoucherRepository {
         audit(voucherHeaderId, "UPDATED", beforeSnapshot, afterSnapshot, userId);
         VoucherDto saved = find(voucherHeaderId);
         return new VoucherSaveResponse(saved.voucherHeaderId(), saved.voucherType(), saved.voucherNumber(), saved.voucherDate(), saved.voucherAmount(), saved.details().size());
+    }
+
+    public boolean voucherNumberExists(String voucherNumber, Long excludedVoucherHeaderId) {
+        StringBuilder sql = new StringBuilder("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM voucher_headers
+                WHERE TRIM(voucher_number) = :voucherNumber
+            """);
+        MapSqlParameterSource params = new MapSqlParameterSource("voucherNumber", clean(voucherNumber));
+
+        if (excludedVoucherHeaderId != null) {
+            sql.append(" AND voucher_header_id <> :excludedVoucherHeaderId\n");
+            params.addValue("excludedVoucherHeaderId", excludedVoucherHeaderId);
+        }
+
+        sql.append(")");
+        Boolean exists = jdbcTemplate.queryForObject(sql.toString(), params, Boolean.class);
+        return Boolean.TRUE.equals(exists);
     }
 
     public boolean activeLedgerExists(String ledgerCode) {
@@ -883,12 +951,43 @@ public class VoucherRepository {
             FROM voucher_headers h
             WHERE h.voucher_header_id = :voucherHeaderId
               AND (
-                  :restricted = FALSE
-                  OR EXISTS (
-                      SELECT 1
-                      FROM users access_user
-                      WHERE access_user.user_id = h.updated_by
-                        AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+                  :fullAccess = TRUE
+                  OR (
+                      EXISTS (
+                          SELECT 1
+                          FROM users access_user
+                          WHERE access_user.user_id = h.updated_by
+                            AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+                      )
+                      AND (
+                          EXISTS (SELECT 1 FROM users scope_user WHERE scope_user.user_id = :scopeUserId AND UPPER(TRIM(COALESCE(scope_user.user_type, 'USER'))) = 'USER')
+                          OR EXISTS (
+                              SELECT 1
+                              FROM contracts scope_contract
+                              WHERE (
+                                  scope_contract.contract_id = h.contract_id
+                                  OR UPPER(TRIM(scope_contract.contract_number)) = UPPER(TRIM(COALESCE(h.contract_number, '')))
+                              )
+                              AND (
+                                  EXISTS (
+                                      SELECT 1
+                                      FROM user_areas scope_area
+                                      JOIN users scope_user ON scope_user.user_id = scope_area.user_id
+                                      WHERE scope_area.user_id = :scopeUserId
+                                        AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) IN ('BRANCH', 'STATE')
+                                        AND UPPER(TRIM(scope_area.area_code)) = UPPER(TRIM(COALESCE(scope_contract.area_code, '')))
+                                  )
+                                  OR EXISTS (
+                                      SELECT 1
+                                      FROM user_contracts scope_user_contract
+                                      JOIN users scope_user ON scope_user.user_id = scope_user_contract.user_id
+                                      WHERE scope_user_contract.user_id = :scopeUserId
+                                        AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) = 'CUSTOMER'
+                                        AND UPPER(TRIM(scope_user_contract.contract_number)) = UPPER(TRIM(COALESCE(scope_contract.contract_number, '')))
+                                  )
+                              )
+                          )
+                      )
                   )
               )
             FOR UPDATE
@@ -901,19 +1000,30 @@ public class VoucherRepository {
     private void appendAccessFilter(StringBuilder sql, MapSqlParameterSource params, ReportAccessScope accessScope, String headerAlias) {
         addAccessParam(params, accessScope);
         sql.append(" AND (\n");
-        sql.append("     :restricted = FALSE\n");
-        sql.append("     OR EXISTS (\n");
-        sql.append("         SELECT 1\n");
-        sql.append("         FROM users access_user\n");
-        sql.append("         WHERE access_user.user_id = ").append(headerAlias).append(".updated_by\n");
-        sql.append("           AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'\n");
+        sql.append("     :fullAccess = TRUE\n");
+        sql.append("     OR (\n");
+        sql.append("       EXISTS (SELECT 1 FROM users access_user WHERE access_user.user_id = ").append(headerAlias).append(".updated_by AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user')\n");
+        sql.append("       AND (\n");
+        sql.append("         EXISTS (SELECT 1 FROM users scope_user WHERE scope_user.user_id = :scopeUserId AND UPPER(TRIM(COALESCE(scope_user.user_type, 'USER'))) = 'USER')\n");
+        sql.append("         OR EXISTS (\n");
+        sql.append("         SELECT 1 FROM contracts scope_contract\n");
+        sql.append("         WHERE (scope_contract.contract_id = ").append(headerAlias).append(".contract_id OR UPPER(TRIM(scope_contract.contract_number)) = UPPER(TRIM(COALESCE(").append(headerAlias).append(".contract_number, ''))))\n");
+        sql.append("           AND (\n");
+        sql.append("             EXISTS (SELECT 1 FROM user_areas scope_area JOIN users scope_user ON scope_user.user_id = scope_area.user_id WHERE scope_area.user_id = :scopeUserId AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) IN ('BRANCH', 'STATE') AND UPPER(TRIM(scope_area.area_code)) = UPPER(TRIM(COALESCE(scope_contract.area_code, ''))))\n");
+        sql.append("             OR EXISTS (SELECT 1 FROM user_contracts scope_user_contract JOIN users scope_user ON scope_user.user_id = scope_user_contract.user_id WHERE scope_user_contract.user_id = :scopeUserId AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) = 'CUSTOMER' AND UPPER(TRIM(scope_user_contract.contract_number)) = UPPER(TRIM(COALESCE(scope_contract.contract_number, ''))))\n");
+        sql.append("           )\n");
+        sql.append("         )\n");
+        sql.append("       )\n");
         sql.append("     )\n");
         sql.append(" )\n");
     }
 
     private void addAccessParam(MapSqlParameterSource params, ReportAccessScope accessScope) {
-        if (!params.hasValue("restricted")) {
-            params.addValue("restricted", accessScope != null && accessScope.restrictedToUserGroup());
+        if (!params.hasValue("fullAccess")) {
+            params.addValue("fullAccess", accessScope == null || accessScope.fullAccess());
+        }
+        if (!params.hasValue("scopeUserId")) {
+            params.addValue("scopeUserId", accessScope == null ? null : accessScope.userId());
         }
     }
 
@@ -1030,21 +1140,6 @@ public class VoucherRepository {
         );
     }
 
-    private String voucherNumber(String requestedNumber, String voucherType, Long headerId) {
-        String cleanNumber = clean(requestedNumber);
-        if (cleanNumber != null && !"AUTO".equalsIgnoreCase(cleanNumber)) {
-            return cleanNumber;
-        }
-        String prefix = switch (voucherType) {
-            case "BP", "BR", "CP", "CR", "JV" -> voucherType;
-            case "PAYMENT" -> "PV";
-            case "RECEIPT" -> "RV";
-            case "JOURNAL" -> "JV";
-            default -> "VCH";
-        };
-        return prefix + "-" + String.format("%06d", headerId);
-    }
-
     private String voucherCode(String voucherType, String transactionType) {
         String type = clean(voucherType) == null ? "" : clean(voucherType).toUpperCase(Locale.ROOT);
         String mode = clean(transactionType) == null ? "" : clean(transactionType).toUpperCase(Locale.ROOT);
@@ -1063,6 +1158,11 @@ public class VoucherRepository {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private boolean isVoucherNumberConflict(DataIntegrityViolationException exception) {
+        String message = String.valueOf(exception.getMessage());
+        return message.contains("uq_voucher_headers_voucher_number") || message.contains("voucher_number");
     }
 
     private String pattern(String value) {

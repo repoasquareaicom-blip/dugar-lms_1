@@ -63,6 +63,10 @@ public class ContractListService {
         return contractListRepository.findAreas(normalize(keyword), limit == null ? 20 : limit);
     }
 
+    public List<ContractAreaOptionDto> getAreaMasterOptions(String keyword, Integer limit) {
+        return contractListRepository.findAreaMasterOptions(normalize(keyword), limit == null ? 20 : limit);
+    }
+
     private ContractListCriteria validate(ContractListCriteria criteria) {
         return new ContractListCriteria(
             normalize(criteria.keyword()),

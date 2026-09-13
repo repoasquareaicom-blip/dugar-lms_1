@@ -22,7 +22,11 @@ public class MenuResponse {
 
     private String menuCode;
 
+    private String menuType;
+
     private String urlPath;
+
+    private Integer displayOrder;
 
     private String icon;
 

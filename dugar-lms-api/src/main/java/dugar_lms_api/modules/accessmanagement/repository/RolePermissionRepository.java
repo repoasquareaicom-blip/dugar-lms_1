@@ -84,4 +84,83 @@ public class RolePermissionRepository {
 
         return namedParameterJdbcTemplate.queryForList(FIND_VIEWABLE_MENU_IDS_BY_ROLE_ID_SQL, params, Long.class);
     }
+
+    public List<Long> findViewableMenuIdsByRoleIds(List<Long> roleIds) {
+        if (roleIds == null || roleIds.isEmpty()) {
+            return List.of();
+        }
+
+        return namedParameterJdbcTemplate.queryForList(
+            """
+            SELECT DISTINCT menu_id
+            FROM role_permissions
+            WHERE role_id IN (:roleIds)
+              AND can_view = TRUE
+            ORDER BY menu_id
+            """,
+            new MapSqlParameterSource("roleIds", roleIds),
+            Long.class
+        );
+    }
+
+    public void replaceViewPermissions(Long roleId, List<Long> menuIds, Long userId) {
+        MapSqlParameterSource deleteParams = new MapSqlParameterSource()
+            .addValue("roleId", roleId);
+
+        namedParameterJdbcTemplate.update(
+            """
+            DELETE FROM role_permissions
+            WHERE role_id = :roleId
+            """,
+            deleteParams
+        );
+
+        if (menuIds == null || menuIds.isEmpty()) {
+            return;
+        }
+
+        MapSqlParameterSource[] batch = menuIds.stream()
+            .distinct()
+            .map(menuId -> new MapSqlParameterSource()
+                .addValue("roleId", roleId)
+                .addValue("menuId", menuId)
+                .addValue("userId", userId))
+            .toArray(MapSqlParameterSource[]::new);
+
+        namedParameterJdbcTemplate.batchUpdate(
+            """
+            INSERT INTO role_permissions (
+                role_id,
+                menu_id,
+                can_view,
+                can_add,
+                can_edit,
+                can_delete,
+                created_by,
+                updated_by,
+                updated_at
+            )
+            VALUES (
+                :roleId,
+                :menuId,
+                TRUE,
+                FALSE,
+                FALSE,
+                FALSE,
+                :userId,
+                :userId,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (role_id, menu_id) DO UPDATE
+            SET
+                can_view = TRUE,
+                can_add = EXCLUDED.can_add,
+                can_edit = EXCLUDED.can_edit,
+                can_delete = EXCLUDED.can_delete,
+                updated_by = EXCLUDED.updated_by,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            batch
+        );
+    }
 }

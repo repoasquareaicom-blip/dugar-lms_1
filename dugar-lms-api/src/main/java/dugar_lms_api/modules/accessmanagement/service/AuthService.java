@@ -7,6 +7,7 @@ import dugar_lms_api.modules.accessmanagement.dto.UserInfoResponse;
 import dugar_lms_api.modules.accessmanagement.model.Role;
 import dugar_lms_api.modules.accessmanagement.model.User;
 import dugar_lms_api.modules.accessmanagement.repository.RoleRepository;
+import dugar_lms_api.modules.accessmanagement.repository.UserRoleRepository;
 import dugar_lms_api.modules.accessmanagement.repository.UserRepository;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -20,6 +21,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final UserRoleRepository userRoleRepository;
     private final MenuService menuService;
     private final JwtService jwtService;
     private final PasswordService passwordService;
@@ -27,12 +29,14 @@ public class AuthService {
     public AuthService(
         UserRepository userRepository,
         RoleRepository roleRepository,
+        UserRoleRepository userRoleRepository,
         MenuService menuService,
         JwtService jwtService,
         PasswordService passwordService
     ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
+        this.userRoleRepository = userRoleRepository;
         this.menuService = menuService;
         this.jwtService = jwtService;
         this.passwordService = passwordService;
@@ -44,12 +48,13 @@ public class AuthService {
         User user = loadUser(request.getUsername());
         verifyPassword(request.getPassword(), user.getPasswordHash());
 
-        Role role = loadRole(user.getRoleId());
-        List<MenuResponse> menus = loadMenus(role.getRoleId());
-        String token = generateJwt(user, role);
+        List<Role> roles = loadRoles(user);
+        Role primaryRole = primaryRole(user, roles);
+        List<MenuResponse> menus = loadMenus(roles);
+        String token = generateJwt(user, primaryRole);
 
         updateLastLogin(user.getUserId());
-        return buildResponse(user, role, menus, token);
+        return buildResponse(user, primaryRole, roles, menus, token);
     }
 
     private void validateRequest(LoginRequest request) {
@@ -76,13 +81,26 @@ public class AuthService {
         }
     }
 
-    private Role loadRole(Long roleId) {
-        return roleRepository.findActiveById(roleId)
+    private List<Role> loadRoles(User user) {
+        List<Role> roles = userRoleRepository.findActiveRolesByUserId(user.getUserId());
+        if (!roles.isEmpty()) {
+            return roles;
+        }
+
+        Role fallbackRole = roleRepository.findActiveById(user.getRoleId())
             .orElseThrow(() -> new BadCredentialsException("Role not found or inactive"));
+        return List.of(fallbackRole);
     }
 
-    private List<MenuResponse> loadMenus(Long roleId) {
-        return menuService.getMenuTreeByRoleId(roleId);
+    private Role primaryRole(User user, List<Role> roles) {
+        return roles.stream()
+            .filter(role -> role.getRoleId().equals(user.getRoleId()))
+            .findFirst()
+            .orElse(roles.get(0));
+    }
+
+    private List<MenuResponse> loadMenus(List<Role> roles) {
+        return menuService.getMenuTreeByRoleIds(roles.stream().map(Role::getRoleId).toList());
     }
 
     private String generateJwt(User user, Role role) {
@@ -99,7 +117,7 @@ public class AuthService {
         userRepository.updateLastLogin(userId, LocalDateTime.now());
     }
 
-    private LoginResponse buildResponse(User user, Role role, List<MenuResponse> menus, String token) {
+    private LoginResponse buildResponse(User user, Role role, List<Role> roles, List<MenuResponse> menus, String token) {
         UserInfoResponse userInfo = UserInfoResponse.builder()
             .userId(user.getUserId())
             .username(user.getUsername())
@@ -109,6 +127,8 @@ public class AuthService {
             .roleName(role.getRoleName())
             .roleCode(role.getRoleCode())
             .userGroup(user.getUserGroup())
+            .roleIds(roles.stream().map(Role::getRoleId).toList())
+            .roleNames(roles.stream().map(Role::getRoleName).toList())
             .build();
 
         return LoginResponse.builder()

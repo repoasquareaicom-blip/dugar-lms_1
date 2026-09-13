@@ -71,6 +71,32 @@ export async function fetchContractAreaOptions({ keyword = '', limit = 20 } = {}
   return areas.slice(0, Math.max(1, Math.min(limit, 50)));
 }
 
+export async function fetchContractAreaMasterOptions({ keyword = '', limit = 20 } = {}) {
+  const params = {};
+  addParam(params, 'keyword', keyword);
+  addParam(params, 'limit', limit);
+  const response = await apiClient.get('/contracts/area-master-options', { params });
+  return normalizeAreaOptions(response.data, limit);
+}
+
+function normalizeAreaOptions(data, limit) {
+  const rows = Array.isArray(data) ? data : data?.content || [];
+  const areas = rows
+    .map((area) => {
+      if (area && typeof area === 'object') {
+        const areaCode = String(area.areaCode || area.area_code || '').trim();
+        const areaName = String(area.areaName || area.area_name || '').trim();
+        return areaCode ? { areaCode, areaName } : null;
+      }
+      const areaCode = String(area || '').trim();
+      return areaCode ? { areaCode, areaName: '' } : null;
+    })
+    .filter(Boolean)
+    .filter((area, index, list) => list.findIndex((item) => item.areaCode === area.areaCode) === index)
+    .sort((left, right) => left.areaCode.localeCompare(right.areaCode));
+  return areas.slice(0, Math.max(1, Math.min(limit, 50)));
+}
+
 export async function saveContractHeaderDraft(contractId, header) {
   const response = await apiClient.post(`/contracts/draft/${contractId}/header`, header);
   return response.data;

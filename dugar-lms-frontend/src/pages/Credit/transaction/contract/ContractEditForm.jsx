@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
+  fetchContractAreaMasterOptions,
   fetchContractAssetDraft,
   fetchContractCoLendingDraft,
   fetchContractDocumentationDraft,
@@ -31,6 +32,20 @@ function displayValue(value) {
 
 function displayContractNumber(contract) {
   return contract?.contractNumber || contract?.legacyContractNumber || contract?.contractId || 'New';
+}
+
+function areaLabel(area) {
+  if (!area?.areaCode) return '';
+  return area.areaName ? `${area.areaCode} - ${area.areaName}` : area.areaCode;
+}
+
+function cleanContractAreaCode(value) {
+  const areaCode = String(value || '').trim();
+  return areaCode && areaCode !== '-' ? areaCode : '';
+}
+
+function currentContractAreaCode(contract) {
+  return cleanContractAreaCode(contract?.areaCode || contract?.area_code || contract?.branch);
 }
 
 function formatDateInput(value) {
@@ -122,6 +137,16 @@ function numberStateValue(value) {
   return String(value).replace(/,/g, '').trim() || null;
 }
 
+function optionsWithCurrentValue(options, value) {
+  const currentValue = typeof value === 'string' ? value.trim() : '';
+  return currentValue && !options.includes(currentValue) ? [...options, currentValue] : options;
+}
+
+function booleanValue(value) {
+  if (value === true || value === 'true' || value === 'Y' || value === 'Yes') return true;
+  return false;
+}
+
 function integerFormValue(formData, key) {
   const value = formValue(formData, key);
   return value === null ? null : Number.parseInt(value, 10);
@@ -175,6 +200,15 @@ function repaymentRowsFrom(financial, fallbackRows = []) {
     installmentAmount: displayValue(row.installmentAmount || row.amount),
     numberOfInstallments: displayValue(row.numberOfInstallments || row.installments),
   }));
+}
+
+function repaymentRowsEqual(leftRows, rightRows) {
+  if (leftRows.length !== rightRows.length) return false;
+  return leftRows.every((leftRow, index) => {
+    const rightRow = rightRows[index] || {};
+    return displayValue(leftRow.installmentAmount) === displayValue(rightRow.installmentAmount)
+      && displayValue(leftRow.numberOfInstallments) === displayValue(rightRow.numberOfInstallments);
+  });
 }
 
 const pendingDocumentNames = [
@@ -483,6 +517,128 @@ const DatePickerField = ({
   );
 };
 
+const AreaSearchField = ({ value, onChange, readOnly = false }) => {
+  const [areaOpen, setAreaOpen] = useState(false);
+  const [areaOptions, setAreaOptions] = useState([]);
+  const [selectedArea, setSelectedArea] = useState(null);
+  const [areaLoading, setAreaLoading] = useState(false);
+  const [areaInputValue, setAreaInputValue] = useState(() => cleanContractAreaCode(value));
+  const areaRef = useRef(null);
+  const areaCode = cleanContractAreaCode(value);
+  const committedAreaLabel = selectedArea?.areaCode === areaCode ? areaLabel(selectedArea) : areaCode;
+
+  const restoreCommittedArea = () => {
+    setAreaInputValue(committedAreaLabel);
+  };
+
+  useEffect(() => {
+    if (!areaOpen) restoreCommittedArea();
+  }, [areaCode, selectedArea?.areaCode, selectedArea?.areaName, areaOpen]);
+
+  useEffect(() => {
+    if (!areaCode) {
+      setSelectedArea(null);
+      return undefined;
+    }
+    if (selectedArea?.areaCode === areaCode) return undefined;
+    let active = true;
+    fetchContractAreaMasterOptions({ keyword: areaCode, limit: 20 })
+      .then((options) => {
+        if (!active) return;
+        const matchingArea = options.find((area) => area.areaCode.toUpperCase() === areaCode.toUpperCase());
+        setSelectedArea(matchingArea || null);
+      })
+      .catch(() => {
+        if (active) setSelectedArea(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [areaCode, selectedArea?.areaCode]);
+
+  useEffect(() => {
+    if (!areaOpen || readOnly) return undefined;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setAreaLoading(true);
+      try {
+        const options = await fetchContractAreaMasterOptions({ keyword: areaInputValue, limit: 20 });
+        if (active) setAreaOptions(options);
+      } catch {
+        if (active) setAreaOptions([]);
+      } finally {
+        if (active) setAreaLoading(false);
+      }
+    }, 200);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [areaOpen, areaInputValue, readOnly]);
+
+  useEffect(() => {
+    const onPointerDown = (event) => {
+      if (!areaRef.current?.contains(event.target)) {
+        setAreaOpen(false);
+        restoreCommittedArea();
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [committedAreaLabel]);
+
+  if (readOnly) {
+    return (
+      <input
+        name="documentation.areaCode"
+        value={committedAreaLabel || '-'}
+        readOnly
+        className="border border-black/60 px-2 py-1 text-[16px] font-black text-black/90 outline-none rounded-sm w-full transition-all bg-slate-100 cursor-not-allowed"
+      />
+    );
+  }
+
+  return (
+    <div ref={areaRef} className="relative w-full">
+      <input
+        name="documentation.areaCode"
+        value={areaInputValue}
+        onFocus={() => setAreaOpen(true)}
+        onChange={(event) => {
+          setSelectedArea(null);
+          setAreaInputValue(event.target.value);
+          setAreaOpen(true);
+        }}
+        onBlur={restoreCommittedArea}
+        placeholder="Search area..."
+        className="border border-black/60 px-2 py-1 text-[16px] font-black text-black/90 focus:border-blue-600 outline-none rounded-sm w-full transition-all bg-white"
+      />
+      {areaOpen && (
+        <div className="absolute left-0 right-0 top-full z-[220] max-h-56 overflow-auto border border-blue-900 bg-white shadow-xl">
+          {areaLoading && <div className="px-2 py-2 text-[11px] font-bold text-blue-700">Loading areas...</div>}
+          {!areaLoading && areaOptions.length === 0 && <div className="px-2 py-2 text-[11px] font-bold text-black/60">No areas found</div>}
+          {!areaLoading && areaOptions.map((area) => (
+            <button
+              key={area.areaCode}
+              type="button"
+              className="block w-full border-b border-black/10 px-2 py-1 text-left text-[12px] font-bold hover:bg-blue-50"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                setSelectedArea(area);
+                setAreaInputValue(areaLabel(area));
+                onChange(area.areaCode);
+                setAreaOpen(false);
+              }}
+            >
+              {areaLabel(area)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const MessageModal = ({ message, onClose }) => {
   const isError = /^unable|required|save|first|contract|borrower|asset|financial|documentation|co lending/i.test(message || '')
     && !/saved|updated/i.test(message || '');
@@ -756,7 +912,9 @@ const ContractEditForm = () => {
     totalContractValue: displayValue(selectedContract.totalContractValue),
   });
   const [repaymentRows, setRepaymentRows] = useState(() => repaymentRowsFrom({}, parseRepaymentSchedule(selectedContract.repaymentSchedule)));
-  const [documentationDetails, setDocumentationDetails] = useState({});
+  const [documentationDetails, setDocumentationDetails] = useState(() => ({
+    areaCode: currentContractAreaCode(selectedContract),
+  }));
   const [documentationLoadVersion, setDocumentationLoadVersion] = useState(0);
   const [pendingDocuments, setPendingDocuments] = useState(() => pendingDocumentsFrom({}));
   const [documentUploads, setDocumentUploads] = useState([]);
@@ -872,11 +1030,11 @@ const ContractEditForm = () => {
 
   useEffect(() => {
     const nextTotalContractValue = formatMoney(totalRepaymentValue(repaymentRows));
-    const nextIrrRate = calculateAnnualIrr(financialInputs.loanAmount, repaymentRows);
+    
 
     setFinancialInputs((current) => ({
       ...current,
-      irrRate: nextIrrRate || current.irrRate,
+      
       totalContractValue: nextTotalContractValue || current.totalContractValue,
     }));
   }, [financialInputs.loanAmount, repaymentRows]);
@@ -889,7 +1047,10 @@ const ContractEditForm = () => {
     fetchContractDocumentationDraft(draftContract.contractId)
       .then((documentation) => {
         if (!active) return;
-        const nextDocumentation = documentation || {};
+        const nextDocumentation = {
+          ...(documentation || {}),
+          areaCode: cleanContractAreaCode(documentation?.areaCode) || currentContractAreaCode(selectedContract),
+        };
         setDocumentationDetails(nextDocumentation);
         setPendingDocuments(pendingDocumentsFrom(nextDocumentation));
         setDocumentUploads(uploadsFrom(nextDocumentation));
@@ -1135,6 +1296,7 @@ const ContractEditForm = () => {
     insuranceDeposit: numberFormValue(formData, 'financial.insuranceDeposit'),
     totalContractValue: numberStateValue(financialInputs.totalContractValue) || numberFormValue(formData, 'financial.totalContractValue'),
     repaymentTerms: formValue(formData, 'financial.repaymentTerms'),
+    isFirstEmiPaid: formValue(formData, 'financial.isFirstEmiPaid') === 'Yes',
     firstEmiDate: parseDateDisplay(formValue(formData, 'financial.firstEmiDate'), 'First EMI Date'),
     moratoriumMonths: moratoriumMonths(formValue(formData, 'financial.moratorium')),
     repaymentType: formValue(formData, 'financial.repaymentType'),
@@ -1175,8 +1337,15 @@ const ContractEditForm = () => {
       draftContract.contractId,
       buildFinancialDraft(formValuesFrom(formContainer))
     );
+    const nextRepaymentRows = repaymentRowsFrom(response || {}, []);
     setFinancialDetails(response || {});
-    setRepaymentRows(repaymentRowsFrom(response || {}, []));
+    setRepaymentRows((currentRows) => repaymentRowsEqual(currentRows, nextRepaymentRows) ? currentRows : nextRepaymentRows);
+    setFinancialInputs((current) => ({
+      ...current,
+      irrRate: displayValue(response?.irrRate ?? current.irrRate),
+      loanAmount: displayValue(response?.loanAmount ?? current.loanAmount),
+      totalContractValue: displayValue(response?.totalContractValue ?? current.totalContractValue),
+    }));
     setFinancialLoadVersion((value) => value + 1);
     setDraftMessage(`Financial terms saved for draft contract ${draftContract.contractNumber || draftContract.contractId}.`);
     return draftContract.contractId;
@@ -1233,7 +1402,7 @@ const ContractEditForm = () => {
     disbursedBy: formValue(formData, 'documentation.disbursedBy'),
     rcOnlineChecking: formValue(formData, 'documentation.rcOnlineChecking'),
     hoCollectionToolBy: formValue(formData, 'documentation.hoCollectionToolBy'),
-    areaCode: formValue(formData, 'documentation.areaCode'),
+    areaCode: cleanContractAreaCode(documentationDetails.areaCode) || null,
     hoTvrDoneBy: formValue(formData, 'documentation.hoTvrDoneBy'),
     stockMarkedToBank: formValue(formData, 'documentation.stockMarkedToBank'),
     pendingDocuments,
@@ -1425,7 +1594,45 @@ const ContractEditForm = () => {
     }
   };
 
-  const indianStates = ["Tamil Nadu", "Karnataka", "Kerala", "Andhra Pradesh", "Maharashtra", "Delhi"];
+  const indianStates = [
+    "Andaman and Nicobar Islands",
+    "Andhra Pradesh",
+    "Arunachal Pradesh",
+    "Assam",
+    "Bihar",
+    "Chandigarh",
+    "Chhattisgarh",
+    "Dadra and Nagar Haveli and Daman and Diu",
+    "Delhi",
+    "Goa",
+    "Gujarat",
+    "Haryana",
+    "Himachal Pradesh",
+    "Jammu and Kashmir",
+    "Jharkhand",
+    "Karnataka",
+    "Kerala",
+    "Ladakh",
+    "Lakshadweep",
+    "Madhya Pradesh",
+    "Maharashtra",
+    "Manipur",
+    "Meghalaya",
+    "Mizoram",
+    "Nagaland",
+    "Odisha",
+    "Puducherry",
+    "Punjab",
+    "Rajasthan",
+    "Sikkim",
+    "Tamil Nadu",
+    "Telangana",
+    "Tripura",
+    "Uttar Pradesh",
+    "Uttarakhand",
+    "West Bengal",
+  ];
+  const vehicleTypeOptions = ["Private Car", "Taxi Permit", "Three Wheeler", "SCV", "MCV", "HCV", "Others"];
   const applicantParty = partyByRole(partyDetails, 'applicant');
   const coApplicantParty = partyByRole(partyDetails, 'coApplicant');
   const guarantor1Party = partyByRole(partyDetails, 'guarantor1');
@@ -1523,6 +1730,7 @@ const ContractEditForm = () => {
     processingCharges: financialDetails.processingCharges,
     rcHoldingAmount: financialDetails.rcHoldingAmount,
     repaymentTerms: financialDetails.repaymentTerms,
+    isFirstEmiPaid: booleanValue(financialDetails.isFirstEmiPaid ?? selectedContract.isFirstEmiPaid),
     firstEmiDate: formatDateDisplay(financialDetails.firstEmiDate || selectedContract.firstEmiDate),
     repaymentType: financialDetails.repaymentType,
     rtoCharges: financialDetails.rtoCharges,
@@ -1531,8 +1739,9 @@ const ContractEditForm = () => {
     totalContractValue: financialInputs.totalContractValue,
     valuationCharges: financialDetails.valuationCharges,
   };
+  const firstEmiAmount = displayValue(repaymentRows[0]?.installmentAmount);
   const documentationData = {
-    areaCode: documentationDetails.areaCode || selectedContract.areaCode,
+    areaCode: cleanContractAreaCode(documentationDetails.areaCode) || currentContractAreaCode(selectedContract),
     borrowerFiBy: documentationDetails.borrowerFiBy,
     branchCollectionToolBy: documentationDetails.branchCollectionToolBy,
     disbursedBy: documentationDetails.disbursedBy,
@@ -1600,7 +1809,7 @@ const ContractEditForm = () => {
               placeholder={visibleContractNumber === 'New' ? 'Auto' : visibleContractNumber}
               readOnly={isViewMode}
               required
-              className="h-8 w-32 bg-white px-2 text-[15px] font-black text-blue-900 outline-none read-only:bg-slate-100"
+              className="h-8 w-28 bg-white px-2 text-[15px] font-black text-blue-900 outline-none read-only:bg-slate-100"
             />
           </div>
 
@@ -1821,7 +2030,7 @@ const ContractEditForm = () => {
                   <span className="text-[16px] font-black uppercase tracking-wide">Vehicle Specifications</span>
                 </div>
                 <div className="bg-white border border-black/60 p-4 grid grid-cols-2 md:grid-cols-4 gap-4 shadow-sm rounded-b-sm">
-                  <FormSelect label="Vehicle Type" name="asset.vehicleTypeCode" options={["Car", "SCV", "HCV", "Three Wheeler"]} value={assetData.vehicleTypeCode || ''} readOnly={isViewMode} />
+                  <FormSelect label="Vehicle Type" name="asset.vehicleTypeCode" options={optionsWithCurrentValue(vehicleTypeOptions, assetData.vehicleTypeCode)} value={assetData.vehicleTypeCode || ''} readOnly={isViewMode} />
                   <FormSelect label="Deal of Assets" name="asset.dealOfAssets" options={["Purchase", "Refinance"]} value={assetData.dealOfAssets || ''} readOnly={isViewMode} />
                   <FormField label="Make of Vehicle" name="asset.vehicleMake" value={assetData.vehicleMake} readOnly={isViewMode} />
                   <FormField label="Version" name="asset.version" value={assetData.version} readOnly={isViewMode} />
@@ -1996,7 +2205,24 @@ const ContractEditForm = () => {
                 >
                   <Plus size={14} /> Add Row
                 </button>
-                <div className="border-t border-black/30 pt-3">
+                <div className="border-t border-black/30 pt-3 space-y-3">
+                  <FormSelect
+                    label="Is First EMI Paid?"
+                    name="financial.isFirstEmiPaid"
+                    options={["No", "Yes"]}
+                    value={financialData.isFirstEmiPaid ? 'Yes' : 'No'}
+                    onChange={(event) => setFinancialDetails((current) => ({ ...current, isFirstEmiPaid: event.target.value === 'Yes' }))}
+                    readOnly={isViewMode}
+                  />
+                  {financialData.isFirstEmiPaid && (
+                    <FormField
+                      label="First EMI Amount"
+                      name="financial.firstEmiAmount"
+                      value={firstEmiAmount}
+                      onChange={() => {}}
+                      readOnly
+                    />
+                  )}
                   <DatePickerField
                     label="First EMI Date"
                     name="financial.firstEmiDate"
@@ -2105,7 +2331,16 @@ const ContractEditForm = () => {
                 <FormField label="Collection Tool By (HO)" name="documentation.hoCollectionToolBy" value={documentationData.hoCollectionToolBy} readOnly={isViewMode} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <FormField label="Area Code" name="documentation.areaCode" value={documentationData.areaCode} readOnly={isViewMode} />
+                <div className="flex flex-col gap-1" style={{ fontFamily: 'Calibri, sans-serif' }}>
+                  <label className="text-[14px] text-black/90 font-normal uppercase tracking-tight leading-tight">
+                    Area Code
+                  </label>
+                  <AreaSearchField
+                    value={documentationData.areaCode}
+                    onChange={(areaCode) => setDocumentationDetails((current) => ({ ...current, areaCode }))}
+                    readOnly={isViewMode}
+                  />
+                </div>
                 <FormField label="TVR Done By (HO)" name="documentation.hoTvrDoneBy" value={documentationData.hoTvrDoneBy} readOnly={isViewMode} />
               </div>
               <FormSelect label="Stock Marked to Bank" name="documentation.stockMarkedToBank" options={["Select Bank", "HDFC", "ICICI", "SBI", "Axis", "Kotak"]} value={documentationData.stockMarkedToBank || ''} readOnly={isViewMode} />

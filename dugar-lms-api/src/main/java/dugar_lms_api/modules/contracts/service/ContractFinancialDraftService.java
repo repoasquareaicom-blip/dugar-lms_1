@@ -43,6 +43,7 @@ public class ContractFinancialDraftService {
         contractFinancialDraftRepository.updateContract(financial, updatedBy);
         contractFinancialDraftRepository.upsertContractDetail(financial, updatedBy);
         contractFinancialDraftRepository.replaceRepayments(contractId, financial.repaymentStructures());
+        contractFinancialDraftRepository.recalculateContractIrr(contractId);
         return contractFinancialDraftRepository.findByContractId(contractId)
             .orElse(contractFinancialDraftRepository.withRepayments(financial, List.of()));
     }
@@ -66,6 +67,7 @@ public class ContractFinancialDraftService {
             financial.insuranceDeposit(),
             financial.totalContractValue(),
             financial.repaymentTerms(),
+            Boolean.TRUE.equals(financial.isFirstEmiPaid()),
             financial.firstEmiDate(),
             financial.moratoriumMonths(),
             financial.repaymentType(),

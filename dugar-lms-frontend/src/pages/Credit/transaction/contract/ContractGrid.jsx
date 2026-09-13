@@ -482,12 +482,14 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
     [],
   );
 
-  const contextMenuItems = (row) => [
-    {
+  const viewContextMenuItem = (row) => ({
       label: 'View Contract',
       icon: <Eye size={14} />,
       onClick: () => openContractForm(row, 'view'),
-    },
+  });
+
+  const contextMenuItems = (row) => isDraft ? [
+    viewContextMenuItem(row),
     {
       label: 'Edit Contract',
       icon: <FilePenLine size={14} />,
@@ -502,10 +504,10 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
       ? [{
         label: 'Add Voucher',
         icon: <ReceiptIndianRupee size={14} />,
-        onClick: () => addVoucher(row),
-      }]
+      onClick: () => addVoucher(row),
+    }]
       : []),
-  ];
+  ] : [viewContextMenuItem(row)];
 
   return (
     <div className="w-full h-full min-h-0 bg-white" style={{ fontFamily: 'Calibri, sans-serif' }}>

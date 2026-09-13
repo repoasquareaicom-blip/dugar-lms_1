@@ -26,12 +26,33 @@ public class ContractDashboardRepository {
 
     private static final String ACCESS_FILTER = """
           AND (
-              :restricted = FALSE
-              OR EXISTS (
-                  SELECT 1
-                  FROM users access_user
-                  WHERE access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))
-                    AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+              :fullAccess = TRUE
+              OR (
+                  EXISTS (
+                      SELECT 1
+                      FROM users access_user
+                      WHERE access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))
+                        AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+                  )
+                  AND (
+                      EXISTS (SELECT 1 FROM users scope_user WHERE scope_user.user_id = :scopeUserId AND UPPER(TRIM(COALESCE(scope_user.user_type, 'USER'))) = 'USER')
+                      OR EXISTS (
+                          SELECT 1
+                          FROM user_areas scope_area
+                          JOIN users scope_user ON scope_user.user_id = scope_area.user_id
+                          WHERE scope_area.user_id = :scopeUserId
+                            AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) IN ('BRANCH', 'STATE')
+                            AND UPPER(TRIM(scope_area.area_code)) = UPPER(TRIM(COALESCE(c.area_code, '')))
+                      )
+                      OR EXISTS (
+                          SELECT 1
+                          FROM user_contracts scope_contract
+                          JOIN users scope_user ON scope_user.user_id = scope_contract.user_id
+                          WHERE scope_contract.user_id = :scopeUserId
+                            AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) = 'CUSTOMER'
+                            AND UPPER(TRIM(scope_contract.contract_number)) = UPPER(TRIM(COALESCE(c.contract_number, '')))
+                      )
+                  )
               )
           )
         """;
@@ -166,7 +187,8 @@ public class ContractDashboardRepository {
 
     private MapSqlParameterSource accessParams(ReportAccessScope accessScope) {
         return new MapSqlParameterSource()
-            .addValue("restricted", accessScope != null && accessScope.restrictedToUserGroup());
+            .addValue("fullAccess", accessScope == null || accessScope.fullAccess())
+            .addValue("scopeUserId", accessScope == null ? null : accessScope.userId());
     }
 
     private String normalizePeriod(String period) {

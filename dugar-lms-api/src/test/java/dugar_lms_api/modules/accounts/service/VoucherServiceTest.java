@@ -52,6 +52,25 @@ class VoucherServiceTest {
     }
 
     @Test
+    void saveRequiresNumericVoucherNumber() {
+        VoucherSaveRequest request = request("PAYMENT", "CP-100", new BigDecimal("100.00"), BigDecimal.ZERO);
+
+        assertThatThrownBy(() -> service.save(request, 7L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Voucher No must contain digits only");
+    }
+
+    @Test
+    void saveRejectsDuplicateVoucherNumber() {
+        VoucherSaveRequest request = request("PAYMENT", "123456", new BigDecimal("100.00"), BigDecimal.ZERO);
+        when(repository.voucherNumberExists("123456", null)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.save(request, 7L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Voucher number 123456 already exists.");
+    }
+
+    @Test
     void rejectRequiresReason() {
         assertThatThrownBy(() -> service.reject(10L, 7L, " "))
             .isInstanceOf(IllegalArgumentException.class)
@@ -88,10 +107,14 @@ class VoucherServiceTest {
     }
 
     private VoucherSaveRequest request(String type, BigDecimal debit, BigDecimal credit) {
+        return request(type, "123456", debit, credit);
+    }
+
+    private VoucherSaveRequest request(String type, String voucherNumber, BigDecimal debit, BigDecimal credit) {
         return new VoucherSaveRequest(
             type,
             type,
-            "AUTO",
+            voucherNumber,
             LocalDate.now(),
             LocalDate.now(),
             "CASH",

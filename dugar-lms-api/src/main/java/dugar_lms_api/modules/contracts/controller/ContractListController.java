@@ -75,4 +75,12 @@ public class ContractListController {
     ) {
         return ResponseEntity.ok(contractListService.getAreas(keyword, limit, authentication));
     }
+
+    @GetMapping("/area-master-options")
+    public ResponseEntity<java.util.List<ContractAreaOptionDto>> listAreaMasterOptions(
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) Integer limit
+    ) {
+        return ResponseEntity.ok(contractListService.getAreaMasterOptions(keyword, limit));
+    }
 }

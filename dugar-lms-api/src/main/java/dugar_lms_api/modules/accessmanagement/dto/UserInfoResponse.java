@@ -6,6 +6,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -28,4 +31,10 @@ public class UserInfoResponse {
     private String roleCode;
 
     private String userGroup;
+
+    @Builder.Default
+    private List<Long> roleIds = new ArrayList<>();
+
+    @Builder.Default
+    private List<String> roleNames = new ArrayList<>();
 }

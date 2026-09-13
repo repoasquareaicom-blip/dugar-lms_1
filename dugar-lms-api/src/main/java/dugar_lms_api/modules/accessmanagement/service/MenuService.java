@@ -26,6 +26,15 @@ public class MenuService {
 
     public List<MenuResponse> getMenuTreeByRoleId(Long roleId) {
         List<Long> menuIds = getViewableMenuIds(roleId);
+        return getMenuTreeByMenuIds(menuIds);
+    }
+
+    public List<MenuResponse> getMenuTreeByRoleIds(List<Long> roleIds) {
+        List<Long> menuIds = rolePermissionRepository.findViewableMenuIdsByRoleIds(roleIds);
+        return getMenuTreeByMenuIds(menuIds);
+    }
+
+    private List<MenuResponse> getMenuTreeByMenuIds(List<Long> menuIds) {
         List<Menu> menus = loadMenus(menuIds);
         List<Menu> allMenus = loadMissingParents(menus);
         Map<Long, MenuResponse> menuResponseMap = convertToMenuResponses(allMenus);
@@ -88,7 +97,9 @@ public class MenuService {
                 .menuId(menu.getMenuId())
                 .menuName(menu.getMenuName())
                 .menuCode(menu.getMenuCode())
+                .menuType(menu.getMenuType())
                 .urlPath(menu.getUrlPath())
+                .displayOrder(menu.getDisplayOrder())
                 .icon(menu.getIcon())
                 .build();
             responseMap.put(menu.getMenuId(), response);

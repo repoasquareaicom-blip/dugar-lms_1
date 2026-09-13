@@ -32,7 +32,7 @@ public class VoucherService {
 
     @Transactional
     public VoucherSaveResponse save(VoucherSaveRequest request, Long userId) {
-        validate(request);
+        validate(request, null);
         return repository.save(request, userId);
     }
 
@@ -75,7 +75,7 @@ public class VoucherService {
 
     @Transactional
     public VoucherSaveResponse update(Long voucherHeaderId, VoucherSaveRequest request, Long userId, ReportAccessScope accessScope) {
-        validate(request);
+        validate(request, voucherHeaderId);
         return repository.update(voucherHeaderId, request, userId, accessScope);
     }
 
@@ -135,11 +135,21 @@ public class VoucherService {
         return repository.resubmit(voucherHeaderId, userId, accessScope);
     }
 
-    private void validate(VoucherSaveRequest request) {
+    private void validate(VoucherSaveRequest request, Long existingVoucherHeaderId) {
         String type = request.voucherType() == null ? "" : request.voucherType().trim().toUpperCase(Locale.ROOT);
         String nature = voucherNature(type);
         if (nature == null) {
             throw new IllegalArgumentException("Voucher type must be BP, BR, CP, CR, or JV.");
+        }
+        String voucherNumber = request.voucherNumber() == null ? "" : request.voucherNumber().trim();
+        if (voucherNumber.isBlank()) {
+            throw new IllegalArgumentException("Voucher No is required.");
+        }
+        if (!voucherNumber.matches("\\d+")) {
+            throw new IllegalArgumentException("Voucher No must contain digits only.");
+        }
+        if (repository.voucherNumberExists(voucherNumber, existingVoucherHeaderId)) {
+            throw new IllegalArgumentException("Voucher number " + voucherNumber + " already exists.");
         }
         if (request.voucherDate().isAfter(LocalDate.now())) {
             throw new IllegalArgumentException("Voucher date cannot be a future date.");

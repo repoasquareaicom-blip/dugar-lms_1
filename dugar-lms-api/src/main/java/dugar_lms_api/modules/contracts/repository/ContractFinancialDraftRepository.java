@@ -23,6 +23,7 @@ public class ContractFinancialDraftRepository {
             c.insurance_deposit,
             c.total_contract_value,
             c.repayment_terms,
+            c.is_first_emi_paid,
             c.first_emi_date,
             c.moratorium_months,
             c.repayment_type,
@@ -62,6 +63,16 @@ public class ContractFinancialDraftRepository {
         WHERE contract_id = :contractId
         """;
 
+    private static final String FIND_CONTRACT_NUMBER_SQL = """
+        SELECT contract_number
+        FROM contracts
+        WHERE contract_id = :contractId
+        """;
+
+    private static final String RECALCULATE_CONTRACT_IRR_SQL = """
+        CALL public.sp_recalculate_contract_irr(:contractNumber)
+        """;
+
     private static final String UPDATE_CONTRACT_SQL = """
         UPDATE contracts
         SET
@@ -72,6 +83,7 @@ public class ContractFinancialDraftRepository {
             insurance_deposit = :insuranceDeposit,
             total_contract_value = :totalContractValue,
             repayment_terms = :repaymentTerms,
+            is_first_emi_paid = :isFirstEmiPaid,
             first_emi_date = :firstEmiDate,
             moratorium_months = :moratoriumMonths,
             repayment_type = :repaymentType,
@@ -175,6 +187,7 @@ public class ContractFinancialDraftRepository {
         rs.getBigDecimal("insurance_deposit"),
         rs.getBigDecimal("total_contract_value"),
         rs.getString("repayment_terms"),
+        rs.getBoolean("is_first_emi_paid"),
         rs.getObject("first_emi_date", java.time.LocalDate.class),
         rs.getObject("moratorium_months", Integer.class),
         rs.getString("repayment_type"),
@@ -224,6 +237,21 @@ public class ContractFinancialDraftRepository {
             FIND_CONTRACT_DATE_SQL,
             new MapSqlParameterSource().addValue("contractId", contractId),
             java.time.LocalDate.class
+        );
+    }
+
+    public void recalculateContractIrr(Long contractId) {
+        String contractNumber = namedParameterJdbcTemplate.queryForObject(
+            FIND_CONTRACT_NUMBER_SQL,
+            new MapSqlParameterSource().addValue("contractId", contractId),
+            String.class
+        );
+        if (contractNumber == null || contractNumber.isBlank()) {
+            return;
+        }
+        namedParameterJdbcTemplate.update(
+            RECALCULATE_CONTRACT_IRR_SQL,
+            new MapSqlParameterSource().addValue("contractNumber", contractNumber.trim())
         );
     }
 
@@ -291,6 +319,7 @@ public class ContractFinancialDraftRepository {
             financial.insuranceDeposit(),
             financial.totalContractValue(),
             financial.repaymentTerms(),
+            Boolean.TRUE.equals(financial.isFirstEmiPaid()),
             financial.firstEmiDate(),
             financial.moratoriumMonths(),
             financial.repaymentType(),
@@ -320,6 +349,7 @@ public class ContractFinancialDraftRepository {
             .addValue("insuranceDeposit", financial.insuranceDeposit())
             .addValue("totalContractValue", financial.totalContractValue())
             .addValue("repaymentTerms", clean(financial.repaymentTerms()))
+            .addValue("isFirstEmiPaid", Boolean.TRUE.equals(financial.isFirstEmiPaid()))
             .addValue("firstEmiDate", financial.firstEmiDate())
             .addValue("moratoriumMonths", financial.moratoriumMonths())
             .addValue("repaymentType", clean(financial.repaymentType()))

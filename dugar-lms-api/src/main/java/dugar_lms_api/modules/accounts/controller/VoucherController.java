@@ -11,6 +11,8 @@ import dugar_lms_api.modules.accounts.dto.VoucherSummaryDto;
 import dugar_lms_api.modules.accounts.service.VoucherService;
 import dugar_lms_api.modules.reports.ReportAccessScope;
 import jakarta.validation.Valid;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
 import org.springframework.http.HttpStatus;
@@ -167,6 +169,19 @@ public class VoucherController {
         return ResponseEntity
             .status(HttpStatus.CONFLICT)
             .body(Map.of("message", exception.getMessage()));
+    }
+
+    @ExceptionHandler({DuplicateKeyException.class, DataIntegrityViolationException.class})
+    public ResponseEntity<Map<String, String>> dataIntegrityError(Exception exception) {
+        String message = String.valueOf(exception.getMessage());
+        if (message.contains("uq_voucher_headers_voucher_number") || message.contains("voucher_number")) {
+            return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(Map.of("message", "Voucher number already exists."));
+        }
+        return ResponseEntity
+            .status(HttpStatus.CONFLICT)
+            .body(Map.of("message", "Voucher could not be saved because it conflicts with existing data."));
     }
 
     private Long userId(Authentication authentication) {

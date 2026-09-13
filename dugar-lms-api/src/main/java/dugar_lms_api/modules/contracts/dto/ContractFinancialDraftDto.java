@@ -13,6 +13,7 @@ public record ContractFinancialDraftDto(
     BigDecimal insuranceDeposit,
     BigDecimal totalContractValue,
     String repaymentTerms,
+    Boolean isFirstEmiPaid,
     LocalDate firstEmiDate,
     Integer moratoriumMonths,
     String repaymentType,

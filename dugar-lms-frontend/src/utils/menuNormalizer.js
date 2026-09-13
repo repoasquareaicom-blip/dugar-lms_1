@@ -339,5 +339,5 @@ export function normalizeMenuTree(menus = []) {
     });
   }
 
-  return sortMenus(ensureCommitteeDemandListMenu(ensureActiveContractsMenu(menuTree)));
+  return sortMenus(ensureActiveContractsMenu(menuTree));
 }

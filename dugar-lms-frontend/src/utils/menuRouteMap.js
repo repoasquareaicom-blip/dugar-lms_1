@@ -4,7 +4,7 @@ const NAME_ROUTE_MAP = [
   { keys: ['active contracts'], route: '/credit/trans/contract-management/active-contracts' },
   { keys: ['draft contracts', 'draft contract'], route: '/credit/trans/contract-management/draft-contracts' },
   { keys: ['edit contracts'], route: '/credit/trans/contract-management/edit-contracts' },
-  { keys: ['edit contract', 'modify contract', 'contract edit', 'contract list', 'contracts'], route: '/credit/trans/contract/edit' },
+  { keys: ['contract sent to active', 'edit contract', 'modify contract', 'contract edit', 'contract list', 'contracts'], route: '/credit/transaction/contract/edit' },
   { keys: ['contract form'], route: '/credit/trans/contract/form' },
   { keys: ['demand list'], route: '/committee/reports/demand-list' },
   { keys: ['afc report', 'afc'], route: '/committee/reports/afc' },
@@ -15,6 +15,9 @@ const NAME_ROUTE_MAP = [
   { keys: ['interest wise aging analysis', 'aging analysis interest wise', 'interest wise'], route: '/committee/aging-analysis/interest-wise' },
   { keys: ['aging analysis', 'ageing analysis'], route: '/committee/reports/aging-analysis' },
   { keys: ['ledger code', 'ledger master'], route: '/accounts/masters/ledger-code' },
+  { keys: ['role menu permissions', 'role permissions'], route: '/committee/masters/user-management/role-menu-permissions' },
+  { keys: ['roles', 'role master'], route: '/committee/masters/user-management/roles' },
+  { keys: ['user management', 'user master'], route: '/committee/masters/user-management' },
   {
     keys: [
       'voucher request sent for authorization',
@@ -55,6 +58,10 @@ export function resolveMenuPath(item) {
   const name = normalize(item?.menuName || item?.menu_name);
   const code = normalize(item?.menuCode || item?.menu_code);
   const lookupText = `${name} ${code}`.trim();
+
+  if (rawPath === '/credit/transaction/contract/edit') {
+    return rawPath;
+  }
 
   if (['/contracts', '/contracts/active', '/active-contracts'].includes(rawPath)) {
     return '/credit/trans/contract-management/active-contracts';

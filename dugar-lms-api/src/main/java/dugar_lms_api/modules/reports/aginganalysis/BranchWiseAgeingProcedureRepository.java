@@ -105,7 +105,7 @@ public class BranchWiseAgeingProcedureRepository {
                             money(optionalMoney(rs, columns, "outstanding_interest_amount", "interest_outstanding", "outstanding_interest"))
                         ));
                     }
-                    return result;
+                    return filterBranchRows(result, accessScope);
                 }
             }
         });
@@ -212,7 +212,7 @@ public class BranchWiseAgeingProcedureRepository {
                             rs.getString("ageing_bucket")
                         ));
                     }
-                    return result;
+                    return filterContractRows(result, accessScope);
                 }
             }
         });
@@ -225,8 +225,106 @@ public class BranchWiseAgeingProcedureRepository {
         return value == null || value.isBlank() ? null : value.trim().toUpperCase();
     }
 
+    private List<AgingAnalysisBranchRowDto> filterBranchRows(List<AgingAnalysisBranchRowDto> rows, ReportAccessScope accessScope) {
+        if (hasFullDataAccess(accessScope)) {
+            return rows;
+        }
+        if (isUserType(accessScope, "USER")) {
+            return rows;
+        }
+        List<String> areas = allowedAreaCodes(accessScope);
+        if (areas.isEmpty()) {
+            return List.of();
+        }
+        Set<String> allowed = normalizedSet(areas);
+        return rows.stream()
+            .filter(row -> allowed.contains(normalize(row.areaCode())))
+            .toList();
+    }
+
+    private List<ProcedureContractReportRow> filterContractRows(List<ProcedureContractReportRow> rows, ReportAccessScope accessScope) {
+        if (hasFullDataAccess(accessScope)) {
+            return rows;
+        }
+        if (isUserType(accessScope, "USER")) {
+            return rows;
+        }
+        List<String> contracts = allowedContractNumbers(accessScope);
+        if (!contracts.isEmpty()) {
+            Set<String> allowed = normalizedSet(contracts);
+            return rows.stream()
+                .filter(row -> allowed.contains(normalize(row.contractNumber())))
+                .toList();
+        }
+        List<String> areas = allowedAreaCodes(accessScope);
+        if (areas.isEmpty()) {
+            return List.of();
+        }
+        Set<String> allowed = normalizedSet(areas);
+        return rows.stream()
+            .filter(row -> allowed.contains(normalize(row.areaCode())))
+            .toList();
+    }
+
+    private boolean hasFullDataAccess(ReportAccessScope accessScope) {
+        if (accessScope == null || accessScope.fullAccess() || accessScope.userId() == null) {
+            return true;
+        }
+        String userType = jdbcTemplate.query(
+            "SELECT UPPER(TRIM(COALESCE(user_type, 'USER'))) FROM users WHERE user_id = ?",
+            ps -> ps.setLong(1, accessScope.userId()),
+            rs -> rs.next() ? rs.getString(1) : "USER"
+        );
+        return false;
+    }
+
+    private boolean isUserType(ReportAccessScope accessScope, String expectedType) {
+        if (accessScope == null || accessScope.userId() == null) {
+            return false;
+        }
+        String userType = jdbcTemplate.query(
+            "SELECT UPPER(TRIM(COALESCE(user_type, 'USER'))) FROM users WHERE user_id = ?",
+            ps -> ps.setLong(1, accessScope.userId()),
+            rs -> rs.next() ? rs.getString(1) : "USER"
+        );
+        return expectedType.equals(userType);
+    }
+
     private String userGroup(ReportAccessScope accessScope) {
         return accessScope == null ? null : accessScope.userGroup();
+    }
+
+    private List<String> allowedAreaCodes(ReportAccessScope accessScope) {
+        if (accessScope == null || accessScope.userId() == null) {
+            return List.of();
+        }
+        return jdbcTemplate.queryForList(
+            "SELECT area_code FROM user_areas WHERE user_id = ?",
+            String.class,
+            accessScope.userId()
+        );
+    }
+
+    private List<String> allowedContractNumbers(ReportAccessScope accessScope) {
+        if (accessScope == null || accessScope.userId() == null) {
+            return List.of();
+        }
+        return jdbcTemplate.queryForList(
+            "SELECT contract_number FROM user_contracts WHERE user_id = ?",
+            String.class,
+            accessScope.userId()
+        );
+    }
+
+    private Set<String> normalizedSet(List<String> values) {
+        return values.stream()
+            .map(this::normalize)
+            .filter(value -> value != null)
+            .collect(java.util.stream.Collectors.toSet());
+    }
+
+    private String normalize(String value) {
+        return value == null ? null : value.trim().toUpperCase();
     }
 
     private BigDecimal money(BigDecimal value) {

@@ -29,6 +29,9 @@ import AfcReportPage from './pages/committee/reports/AfcReportPage.jsx';
 import AgingAnalysisPage from './pages/committee/reports/AgingAnalysisPage.jsx';
 import AgingMatrixReportPage from './pages/committee/reports/AgingMatrixReportPage.jsx';
 import ConsolidatedPortfolioPage from './pages/committee/reports/ConsolidatedPortfolioPage.jsx';
+import RolesMaster from './pages/committee/masters/RolesMaster.jsx';
+import RoleMenuPermissions from './pages/committee/masters/RoleMenuPermissions.jsx';
+import UserManagement from './pages/committee/masters/UserManagement.jsx';
 import { normalizeMenuTree } from './utils/menuNormalizer';
 import { fetchContractDashboard } from './services/dashboardService';
 
@@ -466,6 +469,7 @@ function App() {
         <Route element={<ProtectedRoute><MainDashboardLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<WelcomeDashboard />} />
           <Route path="/credit/masters/party-code" element={<PartyCodeModify />} />
+          <Route path="/credit/transaction/contract/edit" element={<ContractGrid isDraft workflowStatus="E" title="Edit Contracts" showCreate={false} />} />
           <Route path="/credit/trans/contract/edit" element={<ContractGrid isDraft workflowStatus="E" title="Edit Contracts" showCreate={false} />} />
           <Route path="/credit/trans/contract-management/active-contracts" element={<ContractGrid />} />
           <Route path="/credit/trans/contract-management/draft-contracts" element={<ContractGrid isDraft title="Draft Contracts" />} />
@@ -500,6 +504,9 @@ function App() {
           <Route path="/committee/aging-analysis/loan-ticket-wise" element={<AgingMatrixReportPage type="loan-ticket" />} />
           <Route path="/committee/aging-analysis/interest-wise" element={<AgingMatrixReportPage type="interest" />} />
           <Route path="/committee/aging-analysis/consolidated-portfolio" element={<ConsolidatedPortfolioPage />} />
+          <Route path="/committee/masters/user-management/roles" element={<RolesMaster />} />
+          <Route path="/committee/masters/user-management/role-menu-permissions" element={<RoleMenuPermissions />} />
+          <Route path="/committee/masters/user-management" element={<UserManagement />} />
           <Route 
   path="*" 
   element={

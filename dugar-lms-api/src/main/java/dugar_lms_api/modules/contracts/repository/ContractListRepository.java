@@ -1,5 +1,6 @@
 package dugar_lms_api.modules.contracts.repository;
 
+import dugar_lms_api.modules.accessmanagement.dto.ContractOptionDto;
 import dugar_lms_api.modules.contracts.dto.ContractAreaOptionDto;
 import dugar_lms_api.modules.contracts.dto.ContractListDto;
 import dugar_lms_api.modules.contracts.service.ContractListCriteria;
@@ -130,16 +131,95 @@ public class ContractListRepository {
               OR LOWER(TRIM(COALESCE(am.area_name, ''))) LIKE :keyword
           )
           AND (
-              :restricted = FALSE
-              OR EXISTS (
-                  SELECT 1
-                  FROM users access_user
-                  WHERE access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))
-                    AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+              :fullAccess = TRUE
+              OR (
+                  EXISTS (
+                      SELECT 1
+                      FROM users access_user
+                      WHERE access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))
+                        AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+                  )
+                  AND (
+                      EXISTS (SELECT 1 FROM users scope_user WHERE scope_user.user_id = :scopeUserId AND UPPER(TRIM(COALESCE(scope_user.user_type, 'USER'))) = 'USER')
+                      OR EXISTS (
+                          SELECT 1
+                          FROM user_areas scope_area
+                          JOIN users scope_user ON scope_user.user_id = scope_area.user_id
+                          WHERE scope_area.user_id = :scopeUserId
+                            AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) IN ('BRANCH', 'STATE')
+                            AND UPPER(TRIM(scope_area.area_code)) = UPPER(TRIM(COALESCE(c.area_code, '')))
+                      )
+                      OR EXISTS (
+                          SELECT 1
+                          FROM user_contracts scope_contract
+                          JOIN users scope_user ON scope_user.user_id = scope_contract.user_id
+                          WHERE scope_contract.user_id = :scopeUserId
+                            AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) = 'CUSTOMER'
+                            AND UPPER(TRIM(scope_contract.contract_number)) = UPPER(TRIM(COALESCE(c.contract_number, '')))
+                      )
+                  )
               )
           )
         ORDER BY area_code
         LIMIT :limit
+        """;
+
+    private static final String FIND_AREA_MASTER_OPTIONS_SQL = """
+        SELECT
+            NULLIF(TRIM(area_code), '') AS area_code,
+            NULLIF(TRIM(area_name), '') AS area_name
+        FROM area_masters
+        WHERE is_active = TRUE
+          AND NULLIF(TRIM(area_code), '') IS NOT NULL
+          AND (
+              :keyword = ''
+              OR LOWER(TRIM(area_code)) LIKE :keyword
+              OR LOWER(TRIM(COALESCE(area_name, ''))) LIKE :keyword
+          )
+        ORDER BY area_code
+        LIMIT :limit
+        """;
+
+    private static final String FIND_ACTIVE_CONTRACT_OPTIONS_SQL = """
+        SELECT
+            c.contract_number,
+            COALESCE(NULLIF(TRIM(pm.full_name), ''), NULLIF(TRIM(c.borrower_code), ''), '-') AS borrower_name
+        FROM contracts c
+        LEFT JOIN party_masters pm
+            ON UPPER(TRIM(pm.party_code)) = UPPER(TRIM(c.borrower_code))
+           AND pm.is_active = TRUE
+        WHERE c.is_active = TRUE
+          AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
+          AND c.loan_close_date IS NULL
+          AND NULLIF(TRIM(c.contract_number), '') IS NOT NULL
+          AND (
+              :keyword = ''
+              OR LOWER(TRIM(c.contract_number)) LIKE :keyword
+              OR LOWER(TRIM(COALESCE(pm.full_name, ''))) LIKE :keyword
+              OR LOWER(TRIM(COALESCE(c.borrower_code, ''))) LIKE :keyword
+          )
+        ORDER BY c.contract_number
+        LIMIT :limit
+        """;
+
+    private static final String EXISTS_ACTIVE_CONTRACT_SQL = """
+        SELECT EXISTS (
+            SELECT 1
+            FROM contracts
+            WHERE UPPER(TRIM(contract_number)) = UPPER(TRIM(:contractNumber))
+              AND is_active = TRUE
+              AND UPPER(TRIM(COALESCE(status, ''))) = 'Y'
+              AND loan_close_date IS NULL
+        )
+        """;
+
+    private static final String EXISTS_ACTIVE_AREA_SQL = """
+        SELECT EXISTS (
+            SELECT 1
+            FROM area_masters
+            WHERE UPPER(TRIM(area_code)) = UPPER(TRIM(:areaCode))
+              AND is_active = TRUE
+        )
         """;
 
     private static final RowMapper<ContractListDto> CONTRACT_LIST_ROW_MAPPER = (rs, rowNum) -> new ContractListDto(
@@ -231,12 +311,64 @@ public class ContractListRepository {
             new MapSqlParameterSource()
                 .addValue("keyword", cleanedKeyword == null ? "" : "%" + cleanedKeyword + "%")
                 .addValue("limit", Math.max(1, Math.min(limit, 50)))
-                .addValue("restricted", accessScope != null && accessScope.restrictedToUserGroup()),
+                .addValue("fullAccess", accessScope == null || accessScope.fullAccess())
+                .addValue("scopeUserId", accessScope == null ? null : accessScope.userId()),
             (rs, rowNum) -> new ContractAreaOptionDto(
                 rs.getString("area_code"),
                 rs.getString("area_name")
             )
         );
+    }
+
+    public List<ContractAreaOptionDto> findAreaMasterOptions(String keyword, int limit) {
+        String cleanedKeyword = normalizeLower(keyword);
+        return namedParameterJdbcTemplate.query(
+            FIND_AREA_MASTER_OPTIONS_SQL,
+            new MapSqlParameterSource()
+                .addValue("keyword", cleanedKeyword == null ? "" : "%" + cleanedKeyword + "%")
+                .addValue("limit", Math.max(1, Math.min(limit, 50))),
+            (rs, rowNum) -> new ContractAreaOptionDto(
+                rs.getString("area_code"),
+                rs.getString("area_name")
+            )
+        );
+    }
+
+    public List<ContractOptionDto> findActiveContractOptions(String keyword, int limit) {
+        String cleanedKeyword = normalizeLower(keyword);
+        return namedParameterJdbcTemplate.query(
+            FIND_ACTIVE_CONTRACT_OPTIONS_SQL,
+            new MapSqlParameterSource()
+                .addValue("keyword", cleanedKeyword == null ? "" : "%" + cleanedKeyword + "%")
+                .addValue("limit", Math.max(1, Math.min(limit, 50))),
+            (rs, rowNum) -> {
+                String contractNumber = rs.getString("contract_number");
+                String borrowerName = rs.getString("borrower_name");
+                return new ContractOptionDto(
+                    contractNumber,
+                    borrowerName,
+                    contractNumber + " - " + borrowerName
+                );
+            }
+        );
+    }
+
+    public boolean existsActiveContractNumber(String contractNumber) {
+        Boolean exists = namedParameterJdbcTemplate.queryForObject(
+            EXISTS_ACTIVE_CONTRACT_SQL,
+            new MapSqlParameterSource("contractNumber", contractNumber),
+            Boolean.class
+        );
+        return Boolean.TRUE.equals(exists);
+    }
+
+    public boolean existsActiveAreaCode(String areaCode) {
+        Boolean exists = namedParameterJdbcTemplate.queryForObject(
+            EXISTS_ACTIVE_AREA_SQL,
+            new MapSqlParameterSource("areaCode", areaCode),
+            Boolean.class
+        );
+        return Boolean.TRUE.equals(exists);
     }
 
     private QueryParts queryParts(ContractListCriteria criteria) {
@@ -283,16 +415,37 @@ public class ContractListRepository {
     }
 
     private void appendAccessFilter(StringBuilder whereSql, MapSqlParameterSource params, ReportAccessScope accessScope) {
-        boolean restricted = accessScope != null && accessScope.restrictedToUserGroup();
-        params.addValue("restricted", restricted);
+        params.addValue("fullAccess", accessScope == null || accessScope.fullAccess());
+        params.addValue("scopeUserId", accessScope == null ? null : accessScope.userId());
         whereSql.append("""
             AND (
-                :restricted = FALSE
-                OR EXISTS (
-                    SELECT 1
-                    FROM users access_user
-                    WHERE access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))
-                      AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+                :fullAccess = TRUE
+                OR (
+                    EXISTS (
+                        SELECT 1
+                        FROM users access_user
+                        WHERE access_user.user_id::text = TRIM(COALESCE(c.updated_by, ''))
+                          AND LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'
+                    )
+                    AND (
+                        EXISTS (SELECT 1 FROM users scope_user WHERE scope_user.user_id = :scopeUserId AND UPPER(TRIM(COALESCE(scope_user.user_type, 'USER'))) = 'USER')
+                        OR EXISTS (
+                            SELECT 1
+                            FROM user_areas scope_area
+                            JOIN users scope_user ON scope_user.user_id = scope_area.user_id
+                            WHERE scope_area.user_id = :scopeUserId
+                              AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) IN ('BRANCH', 'STATE')
+                              AND UPPER(TRIM(scope_area.area_code)) = UPPER(TRIM(COALESCE(c.area_code, '')))
+                        )
+                        OR EXISTS (
+                            SELECT 1
+                            FROM user_contracts scope_contract
+                            JOIN users scope_user ON scope_user.user_id = scope_contract.user_id
+                            WHERE scope_contract.user_id = :scopeUserId
+                              AND UPPER(TRIM(COALESCE(scope_user.user_type, ''))) = 'CUSTOMER'
+                              AND UPPER(TRIM(scope_contract.contract_number)) = UPPER(TRIM(COALESCE(c.contract_number, '')))
+                        )
+                    )
                 )
             )
             """);

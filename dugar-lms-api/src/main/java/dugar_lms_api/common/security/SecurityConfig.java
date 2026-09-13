@@ -87,9 +87,9 @@ public class SecurityConfig {
             "http://localhost:*",
             "http://127.0.0.1:*",
 
-            // "https://prolms.asquareai.com",
-            // "https://www.prolms.asquareai.com",
-            // "http://prolms.asquareai.com",
+            "https://prolms.asquareai.com",
+            "https://www.prolms.asquareai.com",
+            "http://prolms.asquareai.com",
 
             "https://corelms.asquareai.com",
             "https://www.corelms.asquareai.com",
