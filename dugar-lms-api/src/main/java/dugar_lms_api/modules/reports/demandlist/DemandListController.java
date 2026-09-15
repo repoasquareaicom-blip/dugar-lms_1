@@ -4,14 +4,20 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -66,6 +72,23 @@ public class DemandListController {
         return ResponseEntity.ok(demandListService.getPrintDemandList(request(asOnDate, areaCode, branchId, fieldOfficerCode, contractType, productType, minimumOverdueAmount, maximumOverdueAmount, contractNumber, overdueInstallmentCount, keyword, 0, DemandListService.PRINT_ROW_LIMIT, sortColumn, sortDirection), authentication));
     }
 
+    @GetMapping("/contracts/{contractId}/follow-ups")
+    public ResponseEntity<List<ContractFollowUpDto>> getFollowUps(
+        @PathVariable Long contractId,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(demandListService.getFollowUps(contractId, authentication));
+    }
+
+    @PostMapping("/contracts/{contractId}/follow-ups")
+    public ResponseEntity<ContractFollowUpDto> addFollowUp(
+        @PathVariable Long contractId,
+        @Valid @RequestBody ContractFollowUpRequest request,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(demandListService.addFollowUp(contractId, request, authentication));
+    }
+
     private DemandListRequest request(
         LocalDate asOnDate,
         String areaCode,
@@ -89,5 +112,14 @@ public class DemandListController {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> validationError(IllegalArgumentException exception) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", exception.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, String>> requestValidationError(MethodArgumentNotValidException exception) {
+        String message = exception.getBindingResult().getFieldErrors().stream()
+            .findFirst()
+            .map(error -> error.getDefaultMessage())
+            .orElse("Request is invalid.");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", message));
     }
 }

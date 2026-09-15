@@ -28,3 +28,13 @@ export async function fetchDemandListPrint(filters) {
   });
   return response.data;
 }
+
+export async function fetchDemandFollowUps(contractId) {
+  const response = await apiClient.get(`/reports/demand-list/contracts/${contractId}/follow-ups`);
+  return response.data;
+}
+
+export async function addDemandFollowUp(contractId, payload) {
+  const response = await apiClient.post(`/reports/demand-list/contracts/${contractId}/follow-ups`, payload);
+  return response.data;
+}

@@ -130,6 +130,40 @@ public class BranchWiseAgeingProcedureRepository {
             }
 
             String sql = """
+                WITH last_paid AS (
+                    SELECT
+                        UPPER(TRIM(vd.sub_ledger_code)) AS contract_number,
+                        MAX(vh.voucher_date) AS last_paid_emi_date
+                    FROM voucher_headers vh
+                    JOIN voucher_details vd
+                      ON vd.voucher_header_id = vh.voucher_header_id
+                    JOIN tmp_contract_report report_contract
+                      ON UPPER(TRIM(report_contract.contract_number)) = UPPER(TRIM(vd.sub_ledger_code))
+                    WHERE vh.voucher_date <= ?
+                      AND UPPER(TRIM(COALESCE(vh.status, ''))) = 'AUTHORISED'
+                      AND UPPER(TRIM(COALESCE(vh.voucher_type, ''))) <> 'HJ'
+                      AND TRIM(COALESCE(vd.ledger_code, '')) IN ('3001', '4201')
+                      AND NULLIF(TRIM(vd.sub_ledger_code), '') IS NOT NULL
+                    GROUP BY UPPER(TRIM(vd.sub_ledger_code))
+                ),
+                flags AS (
+                    SELECT
+                        cf.contract_id,
+                        COUNT(*)::int AS flag_count,
+                        STRING_AGG(cfm.flag_name, ', ' ORDER BY cfm.display_order, cfm.flag_name) AS flag_names
+                    FROM contract_flags cf
+                    JOIN contract_flag_master cfm
+                      ON cfm.contract_flag_master_id = cf.contract_flag_master_id
+                    WHERE cfm.is_active = TRUE
+                    GROUP BY cf.contract_id
+                ),
+                follow_ups AS (
+                    SELECT
+                        contract_id,
+                        COUNT(*)::int AS follow_up_count
+                    FROM contract_follow_ups
+                    GROUP BY contract_id
+                )
                 SELECT
                     r.contract_id,
                     r.contract_number,
@@ -138,8 +172,16 @@ public class BranchWiseAgeingProcedureRepository {
                     NULLIF(TRIM(am.area_name), '') AS area_name,
                     r.borrower_code,
                     COALESCE(NULLIF(TRIM(pm.full_name), ''), NULLIF(TRIM(r.borrower_code), '')) AS borrower_name,
+                    NULLIF(TRIM(pm.contact_number), '') AS borrower_phone,
+                    NULLIF(TRIM(CONCAT_WS(', ', NULLIF(TRIM(pm.address_line_1), ''), NULLIF(TRIM(pm.address_line_2), ''), NULLIF(TRIM(pm.area), ''), NULLIF(TRIM(pm.city), ''), NULLIF(TRIM(pm.state), ''), NULLIF(TRIM(pm.pin_code), ''))), '') AS borrower_address,
                     r.guarantor_code,
                     COALESCE(NULLIF(TRIM(gm.full_name), ''), NULLIF(TRIM(r.guarantor_code), '')) AS guarantor_name,
+                    NULLIF(TRIM(gm.contact_number), '') AS guarantor_phone,
+                    NULLIF(TRIM(CONCAT_WS(', ', NULLIF(TRIM(gm.address_line_1), ''), NULLIF(TRIM(gm.address_line_2), ''), NULLIF(TRIM(gm.area), ''), NULLIF(TRIM(gm.city), ''), NULLIF(TRIM(gm.state), ''), NULLIF(TRIM(gm.pin_code), ''))), '') AS guarantor_address,
+                    NULLIF(TRIM(c.guarantor_2_code), '') AS guarantor_2_code,
+                    COALESCE(NULLIF(TRIM(g2m.full_name), ''), NULLIF(TRIM(c.guarantor_2_code), '')) AS guarantor_2_name,
+                    NULLIF(TRIM(g2m.contact_number), '') AS guarantor_2_phone,
+                    NULLIF(TRIM(CONCAT_WS(', ', NULLIF(TRIM(g2m.address_line_1), ''), NULLIF(TRIM(g2m.address_line_2), ''), NULLIF(TRIM(g2m.area), ''), NULLIF(TRIM(g2m.city), ''), NULLIF(TRIM(g2m.state), ''), NULLIF(TRIM(g2m.pin_code), ''))), '') AS guarantor_2_address,
                     r.contract_date,
                     r.first_emi_date,
                     r.vehicle_make,
@@ -159,6 +201,10 @@ public class BranchWiseAgeingProcedureRepository {
                     r.overdue_end_date,
                     COALESCE(r.current_due, 0) AS current_due,
                     r.current_due_date,
+                    lp.last_paid_emi_date,
+                    COALESCE(flags.flag_count, 0) AS flag_count,
+                    COALESCE(flags.flag_names, '') AS flag_names,
+                    COALESCE(follow_ups.follow_up_count, 0) AS follow_up_count,
                     r.ageing_bucket
                 FROM tmp_contract_report r
                 LEFT JOIN contracts c
@@ -171,12 +217,22 @@ public class BranchWiseAgeingProcedureRepository {
                 LEFT JOIN party_masters gm
                   ON UPPER(TRIM(gm.party_code)) = UPPER(TRIM(r.guarantor_code))
                  AND gm.is_active = TRUE
+                LEFT JOIN party_masters g2m
+                  ON UPPER(TRIM(g2m.party_code)) = UPPER(TRIM(c.guarantor_2_code))
+                 AND g2m.is_active = TRUE
+                LEFT JOIN last_paid lp
+                  ON lp.contract_number = UPPER(TRIM(r.contract_number))
+                LEFT JOIN flags
+                  ON flags.contract_id = r.contract_id
+                LEFT JOIN follow_ups
+                  ON follow_ups.contract_id = r.contract_id
                 WHERE (? IS NULL OR UPPER(TRIM(COALESCE(r.area_code, ''))) = ?)
                 ORDER BY r.area_code, r.contract_number
                 """;
             try (var select = connection.prepareStatement(sql)) {
-                select.setString(1, normalizedArea);
+                select.setObject(1, asOnDate);
                 select.setString(2, normalizedArea);
+                select.setString(3, normalizedArea);
                 try (ResultSet rs = select.executeQuery()) {
                     List<ProcedureContractReportRow> result = new ArrayList<>();
                     while (rs.next()) {
@@ -188,8 +244,16 @@ public class BranchWiseAgeingProcedureRepository {
                             rs.getString("area_name"),
                             rs.getString("borrower_code"),
                             rs.getString("borrower_name"),
+                            rs.getString("borrower_phone"),
+                            rs.getString("borrower_address"),
                             rs.getString("guarantor_code"),
                             rs.getString("guarantor_name"),
+                            rs.getString("guarantor_phone"),
+                            rs.getString("guarantor_address"),
+                            rs.getString("guarantor_2_code"),
+                            rs.getString("guarantor_2_name"),
+                            rs.getString("guarantor_2_phone"),
+                            rs.getString("guarantor_2_address"),
                             rs.getObject("contract_date", LocalDate.class),
                             rs.getObject("first_emi_date", LocalDate.class),
                             rs.getString("vehicle_make"),
@@ -209,6 +273,10 @@ public class BranchWiseAgeingProcedureRepository {
                             rs.getObject("overdue_end_date", LocalDate.class),
                             money(rs.getBigDecimal("current_due")),
                             rs.getObject("current_due_date", LocalDate.class),
+                            rs.getObject("last_paid_emi_date", LocalDate.class),
+                            rs.getInt("flag_count"),
+                            rs.getString("flag_names"),
+                            rs.getInt("follow_up_count"),
                             rs.getString("ageing_bucket")
                         ));
                     }
@@ -357,8 +425,16 @@ public class BranchWiseAgeingProcedureRepository {
         String areaName,
         String borrowerCode,
         String borrowerName,
+        String borrowerPhone,
+        String borrowerAddress,
         String guarantorCode,
         String guarantorName,
+        String guarantorPhone,
+        String guarantorAddress,
+        String guarantor2Code,
+        String guarantor2Name,
+        String guarantor2Phone,
+        String guarantor2Address,
         LocalDate contractDate,
         LocalDate firstEmiDate,
         String vehicleMake,
@@ -378,6 +454,10 @@ public class BranchWiseAgeingProcedureRepository {
         LocalDate overdueEndDate,
         BigDecimal currentDue,
         LocalDate currentDueDate,
+        LocalDate lastPaidEmiDate,
+        Integer flagCount,
+        String flagNames,
+        Integer followUpCount,
         String ageingBucket
     ) {
     }

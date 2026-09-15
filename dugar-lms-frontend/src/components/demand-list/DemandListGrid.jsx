@@ -1,6 +1,6 @@
 const groupedColumns = [
   { key: 'serialNumber', label: ['Sl. No'], align: 'right', sortField: 'serialNumber', width: 'w-[70px]' },
-  { key: 'loanNumber', label: ['Loan No.'], sortField: 'loanNumber', width: 'w-[110px]' },
+  { key: 'loanNumber', label: ['Loan No.'], sortField: 'loanNumber', width: 'w-[135px]' },
   { key: 'party', label: ['Name of Borrower', 'Name of Guarantor'], sortField: 'borrowerName', width: 'w-[260px]' },
   { key: 'area', label: ['Area'], sortField: 'areaCode', width: 'w-[150px]' },
   {
@@ -25,6 +25,7 @@ const groupedColumns = [
   },
   { key: 'currentDue', label: ['Current Due'], align: 'right', sortField: 'currentDueAmount', width: 'w-[125px]' },
   { key: 'currentDueDate', label: ['Due Date'], align: 'center', sortField: 'currentDueDate', width: 'w-[110px]' },
+  { key: 'lastPaidEmiDate', label: ['Last Paid', 'EMI Date'], align: 'center', sortField: 'lastPaidEmiDate', width: 'w-[115px]' },
 ];
 
 function formatDate(value) {
@@ -57,7 +58,7 @@ function lineValues(row, key) {
     case 'serialNumber':
       return [row.serialNumber];
     case 'loanNumber':
-      return [row.loanNumber || ''];
+      return [row.loanNumber || '', row.agreementDate ? `Agreement: ${formatDate(row.agreementDate)}` : ''];
     case 'party':
       return [
         row.borrowerName || '',
@@ -91,6 +92,10 @@ function lineValues(row, key) {
       return [formatMoney(row.currentDueAmount)];
     case 'currentDueDate':
       return [formatDate(row.currentDueDate)];
+    case 'lastPaidEmiDate':
+      return [formatDate(row.lastPaidEmiDate) || '-'];
+    case 'flag':
+      return [Number(row.flagCount || 0) > 0 ? row.flagNames || 'Flagged' : 'No flags'];
     default:
       return [''];
   }
@@ -118,13 +123,19 @@ function StackCell({ values, align = 'left' }) {
   );
 }
 
-export default function DemandListGrid({ rows, page, pageSize, sortColumn, sortDirection, onSort, onOpen }) {
+function visibleDemandListColumns({ showArea = true } = {}) {
+  return groupedColumns.filter((column) => column.key !== 'flag' && (showArea || column.key !== 'area'));
+}
+
+export default function DemandListGrid({ rows, page, pageSize, sortColumn, sortDirection, onSort, onOpen, showArea = true }) {
+  const visibleColumns = visibleDemandListColumns({ showArea });
+
   return (
     <div className="no-print min-h-0 flex-1 overflow-auto bg-white">
       <table className="min-w-[1250px] border-collapse text-[12px] text-black">
         <thead className="sticky top-0 z-20 bg-[#e8edf5] text-[12px] font-bold">
           <tr>
-            {groupedColumns.map((column) => (
+            {visibleColumns.map((column) => (
               <th key={column.key} className={`${column.width} border border-black/40 px-2 py-1 align-top ${headerAlignClass(column.align)}`}>
                 <button type="button" onClick={() => onSort(column.sortField)} className={`w-full text-inherit ${headerAlignClass(column.align)}`}>
                   {column.label.map((line) => <div key={line}>{line}</div>)}
@@ -139,7 +150,7 @@ export default function DemandListGrid({ rows, page, pageSize, sortColumn, sortD
             const displayRow = { ...row, serialNumber: page * pageSize + index + 1 };
             return (
               <tr key={row.contractId} onDoubleClick={() => onOpen(row)} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-blue-50`}>
-                {groupedColumns.map((column) => (
+                {visibleColumns.map((column) => (
                   <td key={column.key} className={`border border-black/30 px-2 py-1 align-top ${alignClass(column.align)}`}>
                     <StackCell values={lineValues(displayRow, column.key)} align={column.align || 'left'} />
                   </td>
@@ -149,7 +160,7 @@ export default function DemandListGrid({ rows, page, pageSize, sortColumn, sortD
           })}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={groupedColumns.length} className="border border-black/30 px-3 py-6 text-center font-bold uppercase text-black/50">No records found</td>
+              <td colSpan={visibleColumns.length} className="border border-black/30 px-3 py-6 text-center font-bold uppercase text-black/50">No records found</td>
             </tr>
           )}
         </tbody>
@@ -158,4 +169,4 @@ export default function DemandListGrid({ rows, page, pageSize, sortColumn, sortD
   );
 }
 
-export { groupedColumns as demandListColumns, formatDate, formatMoney, lineValues };
+export { groupedColumns as demandListColumns, formatDate, formatMoney, lineValues, visibleDemandListColumns };

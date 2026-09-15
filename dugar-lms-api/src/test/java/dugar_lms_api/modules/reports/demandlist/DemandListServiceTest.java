@@ -1,6 +1,7 @@
 package dugar_lms_api.modules.reports.demandlist;
 
 import dugar_lms_api.modules.reports.aginganalysis.BranchWiseAgeingProcedureRepository;
+import dugar_lms_api.modules.contracts.repository.ContractAccessRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -87,7 +88,7 @@ class DemandListServiceTest {
     private DemandListService service(List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> rows) {
         BranchWiseAgeingProcedureRepository procedureRepository = mock(BranchWiseAgeingProcedureRepository.class);
         when(procedureRepository.getContractReportRows(eq(LocalDate.of(2026, 1, 1)), eq("AREA"), any())).thenReturn(rows);
-        return new DemandListService(mock(DemandListRepository.class), new DemandListCalculationService(), procedureRepository);
+        return new DemandListService(mock(DemandListRepository.class), new DemandListCalculationService(), procedureRepository, mock(ContractAccessRepository.class));
     }
 
     private BranchWiseAgeingProcedureRepository.ProcedureContractReportRow procedureRow(Long id, String loanNumber, int overdueCount) {
@@ -99,8 +100,16 @@ class DemandListServiceTest {
             null,
             "B" + loanNumber,
             "Borrower " + loanNumber,
+            null,
+            null,
             "G" + loanNumber,
             "Guarantor " + loanNumber,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null,
             null,
             null,
@@ -120,6 +129,10 @@ class DemandListServiceTest {
             LocalDate.of(2026, 1, 1),
             BigDecimal.ZERO,
             null,
+            null,
+            0,
+            "",
+            0,
             overdueCount > 0 ? "1--30" : "Current"
         );
     }
@@ -133,8 +146,16 @@ class DemandListServiceTest {
             null,
             "B" + loanNumber,
             "Borrower " + loanNumber,
+            null,
+            null,
             "G" + loanNumber,
             "Guarantor " + loanNumber,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null,
             null,
             null,
@@ -154,6 +175,10 @@ class DemandListServiceTest {
             null,
             BigDecimal.ZERO,
             LocalDate.of(2026, 2, 1),
+            null,
+            0,
+            "",
+            0,
             "Current"
         );
     }

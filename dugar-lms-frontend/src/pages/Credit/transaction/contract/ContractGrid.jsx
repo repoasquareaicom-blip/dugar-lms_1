@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Eye, FilePenLine, FilePlus2, Printer, ReceiptIndianRupee } from 'lucide-react';
+import { Eye, FilePenLine, FilePlus2, Flag, Loader2, Printer, RotateCcw, Save, X } from 'lucide-react';
 import ServerDataTable from '../../../../components/common/ServerDataTable';
-import { fetchContractsPage } from '../../../../services/contractsService';
+import {
+  fetchContractFlagMaster,
+  fetchContractFlags,
+  fetchContractsPage,
+  saveContractFlags,
+} from '../../../../services/contractsService';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
 const DEFAULT_FILTERS = {
@@ -304,6 +309,29 @@ function SummaryCell(props) {
   return <SmartTooltipCell {...props} />;
 }
 
+function FlagButtonCell({ row, onOpen }) {
+  const flagCount = Number(row.flagCount || 0);
+  const hasFlags = flagCount > 0;
+
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen(row);
+      }}
+      className={`inline-flex h-7 w-7 items-center justify-center rounded border-2 transition-all ${
+        hasFlags
+          ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
+          : 'border-blue-200 bg-blue-50 text-[#0052CC] hover:bg-blue-100'
+      }`}
+      title={hasFlags ? `${flagCount} saved flag(s)` : 'No saved flags'}
+    >
+      <Flag size={15} fill={hasFlags ? 'currentColor' : 'none'} strokeWidth={3} />
+    </button>
+  );
+}
+
 function transformContractsResponse(data) {
   const rows = Array.isArray(data?.content) ? data.content : [];
 
@@ -313,10 +341,20 @@ function transformContractsResponse(data) {
   };
 }
 
-const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowStatus = null, showCreate = true }) => {
+const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowStatus = null, showCreate = true, enableFlagging = false }) => {
   const navigate = useNavigate();
   const sourceWorkflow = workflowStatus || (isDraft ? 'DRAFT' : 'ACTIVE');
   const isActiveContracts = !isDraft && !workflowStatus;
+  const [flagMaster, setFlagMaster] = useState([]);
+  const [flagRowUpdates, setFlagRowUpdates] = useState({});
+  const [flagModal, setFlagModal] = useState({
+    error: '',
+    loading: false,
+    open: false,
+    row: null,
+    saving: false,
+    selected: {},
+  });
 
   const openContractForm = (row, mode) => {
     navigate('/credit/trans/contract/form', {
@@ -339,21 +377,103 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
     });
   };
 
-  const addVoucher = (row) => {
-    navigate('/accounts/trans/voucher/receipt', {
-      state: {
-        contract: row,
-        mode: 'add-voucher',
-      },
-    });
-  };
-
   const createContract = () => {
     navigate('/credit/trans/contract/form', {
       state: {
         mode: 'create',
       },
     });
+  };
+
+  const loadContractsPage = useCallback(
+    (params) => fetchContractsPage({ ...params, isDraft, workflowStatus }),
+    [isDraft, workflowStatus],
+  );
+
+  const openFlagModal = useCallback(async (row) => {
+    setFlagModal({
+      error: '',
+      loading: true,
+      open: true,
+      row,
+      saving: false,
+      selected: {},
+    });
+
+    try {
+      const [master, existing] = await Promise.all([
+        flagMaster.length > 0 ? Promise.resolve(flagMaster) : fetchContractFlagMaster(),
+        fetchContractFlags(row.contractId),
+      ]);
+      const selected = {};
+
+      (existing.flags || []).forEach((flag) => {
+        selected[flag.contractFlagMasterId] = true;
+      });
+
+      setFlagMaster(master);
+      setFlagModal({
+        error: '',
+        loading: false,
+        open: true,
+        row,
+        saving: false,
+        selected,
+      });
+    } catch {
+      setFlagModal((current) => ({
+        ...current,
+        error: 'Unable to load contract flags. Please try again.',
+        loading: false,
+      }));
+    }
+  }, [flagMaster]);
+
+  const closeFlagModal = () => {
+    if (flagModal.saving) return;
+    setFlagModal((current) => ({ ...current, open: false }));
+  };
+
+  const toggleFlagSelection = (flagId) => {
+    setFlagModal((current) => {
+      const selected = { ...current.selected, [flagId]: !current.selected[flagId] };
+      if (!selected[flagId]) {
+        delete selected[flagId];
+      }
+      return { ...current, selected };
+    });
+  };
+
+  const clearFlagSelections = () => {
+    setFlagModal((current) => ({ ...current, selected: {} }));
+  };
+
+  const saveFlagSelections = async () => {
+    const row = flagModal.row;
+    if (!row?.contractId) return;
+
+    const flags = Object.keys(flagModal.selected)
+      .filter((flagId) => flagModal.selected[flagId])
+      .map((flagId) => ({
+        contractFlagMasterId: Number(flagId),
+      }));
+
+    setFlagModal((current) => ({ ...current, error: '', saving: true }));
+    try {
+      const response = await saveContractFlags(row.contractId, flags);
+      const flagCount = Array.isArray(response.flags) ? response.flags.length : flags.length;
+      setFlagRowUpdates((current) => ({
+        ...current,
+        [row.contractId]: { flagCount },
+      }));
+      setFlagModal((current) => ({ ...current, open: false, saving: false }));
+    } catch {
+      setFlagModal((current) => ({
+        ...current,
+        error: 'Unable to save contract flags. Please try again.',
+        saving: false,
+      }));
+    }
   };
 
   const filterFields = useMemo(
@@ -375,6 +495,14 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
       { field: 'serialNumber', headerName: 'S.No', minWidth: 70, align: 'center', headerAlign: 'center' },
       { field: 'contractId', headerName: 'Contract ID', minWidth: 110, align: 'right', headerAlign: 'right', sortable: true },
       { field: 'contractNumber', headerName: 'Contract No', minWidth: 135, sortable: true },
+      ...(enableFlagging ? [{
+        field: 'flagAction',
+        headerName: 'Flag',
+        minWidth: 70,
+        align: 'center',
+        headerAlign: 'center',
+        renderCell: (row) => <FlagButtonCell row={row} onOpen={openFlagModal} />,
+      }] : []),
       { field: 'legacyContractNumber', headerName: 'Legacy Contract No', minWidth: 165, sortable: true },
       { field: 'product', headerName: 'Product', minWidth: 120, sortable: true },
       { field: 'branch', headerName: 'Branch', minWidth: 115, sortable: true },
@@ -479,35 +607,43 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
       { field: 'guarantorPanNumber', headerName: 'Guarantor PAN', minWidth: 140, sortable: true },
       { field: 'guarantorOccupation', headerName: 'Guarantor Occupation', minWidth: 175, sortable: true },
     ],
-    [],
+    [enableFlagging, openFlagModal],
   );
 
   const viewContextMenuItem = (row) => ({
-      label: 'View Contract',
+      label: 'View',
       icon: <Eye size={14} />,
       onClick: () => openContractForm(row, 'view'),
   });
 
-  const contextMenuItems = (row) => isDraft ? [
-    viewContextMenuItem(row),
-    {
-      label: 'Edit Contract',
-      icon: <FilePenLine size={14} />,
-      onClick: () => openContractForm(row, 'edit'),
-    },
-    {
-      label: 'Print Contract',
-      icon: <Printer size={14} />,
-      onClick: () => printContract(row),
-    },
-    ...(isActiveContracts
-      ? [{
-        label: 'Add Voucher',
-        icon: <ReceiptIndianRupee size={14} />,
-      onClick: () => addVoucher(row),
-    }]
-      : []),
-  ] : [viewContextMenuItem(row)];
+  const editContextMenuItem = (row) => ({
+    label: 'Edit',
+    icon: <FilePenLine size={14} />,
+    onClick: () => openContractForm(row, 'edit'),
+  });
+
+  const contextMenuItems = (row) => {
+    if (isActiveContracts) {
+      return [
+        viewContextMenuItem(row),
+        editContextMenuItem(row),
+      ];
+    }
+
+    if (isDraft) {
+      return [
+        viewContextMenuItem(row),
+        editContextMenuItem(row),
+        {
+          label: 'Print Contract',
+          icon: <Printer size={14} />,
+          onClick: () => printContract(row),
+        },
+      ];
+    }
+
+    return [viewContextMenuItem(row)];
+  };
 
   return (
     <div className="w-full h-full min-h-0 bg-white" style={{ fontFamily: 'Calibri, sans-serif' }}>
@@ -518,11 +654,12 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
         defaultPageSize={25}
         defaultSortColumn="contractDate"
         defaultSortDirection="desc"
-        fetchPage={(params) => fetchContractsPage({ ...params, isDraft, workflowStatus })}
+        fetchPage={loadContractsPage}
         filterFields={filterFields}
         getContextMenuItems={contextMenuItems}
         getRowId={(row) => row.contractId}
         pageSizeOptions={PAGE_SIZE_OPTIONS}
+        rowUpdates={flagRowUpdates}
         searchPlaceholder="Quick search contracts..."
         title={title}
         titleAction={showCreate ? (
@@ -536,8 +673,92 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
           </button>
         ) : null}
         transformResponse={transformContractsResponse}
-        onRowDoubleClick={(row) => openContractForm(row, 'edit')}
+        onRowDoubleClick={(row) => openContractForm(row, enableFlagging ? 'view' : 'edit')}
       />
+      {flagModal.open && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/30 px-4 py-6">
+          <div className="w-full max-w-2xl overflow-hidden rounded-lg border-2 border-black/20 bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b-2 border-black/10 bg-[#dfe7f2] px-4 py-3">
+              <div className="min-w-0">
+                <div className="text-[13px] font-black uppercase text-[#0052CC]">Request To Flag Loan</div>
+                <div className="truncate text-[12px] font-bold text-black/70">
+                  {displayFallback(flagModal.row?.contractNumber)}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeFlagModal}
+                className="inline-flex h-8 w-8 items-center justify-center rounded border border-black/20 bg-white text-black hover:bg-slate-100"
+                title="Close"
+              >
+                <X size={16} strokeWidth={3} />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-auto p-4">
+              {flagModal.loading ? (
+                <div className="flex items-center justify-center gap-2 py-10 text-[12px] font-black uppercase text-[#0052CC]">
+                  <Loader2 size={18} className="animate-spin" />
+                  Loading flags
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {flagMaster.map((flag) => {
+                    const flagId = flag.contractFlagMasterId;
+                    const checked = Boolean(flagModal.selected[flagId]);
+                    return (
+                      <label
+                        key={flagId}
+                        className={`rounded-lg border-2 p-3 transition-colors ${
+                          checked ? 'border-[#0052CC] bg-blue-50' : 'border-black/15 bg-white hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleFlagSelection(flagId)}
+                            className="h-4 w-4"
+                          />
+                          <span className="text-[12px] font-black uppercase text-black">{flag.flagName}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              {flagModal.error && (
+                <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-700">
+                  {flagModal.error}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-black/10 bg-slate-50 px-4 py-3">
+              <button
+                type="button"
+                onClick={clearFlagSelections}
+                disabled={flagModal.loading || flagModal.saving}
+                className="inline-flex items-center gap-2 rounded border border-black/20 bg-white px-3 py-1.5 text-[11px] font-black uppercase text-black disabled:opacity-50"
+              >
+                <RotateCcw size={14} strokeWidth={3} />
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={saveFlagSelections}
+                disabled={flagModal.loading || flagModal.saving}
+                className="inline-flex items-center gap-2 rounded bg-[#0052CC] px-4 py-1.5 text-[11px] font-black uppercase text-white disabled:opacity-50"
+              >
+                {flagModal.saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} strokeWidth={3} />}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 };

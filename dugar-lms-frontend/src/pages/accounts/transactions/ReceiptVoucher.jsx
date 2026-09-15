@@ -16,6 +16,8 @@ import { fetchLedgerCodes } from '../../../services/ledgerCodeService';
 import {
   authoriseVoucher,
   cancelVoucher,
+  editAuthorisedVoucher,
+  fetchEditableVoucherByNumber,
   fetchVoucher,
   rejectVoucher,
   reopenVoucher,
@@ -112,12 +114,34 @@ function voucherKind(path) {
   return 'receipt';
 }
 
+function voucherMode(path) {
+  const lower = path.toLowerCase();
+  if (lower.includes('bank')) return 'BANK';
+  if (lower.includes('cash')) return 'CASH';
+  return '';
+}
+
 function voucherCode(kind, pathOrMode = '') {
   if (kind === 'journal') return 'JV';
   const lower = String(pathOrMode || '').toLowerCase();
-  const isBank = lower.includes('/bank') || lower === 'bank';
+  const isBank = lower.includes('bank');
   if (kind === 'payment') return isBank ? 'BP' : 'CP';
   return isBank ? 'BR' : 'CR';
+}
+
+function voucherKindFromCode(code) {
+  const upper = String(code || '').toUpperCase();
+  if (upper === 'JV') return 'journal';
+  if (upper === 'BP' || upper === 'CP') return 'payment';
+  if (upper === 'BR' || upper === 'CR') return 'receipt';
+  return 'receipt';
+}
+
+function voucherModeFromCode(code) {
+  const upper = String(code || '').toUpperCase();
+  if (upper === 'BP' || upper === 'BR') return 'BANK';
+  if (upper === 'CP' || upper === 'CR') return 'CASH';
+  return '';
 }
 
 function readParty(contract) {
@@ -209,12 +233,17 @@ const ReceiptVoucher = () => {
   const requestedVoucherId = location.state?.voucherHeaderId || searchParams.get('voucherHeaderId');
   const authorisationMode = location.state?.authorisationMode || searchParams.get('authorisation') === 'true';
   const returnTo = location.state?.returnTo || '/accounts/transaction/authorisation';
-  const kind = voucherKind(location.pathname);
-  const editMode = location.pathname.toLowerCase().includes('/edit/');
+  const voucherEditMode = location.pathname.toLowerCase() === '/accounts/transaction/voucher-edit';
+  const routeKind = voucherKind(location.pathname);
+  const routeMode = voucherMode(location.pathname);
+  const [selectedVoucherType, setSelectedVoucherType] = useState(voucherCode(routeKind, routeMode));
+  const kind = voucherEditMode ? voucherKindFromCode(selectedVoucherType) : routeKind;
+  const editMode = location.pathname.toLowerCase().includes('/edit/') || voucherEditMode;
   const isReceipt = kind === 'receipt';
   const isPayment = kind === 'payment';
   const isJournal = kind === 'journal';
-  const voucherTitle = isJournal ? 'Journal Voucher' : isPayment ? 'Payment Voucher' : 'Receipt Voucher';
+  const mode = voucherEditMode ? voucherModeFromCode(selectedVoucherType) : routeMode;
+  const voucherTitle = voucherEditMode ? 'Voucher Edit' : isJournal ? 'Journal Voucher' : `${isPayment ? 'Payment Voucher' : 'Receipt Voucher'}${mode ? ` - ${mode[0]}${mode.slice(1).toLowerCase()}` : ''}`;
 
   const [category, setCategory] = useState(selectedContract ? 'LOAN' : 'GENERAL');
   const [systemDate, setSystemDate] = useState(today);
@@ -238,6 +267,7 @@ const ReceiptVoucher = () => {
   const [loadingVoucher, setLoadingVoucher] = useState(false);
   const [reasonAction, setReasonAction] = useState(null);
   const [redirectAfterMessage, setRedirectAfterMessage] = useState('');
+  const [editAllowDuplicateDetails, setEditAllowDuplicateDetails] = useState(false);
 
   const isLoan = category === 'LOAN';
   const debitEditable = isPayment || isJournal;
@@ -290,7 +320,7 @@ const ReceiptVoucher = () => {
 
   const payload = (allowDuplicateDetails = false) => {
     const contract = rows.find((row) => row.loanReference)?.loanReference || null;
-    const code = voucherCode(kind, location.pathname);
+    const code = voucherEditMode ? selectedVoucherType : voucherCode(kind, location.pathname);
     return {
       voucherType: code,
       voucherTypeDescription: null,
@@ -361,6 +391,8 @@ const ReceiptVoucher = () => {
     setDuplicateConfirm(false);
     setSearchOpen(false);
     setReasonAction(null);
+    setEditAllowDuplicateDetails(false);
+    setSelectedVoucherType(voucherCode(routeKind, routeMode));
   };
 
   const showSuccessAndReturn = (text) => {
@@ -430,11 +462,22 @@ const ReceiptVoucher = () => {
       return;
     }
 
+    if (voucherEditMode) {
+      if (!editingVoucherId) {
+        setMessage({ type: 'error', text: 'Search and load an authorised active-loan voucher before saving.' });
+        return;
+      }
+      setEditAllowDuplicateDetails(allowDuplicate);
+      setReasonAction('edit-authorised');
+      return;
+    }
+
     performSave(allowDuplicate);
   };
 
   const loadVoucherForEdit = (voucher) => {
     setEditingVoucherId(voucher.voucherHeaderId);
+    setSelectedVoucherType(voucher.voucherType || voucherCode(routeKind, routeMode));
     setVoucherNo(voucher.voucherNumber || '');
     setVoucherDate(voucher.voucherDate || today);
     setSystemDate(voucher.systemDate || today);
@@ -454,6 +497,7 @@ const ReceiptVoucher = () => {
       },
       loanReference: detail.loanReference ? {
         contractNumber: detail.loanReference,
+        legacyContractNumber: detail.loanReference,
         customerName: detail.partyName || '',
         customerAddress: detail.address || '',
       } : null,
@@ -510,6 +554,18 @@ const ReceiptVoucher = () => {
     if (!editingVoucherId || !reasonAction) return;
     const action = reasonAction;
     setSaving(true);
+    if (action === 'edit-authorised') {
+      editAuthorisedVoucher(editingVoucherId, payload(editAllowDuplicateDetails), reason)
+        .then((saved) => {
+          setReasonAction(null);
+          setVoucherStatus('SUBMITTED');
+          setEditAllowDuplicateDetails(false);
+          showSuccessAndReturn(`Voucher edited and submitted for authorisation: ${saved.voucherNumber || voucherNo}`);
+        })
+        .catch((error) => setMessage({ type: 'error', text: saveErrorMessage(error) }))
+        .finally(() => setSaving(false));
+      return;
+    }
     const request = action === 'reject'
       ? rejectVoucher(editingVoucherId, reason)
       : cancelVoucher(editingVoucherId, reason);
@@ -533,9 +589,19 @@ const ReceiptVoucher = () => {
             <div>
               <h2 className="text-[22px] font-black uppercase tracking-tight text-black">{voucherTitle}</h2>
               <p className="mt-1 text-[12px] font-bold uppercase text-gray-600">
-                {authorisationMode ? `Authorisation process${voucherStatus ? ` | Status ${voucherStatus}` : ''}` : editMode ? 'Edit voucher' : 'Accounts voucher entry'}
+                {authorisationMode ? `Authorisation process${voucherStatus ? ` | Status ${voucherStatus}` : ''}` : voucherEditMode ? 'Search by voucher number and edit authorised active-loan vouchers' : editMode ? 'Edit voucher' : 'Accounts voucher entry'}
               </p>
             </div>
+            {voucherEditMode && (
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded bg-blue-800 px-4 py-2 text-[12px] font-black uppercase text-white disabled:bg-blue-500"
+              >
+                <Search size={15} /> Search Voucher
+              </button>
+            )}
             <table className="min-w-[500px] border border-blue-900 bg-white text-[11px] font-black uppercase text-gray-700">
               <thead>
                 <tr className="bg-blue-900 text-white">
@@ -554,12 +620,16 @@ const ReceiptVoucher = () => {
                       value={voucherNo}
                       onKeyDown={moveNextOnEnter}
                       onPaste={(event) => {
+                        if (voucherEditMode) return;
                         const cleaned = cleanDigitsInput(event.clipboardData.getData('text'));
                         event.preventDefault();
                         setVoucherNo(cleaned);
                       }}
-                      onChange={(event) => setVoucherNo(cleanDigitsInput(event.target.value))}
-                      className="h-7 w-full border border-gray-300 bg-white px-2 text-right text-[13px] font-black text-black outline-none focus:border-blue-700"
+                      onChange={(event) => {
+                        if (!voucherEditMode) setVoucherNo(cleanDigitsInput(event.target.value));
+                      }}
+                      readOnly={voucherEditMode}
+                      className={`h-7 w-full border border-gray-300 px-2 text-right text-[13px] font-black text-black outline-none focus:border-blue-700 ${voucherEditMode ? 'bg-gray-100' : 'bg-white'}`}
                       placeholder="Required"
                       required
                     />
@@ -581,12 +651,24 @@ const ReceiptVoucher = () => {
               </select>
             </Field>
 
+            {voucherEditMode && (
+              <Field label="Voucher Type" className="lg:col-span-2">
+                <select value={selectedVoucherType} onKeyDown={moveNextOnEnter} onChange={(event) => setSelectedVoucherType(event.target.value)} className="field-input">
+                  <option value="CP">Payment Cash</option>
+                  <option value="BP">Payment Bank</option>
+                  <option value="CR">Receipt Cash</option>
+                  <option value="BR">Receipt Bank</option>
+                  <option value="JV">Journal</option>
+                </select>
+              </Field>
+            )}
+
             {!isJournal && (
               <>
-                <Field label="Header Control Code" className="lg:col-span-7">
+                <Field label="Header Control Code" className={voucherEditMode ? 'lg:col-span-6' : 'lg:col-span-7'}>
                   <LedgerLookup value={headerControlCode} onChange={setHeaderControlCode} placeholder="Search ledger code..." />
                 </Field>
-                <Field label="Voucher Amount" className="flex flex-col items-end lg:col-span-4">
+                <Field label="Voucher Amount" className={voucherEditMode ? 'flex flex-col items-end lg:col-span-3' : 'flex flex-col items-end lg:col-span-4'}>
                   <input type="number" min="0" value={voucherAmount} onKeyDown={(event) => { blockNegativeNumberKeys(event); moveNextOnEnter(event); }} onPaste={(event) => event.clipboardData.getData('text').includes('-') && event.preventDefault()} onChange={(event) => setVoucherAmount(cleanAmountInput(event.target.value))} className="field-input h-14 max-w-64 border-2 border-blue-800 bg-blue-100 text-right text-[32px] font-black text-blue-950 shadow-inner" placeholder="0.00" />
                 </Field>
               </>
@@ -729,10 +811,10 @@ const ReceiptVoucher = () => {
                       className="inline-flex min-w-32 items-center justify-center gap-2 rounded bg-blue-800 px-5 py-2 text-[13px] font-black uppercase text-white shadow disabled:cursor-wait disabled:bg-blue-500"
                     >
                       {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                      {saving ? 'Checking' : editMode ? 'Save Changes' : 'Submit'}
+                      {saving ? 'Checking' : voucherEditMode ? 'Submit Edited Voucher' : editMode ? 'Save Changes' : 'Submit'}
                     </button>
                   )}
-                  {editMode && !authorisationMode && (
+                  {editMode && !authorisationMode && !voucherEditMode && (
                     <button
                       type="button"
                       onClick={handleSubmitForAuthorisation}
@@ -775,7 +857,7 @@ const ReceiptVoucher = () => {
 
       {reasonAction && (
         <ReasonModal
-          title={reasonAction === 'reject' ? 'Reject Voucher' : 'Cancel Voucher'}
+          title={reasonAction === 'edit-authorised' ? 'Edit Reason' : reasonAction === 'reject' ? 'Reject Voucher' : 'Cancel Voucher'}
           onClose={() => setReasonAction(null)}
           onSubmit={handleReasonAction}
         />
@@ -784,7 +866,8 @@ const ReceiptVoucher = () => {
       {searchOpen && (
         <VoucherSearchModal
           kind={kind}
-          transactionType={location.pathname.toLowerCase().includes('/bank') ? 'BANK' : location.pathname.toLowerCase().includes('/cash') ? 'CASH' : ''}
+          transactionType={mode}
+          voucherEditMode={voucherEditMode}
           onClose={() => setSearchOpen(false)}
           onSelect={loadVoucherForEdit}
         />
@@ -930,7 +1013,7 @@ const ReasonModal = ({ title, onClose, onSubmit }) => {
   );
 };
 
-const VoucherSearchModal = ({ kind, transactionType, onClose, onSelect }) => {
+const VoucherSearchModal = ({ kind, transactionType, voucherEditMode = false, onClose, onSelect }) => {
   const [filters, setFilters] = useState({ voucherNumber: '', voucherDate: '', contractNumber: '' });
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -941,8 +1024,21 @@ const VoucherSearchModal = ({ kind, transactionType, onClose, onSelect }) => {
       setError('Your login token is missing. Please sign in again before searching vouchers.');
       return;
     }
+    if (voucherEditMode && !filters.voucherNumber.trim()) {
+      setError('Voucher Number is required.');
+      return;
+    }
     setLoading(true);
     setError('');
+    if (voucherEditMode) {
+      fetchEditableVoucherByNumber(filters.voucherNumber.trim())
+        .then((voucher) => {
+          setResults(voucher ? [voucher] : []);
+        })
+        .catch((err) => setError(requestErrorMessage(err, 'find editable voucher')))
+        .finally(() => setLoading(false));
+      return;
+    }
     searchVouchers({
       voucherType: voucherCode(kind, transactionType),
       voucherNumber: filters.voucherNumber,
@@ -955,6 +1051,10 @@ const VoucherSearchModal = ({ kind, transactionType, onClose, onSelect }) => {
   };
 
   const selectVoucher = (summary) => {
+    if (voucherEditMode) {
+      onSelect(summary);
+      return;
+    }
     const confirmed = window.confirm('This voucher is already authorised. Editing will remove it from reports until it is authorised again. Continue?');
     if (!confirmed) return;
     setLoading(true);
@@ -972,7 +1072,7 @@ const VoucherSearchModal = ({ kind, transactionType, onClose, onSelect }) => {
         <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50 px-5 py-4">
           <div>
             <h3 className="text-[18px] font-black uppercase text-black">Search Voucher</h3>
-            <p className="text-[12px] font-bold uppercase text-gray-600">Select a voucher to edit</p>
+            <p className="text-[12px] font-bold uppercase text-gray-600">{voucherEditMode ? 'Search by Voucher Number' : 'Select a voucher to edit'}</p>
           </div>
           <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded hover:bg-white">
             <X size={18} />
@@ -983,12 +1083,16 @@ const VoucherSearchModal = ({ kind, transactionType, onClose, onSelect }) => {
           <Field label="Voucher Number">
             <input value={filters.voucherNumber} onChange={(event) => setFilters((current) => ({ ...current, voucherNumber: event.target.value }))} className="field-input" placeholder="Voucher no..." />
           </Field>
-          <Field label="Voucher Date">
-            <input type="date" value={filters.voucherDate} onChange={(event) => setFilters((current) => ({ ...current, voucherDate: event.target.value }))} className="field-input" />
-          </Field>
-          <Field label="Contract Number">
-            <input value={filters.contractNumber} onChange={(event) => setFilters((current) => ({ ...current, contractNumber: event.target.value }))} className="field-input" placeholder="Contract no..." />
-          </Field>
+          {!voucherEditMode && (
+            <>
+              <Field label="Voucher Date">
+                <input type="date" value={filters.voucherDate} onChange={(event) => setFilters((current) => ({ ...current, voucherDate: event.target.value }))} className="field-input" />
+              </Field>
+              <Field label="Contract Number">
+                <input value={filters.contractNumber} onChange={(event) => setFilters((current) => ({ ...current, contractNumber: event.target.value }))} className="field-input" placeholder="Contract no..." />
+              </Field>
+            </>
+          )}
           <div className="flex items-end">
             <button type="button" onClick={search} disabled={loading} className="inline-flex h-[38px] w-full items-center justify-center gap-2 rounded bg-blue-800 px-5 text-[13px] font-black uppercase text-white disabled:bg-blue-500">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
@@ -1018,12 +1122,12 @@ const VoucherSearchModal = ({ kind, transactionType, onClose, onSelect }) => {
                   <Td className="font-black text-blue-900">{row.voucherNumber}</Td>
                   <Td>{displayDate(row.voucherDate)}</Td>
                   <Td>{row.voucherType}</Td>
-                  <Td>{row.transactionType || '-'}</Td>
+                  <Td>{row.transactionType || voucherModeFromCode(row.voucherType) || '-'}</Td>
                   <Td>{row.contractNumber || '-'}</Td>
                   <Td className="text-right font-black">{money(row.voucherAmount)}</Td>
                   <Td className="text-center">
                     <button type="button" onClick={() => selectVoucher(row)} className="rounded bg-blue-800 px-4 py-1.5 text-[12px] font-black uppercase text-white">
-                      Select
+                      {voucherEditMode ? 'Load' : 'Select'}
                     </button>
                   </Td>
                 </tr>

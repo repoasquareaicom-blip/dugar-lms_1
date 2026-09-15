@@ -1,4 +1,4 @@
-import { demandListColumns, formatDate, lineValues } from './DemandListGrid';
+import { formatDate, lineValues, visibleDemandListColumns } from './DemandListGrid';
 
 function PrintStack({ values }) {
   return (
@@ -14,6 +14,7 @@ function PrintStack({ values }) {
 
 export default function DemandListPrintView({ data, filters }) {
   const rows = data?.rows?.content || [];
+  const columns = visibleDemandListColumns({ showArea: !filters?.areaCode?.trim() });
 
   return (
     <div className="demand-print-root">
@@ -21,7 +22,7 @@ export default function DemandListPrintView({ data, filters }) {
       <table className="demand-print-table">
         <thead>
           <tr>
-            {demandListColumns.map((column) => (
+            {columns.map((column) => (
               <th key={column.key} className={column.align === 'right' ? 'num' : column.align === 'center' ? 'center' : ''}>
                 {column.label.map((line) => <div key={line}>{line}</div>)}
               </th>
@@ -33,7 +34,7 @@ export default function DemandListPrintView({ data, filters }) {
             const displayRow = { ...row, serialNumber: index + 1 };
             return (
               <tr key={row.contractId}>
-                {demandListColumns.map((column) => (
+                {columns.map((column) => (
                   <td key={column.key} className={column.align === 'right' ? 'num' : column.align === 'center' ? 'center' : ''}>
                     <PrintStack values={lineValues(displayRow, column.key)} />
                   </td>

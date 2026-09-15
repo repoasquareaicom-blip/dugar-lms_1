@@ -1,6 +1,7 @@
 package dugar_lms_api.modules.reports.demandlist;
 
 import dugar_lms_api.common.pagination.PageResponse;
+import dugar_lms_api.modules.contracts.repository.ContractAccessRepository;
 import dugar_lms_api.modules.reports.aginganalysis.BranchWiseAgeingProcedureRepository;
 import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.security.core.Authentication;
@@ -22,15 +23,18 @@ public class DemandListService {
     private final DemandListRepository demandListRepository;
     private final DemandListCalculationService demandListCalculationService;
     private final BranchWiseAgeingProcedureRepository branchWiseAgeingProcedureRepository;
+    private final ContractAccessRepository contractAccessRepository;
 
     public DemandListService(
         DemandListRepository demandListRepository,
         DemandListCalculationService demandListCalculationService,
-        BranchWiseAgeingProcedureRepository branchWiseAgeingProcedureRepository
+        BranchWiseAgeingProcedureRepository branchWiseAgeingProcedureRepository,
+        ContractAccessRepository contractAccessRepository
     ) {
         this.demandListRepository = demandListRepository;
         this.demandListCalculationService = demandListCalculationService;
         this.branchWiseAgeingProcedureRepository = branchWiseAgeingProcedureRepository;
+        this.contractAccessRepository = contractAccessRepository;
     }
 
     public DemandListResponse getDemandList(DemandListRequest request, Authentication authentication) {
@@ -71,6 +75,27 @@ public class DemandListService {
             throw new IllegalArgumentException("As On Date is required");
         }
         return procedureRows(validate(request, true), accessScope);
+    }
+
+    public List<ContractFollowUpDto> getFollowUps(Long contractId, Authentication authentication) {
+        requireContractAccess(contractId, authentication);
+        return demandListRepository.findFollowUps(contractId);
+    }
+
+    public ContractFollowUpDto addFollowUp(Long contractId, ContractFollowUpRequest request, Authentication authentication) {
+        requireContractAccess(contractId, authentication);
+        if (request == null || request.commentText() == null || request.commentText().trim().isEmpty()) {
+            throw new IllegalArgumentException("Comments are mandatory.");
+        }
+        Long userId = userId(authentication);
+        if (userId == null) {
+            throw new IllegalArgumentException("User id is required to add a follow-up.");
+        }
+        return demandListRepository.addFollowUp(
+            contractId,
+            new ContractFollowUpRequest(request.commentText().trim(), request.followUpDate()),
+            userId
+        );
     }
 
     private List<DemandListRowDto> procedureRows(DemandListRequest request, ReportAccessScope accessScope) {
@@ -124,10 +149,19 @@ public class DemandListService {
         return new DemandListRowDto(
             row.contractId(),
             row.contractNumber(),
+            row.contractDate(),
             row.borrowerCode(),
             row.borrowerName(),
+            row.borrowerPhone(),
+            row.borrowerAddress(),
             row.guarantorCode(),
             row.guarantorName(),
+            row.guarantorPhone(),
+            row.guarantorAddress(),
+            row.guarantor2Code(),
+            row.guarantor2Name(),
+            row.guarantor2Phone(),
+            row.guarantor2Address(),
             first(row.category(), row.contractType()),
             row.vehicleMake(),
             null,
@@ -147,6 +181,10 @@ public class DemandListService {
             row.overdueEndDate(),
             money(row.currentDue()),
             row.currentDueDate(),
+            row.lastPaidEmiDate(),
+            row.flagCount(),
+            row.flagNames(),
+            row.followUpCount(),
             row.areaCode(),
             row.areaName(),
             null,
@@ -215,5 +253,27 @@ public class DemandListService {
             }
         }
         return authentication != null && authentication.getName() != null ? authentication.getName() : "system";
+    }
+
+    private void requireContractAccess(Long contractId, Authentication authentication) {
+        contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
+    }
+
+    private Long userId(Authentication authentication) {
+        if (authentication == null || !(authentication.getDetails() instanceof Map<?, ?> details)) {
+            return null;
+        }
+        Object userId = details.get("userId");
+        if (userId instanceof Number number) {
+            return number.longValue();
+        }
+        if (userId == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(String.valueOf(userId));
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 }

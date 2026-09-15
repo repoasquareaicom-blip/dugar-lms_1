@@ -1,4 +1,4 @@
-import apiClient from '../api/apiClient';
+import apiClient, { getStoredAuthToken } from '../api/apiClient';
 
 function addParam(params, key, value) {
   if (value !== null && value !== undefined && value !== '') {
@@ -37,6 +37,26 @@ export async function fetchContractsPage({
 
   const response = await apiClient.get('/contracts', { params });
   return response.data;
+}
+
+export async function fetchContractFlagMaster() {
+  const response = await apiClient.get('/contract-flags/master', authenticatedConfig());
+  return Array.isArray(response.data) ? response.data : [];
+}
+
+export async function fetchContractFlags(contractId) {
+  const response = await apiClient.get(`/contract-flags/contract/${contractId}`, authenticatedConfig());
+  return response.data || { contractId, flags: [] };
+}
+
+export async function saveContractFlags(contractId, flags) {
+  const response = await apiClient.put(`/contract-flags/contract/${contractId}`, { flags }, authenticatedConfig());
+  return response.data || { contractId, flags: [] };
+}
+
+function authenticatedConfig() {
+  const token = getStoredAuthToken();
+  return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 }
 
 export async function saveContractPartyDraft({ contractId, contractNumber, contractDate, parties }) {

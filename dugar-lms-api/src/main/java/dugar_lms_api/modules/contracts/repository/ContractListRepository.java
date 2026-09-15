@@ -20,6 +20,7 @@ public class ContractListRepository {
     private static final String CONTRACT_LIST_COLUMNS = """
         c.contract_id,
         c.contract_number,
+        COALESCE(flags.flag_count, 0) AS flag_count,
         COALESCE(NULLIF(TRIM(c.legacy_contract_number), ''), '-') AS legacy_contract_number,
         COALESCE(NULLIF(TRIM(c.contract_type), ''), '-') AS product,
         COALESCE(NULLIF(TRIM(c.area_code), ''), '-') AS branch,
@@ -106,6 +107,11 @@ public class ContractListRepository {
             FROM contract_repayment_structures repayment
             WHERE repayment.contract_id = c.contract_id
         ) rs ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*)::integer AS flag_count
+            FROM contract_flags contract_flag
+            WHERE contract_flag.contract_id = c.contract_id
+        ) flags ON TRUE
         """;
 
     private static final String FIND_SQL_PREFIX = """
@@ -225,6 +231,7 @@ public class ContractListRepository {
     private static final RowMapper<ContractListDto> CONTRACT_LIST_ROW_MAPPER = (rs, rowNum) -> new ContractListDto(
         rs.getLong("contract_id"),
         rs.getString("contract_number"),
+        rs.getObject("flag_count", Integer.class),
         rs.getString("legacy_contract_number"),
         rs.getString("product"),
         rs.getString("branch"),

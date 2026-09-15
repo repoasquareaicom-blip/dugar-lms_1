@@ -40,6 +40,7 @@ const ServerDataTable = ({
     rows: Array.isArray(data?.content) ? data.content : [],
     totalElements: Number(data?.totalElements || 0),
   }),
+  rowUpdates,
   onRowClick,
   onRowDoubleClick,
 }) => {
@@ -130,6 +131,15 @@ const ServerDataTable = ({
     () => rows.map((row, index) => ({ ...row, serialNumber: page * pageSize + index + 1 })),
     [page, pageSize, rows],
   );
+
+  useEffect(() => {
+    if (!rowUpdates || Object.keys(rowUpdates).length === 0) return;
+    setRows((currentRows) => currentRows.map((row) => {
+      const rowId = getRowId(row);
+      const patch = rowUpdates[rowId];
+      return patch ? { ...row, ...patch } : row;
+    }));
+  }, [rowUpdates]);
 
   const visibleColumns = useMemo(
     () => columns.filter((column) => hiddenColumns[column.field] !== false),

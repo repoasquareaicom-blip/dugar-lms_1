@@ -5,6 +5,7 @@ import dugar_lms_api.modules.accounts.dto.VoucherAuthorisationCriteria;
 import dugar_lms_api.modules.accounts.dto.VoucherDetailRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherDetailDto;
 import dugar_lms_api.modules.accounts.dto.VoucherDto;
+import dugar_lms_api.modules.accounts.dto.VoucherEditRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherReviewDto;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveResponse;
@@ -60,6 +61,10 @@ public class VoucherService {
         return repository.find(voucherHeaderId, accessScope);
     }
 
+    public VoucherDto findEditableByVoucherNumber(String voucherNumber, ReportAccessScope accessScope) {
+        return repository.findEditableByVoucherNumber(voucherNumber, accessScope);
+    }
+
     public VoucherReviewDto review(Long voucherHeaderId) {
         return repository.review(voucherHeaderId);
     }
@@ -77,6 +82,14 @@ public class VoucherService {
     public VoucherSaveResponse update(Long voucherHeaderId, VoucherSaveRequest request, Long userId, ReportAccessScope accessScope) {
         validate(request, voucherHeaderId);
         return repository.update(voucherHeaderId, request, userId, accessScope);
+    }
+
+    @Transactional
+    public VoucherSaveResponse editAuthorised(Long voucherHeaderId, VoucherEditRequest request, Long userId, ReportAccessScope accessScope) {
+        requireReason(request.editReason(), "Edit reason is mandatory.");
+        validate(request.voucher(), voucherHeaderId);
+        validateOpenActiveLoans(request.voucher());
+        return repository.editAuthorised(voucherHeaderId, request.voucher(), userId, accessScope, request.editReason());
     }
 
     @Transactional
@@ -262,6 +275,17 @@ public class VoucherService {
     private void requireReason(String reason, String message) {
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException(message);
+        }
+    }
+
+    private void validateOpenActiveLoans(VoucherSaveRequest request) {
+        if (request.contractNumber() != null && !request.contractNumber().isBlank() && !repository.openActiveContractExists(request.contractNumber())) {
+            throw new IllegalArgumentException("Contract number " + request.contractNumber() + " is closed, inactive, or was not found.");
+        }
+        for (VoucherDetailRequest detail : request.details()) {
+            if (detail.loanReference() != null && !detail.loanReference().isBlank() && !repository.openActiveContractExists(detail.loanReference())) {
+                throw new IllegalArgumentException("Loan reference " + detail.loanReference() + " is closed, inactive, or was not found.");
+            }
         }
     }
 

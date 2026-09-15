@@ -380,6 +380,33 @@ public class VoucherRepository {
         );
     }
 
+    public VoucherDto findEditableByVoucherNumber(String voucherNumber, ReportAccessScope accessScope) {
+        MapSqlParameterSource params = new MapSqlParameterSource("voucherNumber", clean(voucherNumber));
+        StringBuilder sql = new StringBuilder(
+            """
+            SELECT h.voucher_header_id
+            FROM voucher_headers h
+            WHERE h.voucher_number = :voucherNumber
+              AND h.status = 'AUTHORISED'
+              AND EXISTS (
+                  SELECT 1
+                  FROM contracts c
+                  WHERE (
+                      c.contract_id = h.contract_id
+                      OR UPPER(TRIM(c.contract_number)) = UPPER(TRIM(COALESCE(h.contract_number, '')))
+                      OR UPPER(TRIM(COALESCE(c.legacy_contract_number, ''))) = UPPER(TRIM(COALESCE(h.contract_number, '')))
+                  )
+                    AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
+                    AND c.loan_close_date IS NULL
+              )
+            """
+        );
+        appendAccessFilter(sql, params, accessScope, "h");
+        sql.append(" ORDER BY h.voucher_header_id DESC LIMIT 1\n");
+        Long voucherHeaderId = jdbcTemplate.queryForObject(sql.toString(), params, Long.class);
+        return find(voucherHeaderId, accessScope);
+    }
+
     public VoucherSaveResponse update(Long voucherHeaderId, VoucherSaveRequest request, Long userId) {
         return update(voucherHeaderId, request, userId, new ReportAccessScope(false));
     }
@@ -454,6 +481,85 @@ public class VoucherRepository {
         return new VoucherSaveResponse(saved.voucherHeaderId(), saved.voucherType(), saved.voucherNumber(), saved.voucherDate(), saved.voucherAmount(), saved.details().size());
     }
 
+    public VoucherSaveResponse editAuthorised(Long voucherHeaderId, VoucherSaveRequest request, Long userId, ReportAccessScope accessScope, String editReason) {
+        StatusVersion current = lockStatus(voucherHeaderId, accessScope);
+        requireStatus(current, "AUTHORISED");
+        requireActiveLoanVoucher(voucherHeaderId);
+        requireVoucherNumberUnchanged(voucherHeaderId, request.voucherNumber());
+
+        String beforeSnapshot = snapshot(voucherHeaderId);
+        Long historyId = createHistorySnapshot(voucherHeaderId, current, userId, clean(editReason));
+        createDetailHistorySnapshot(voucherHeaderId, historyId, current.versionNumber());
+
+        String voucherType = voucherCode(request.voucherType(), request.transactionType());
+        int updated = jdbcTemplate.update(
+            """
+            UPDATE voucher_headers
+            SET
+                voucher_type = :voucherType,
+                voucher_type_description = :voucherTypeDescription,
+                voucher_date = :voucherDate,
+                system_date = :systemDate,
+                transaction_type = :transactionType,
+                voucher_amount = :voucherAmount,
+                contract_number = :contractNumber,
+                contract_type = :contractType,
+                contract_id = :contractId,
+                bank_code = :bankCode,
+                header_control_code = :headerControlCode,
+                header_control_name = :headerControlName,
+                remarks = :remarks,
+                status = 'SUBMITTED',
+                reopened_by = :userId,
+                reopened_at = CURRENT_TIMESTAMP,
+                submitted_by = :userId,
+                submitted_at = CURRENT_TIMESTAMP,
+                authorised_by = NULL,
+                authorised_at = NULL,
+                rejected_by = NULL,
+                rejected_at = NULL,
+                rejection_reason = NULL,
+                version_number = version_number + 1,
+                updated_by = :userId,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE voucher_header_id = :voucherHeaderId
+              AND status = 'AUTHORISED'
+              AND version_number = :versionNumber
+            """,
+            new MapSqlParameterSource()
+                .addValue("voucherHeaderId", voucherHeaderId)
+                .addValue("voucherType", voucherType)
+                .addValue("voucherTypeDescription", null)
+                .addValue("voucherDate", request.voucherDate())
+                .addValue("systemDate", request.systemDate())
+                .addValue("transactionType", null)
+                .addValue("voucherAmount", request.voucherAmount())
+                .addValue("contractNumber", clean(request.contractNumber()))
+                .addValue("contractType", clean(request.contractType()))
+                .addValue("contractId", request.contractId())
+                .addValue("bankCode", clean(request.bankCode()))
+                .addValue("headerControlCode", clean(request.headerControlCode()))
+                .addValue("headerControlName", clean(request.headerControlName()))
+                .addValue("remarks", clean(request.remarks()))
+                .addValue("userId", userId)
+                .addValue("versionNumber", current.versionNumber())
+        );
+        requireUpdated(updated);
+
+        jdbcTemplate.update(
+            "DELETE FROM voucher_details WHERE voucher_header_id = :voucherHeaderId",
+            new MapSqlParameterSource("voucherHeaderId", voucherHeaderId)
+        );
+        for (VoucherDetailRequest detail : request.details()) {
+            insertDetail(voucherHeaderId, request.category(), voucherType, detail, userId);
+        }
+
+        String afterSnapshot = snapshot(voucherHeaderId);
+        audit(voucherHeaderId, "UPDATED", beforeSnapshot, afterSnapshot, userId);
+        VoucherDto saved = find(voucherHeaderId, accessScope);
+        return new VoucherSaveResponse(saved.voucherHeaderId(), saved.voucherType(), saved.voucherNumber(), saved.voucherDate(), saved.voucherAmount(), saved.details().size());
+    }
+
     public boolean voucherNumberExists(String voucherNumber, Long excludedVoucherHeaderId) {
         StringBuilder sql = new StringBuilder("""
             SELECT EXISTS (
@@ -470,6 +576,26 @@ public class VoucherRepository {
 
         sql.append(")");
         Boolean exists = jdbcTemplate.queryForObject(sql.toString(), params, Boolean.class);
+        return Boolean.TRUE.equals(exists);
+    }
+
+    public boolean openActiveContractExists(String contractNumber) {
+        Boolean exists = jdbcTemplate.queryForObject(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM contracts
+                WHERE (
+                    UPPER(contract_number) = UPPER(:contractNumber)
+                    OR UPPER(COALESCE(legacy_contract_number, '')) = UPPER(:contractNumber)
+                )
+                  AND UPPER(TRIM(COALESCE(status, ''))) = 'Y'
+                  AND loan_close_date IS NULL
+            )
+            """,
+            new MapSqlParameterSource("contractNumber", clean(contractNumber)),
+            Boolean.class
+        );
         return Boolean.TRUE.equals(exists);
     }
 
@@ -1057,6 +1183,77 @@ public class VoucherRepository {
                 .addValue("reason", reason),
             Long.class
         );
+    }
+
+    private void createDetailHistorySnapshot(Long voucherHeaderId, Long historyId, Integer versionNumber) {
+        jdbcTemplate.update(
+            """
+            INSERT INTO voucher_detail_history (
+                voucher_header_history_id,
+                voucher_header_id,
+                voucher_detail_id,
+                version_number,
+                serial_number,
+                detail_snapshot
+            )
+            SELECT
+                :historyId,
+                voucher_header_id,
+                voucher_detail_id,
+                :versionNumber,
+                serial_number,
+                to_jsonb(voucher_details)
+            FROM voucher_details
+            WHERE voucher_header_id = :voucherHeaderId
+            ORDER BY serial_number
+            """,
+            new MapSqlParameterSource()
+                .addValue("historyId", historyId)
+                .addValue("voucherHeaderId", voucherHeaderId)
+                .addValue("versionNumber", versionNumber)
+        );
+    }
+
+    private void requireActiveLoanVoucher(Long voucherHeaderId) {
+        Boolean exists = jdbcTemplate.queryForObject(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM voucher_headers h
+                JOIN contracts c
+                  ON (
+                      c.contract_id = h.contract_id
+                      OR UPPER(TRIM(c.contract_number)) = UPPER(TRIM(COALESCE(h.contract_number, '')))
+                      OR UPPER(TRIM(COALESCE(c.legacy_contract_number, ''))) = UPPER(TRIM(COALESCE(h.contract_number, '')))
+                  )
+                WHERE h.voucher_header_id = :voucherHeaderId
+                  AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
+                  AND c.loan_close_date IS NULL
+            )
+            """,
+            new MapSqlParameterSource("voucherHeaderId", voucherHeaderId),
+            Boolean.class
+        );
+        if (!Boolean.TRUE.equals(exists)) {
+            throw new IllegalStateException("Only active-loan authorised vouchers can be edited.");
+        }
+    }
+
+    private void requireVoucherNumberUnchanged(Long voucherHeaderId, String requestedVoucherNumber) {
+        Boolean unchanged = jdbcTemplate.queryForObject(
+            """
+            SELECT TRIM(COALESCE(voucher_number, '')) = TRIM(COALESCE(:voucherNumber, ''))
+            FROM voucher_headers
+            WHERE voucher_header_id = :voucherHeaderId
+            """,
+            new MapSqlParameterSource()
+                .addValue("voucherHeaderId", voucherHeaderId)
+                .addValue("voucherNumber", clean(requestedVoucherNumber)),
+            Boolean.class
+        );
+        if (!Boolean.TRUE.equals(unchanged)) {
+            throw new IllegalArgumentException("Voucher Number cannot be changed.");
+        }
     }
 
     private Totals totals(Long voucherHeaderId) {

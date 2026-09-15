@@ -59,10 +59,11 @@ export default function DemandListFilters({
       <table className="w-full max-w-4xl border-collapse border border-black/30">
         <thead>
           <tr className="bg-slate-100">
-            <th className="w-1/4 border border-black/30 px-2 py-1 text-left font-bold uppercase">As On Date</th>
-            <th className="w-1/4 border border-black/30 px-2 py-1 text-left font-bold uppercase">Area</th>
-            <th className="w-1/4 border border-black/30 px-2 py-1 text-left font-bold uppercase">Contract No</th>
-            <th className="w-1/4 border border-black/30 px-2 py-1 text-left font-bold uppercase">No. of Overdues</th>
+            <th className="w-1/5 border border-black/30 px-2 py-1 text-left font-bold uppercase">As On Date</th>
+            <th className="w-1/5 border border-black/30 px-2 py-1 text-left font-bold uppercase">Area</th>
+            <th className="w-1/5 border border-black/30 px-2 py-1 text-left font-bold uppercase">Contract No</th>
+            <th className="w-1/5 border border-black/30 px-2 py-1 text-left font-bold uppercase">No. of Overdues</th>
+            <th className="w-1/5 border border-black/30 px-2 py-1 text-left font-bold uppercase">Overdue Sorting</th>
           </tr>
         </thead>
         <tbody>
@@ -109,6 +110,12 @@ export default function DemandListFilters({
             </td>
             <td className="border border-black/30">
               <input className={fieldClass} min="0" type="number" value={filters.overdueInstallmentCount} onChange={(event) => setField('overdueInstallmentCount', event.target.value)} />
+            </td>
+            <td className="border border-black/30">
+              <select className={fieldClass} value={filters.overdueSort} onChange={(event) => setField('overdueSort', event.target.value)}>
+                <option value="count">No. of Overdues</option>
+                <option value="amount">Overdue Amount</option>
+              </select>
             </td>
           </tr>
         </tbody>

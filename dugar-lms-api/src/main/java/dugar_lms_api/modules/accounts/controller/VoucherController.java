@@ -4,6 +4,7 @@ import dugar_lms_api.common.pagination.PageResponse;
 import dugar_lms_api.modules.accounts.dto.VoucherActionRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherAuthorisationCriteria;
 import dugar_lms_api.modules.accounts.dto.VoucherDto;
+import dugar_lms_api.modules.accounts.dto.VoucherEditRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherReviewDto;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveResponse;
@@ -13,6 +14,7 @@ import dugar_lms_api.modules.reports.ReportAccessScope;
 import jakarta.validation.Valid;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
 import org.springframework.http.HttpStatus;
@@ -95,6 +97,14 @@ public class VoucherController {
         return ResponseEntity.ok(service.review(voucherHeaderId, ReportAccessScope.from(authentication)));
     }
 
+    @GetMapping("/editable")
+    public ResponseEntity<VoucherDto> findEditableByVoucherNumber(
+        @RequestParam String voucherNumber,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(service.findEditableByVoucherNumber(voucherNumber, ReportAccessScope.from(authentication)));
+    }
+
     @GetMapping("/{voucherHeaderId}")
     public ResponseEntity<VoucherDto> find(@PathVariable Long voucherHeaderId, Authentication authentication) {
         return ResponseEntity.ok(service.find(voucherHeaderId, ReportAccessScope.from(authentication)));
@@ -107,6 +117,15 @@ public class VoucherController {
         Authentication authentication
     ) {
         return ResponseEntity.ok(service.update(voucherHeaderId, request, userId(authentication), ReportAccessScope.from(authentication)));
+    }
+
+    @PutMapping("/{voucherHeaderId}/authorised-edit")
+    public ResponseEntity<VoucherSaveResponse> editAuthorised(
+        @PathVariable Long voucherHeaderId,
+        @Valid @RequestBody VoucherEditRequest request,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(service.editAuthorised(voucherHeaderId, request, userId(authentication), ReportAccessScope.from(authentication)));
     }
 
     @PostMapping("/{voucherHeaderId}/authorise")
@@ -169,6 +188,13 @@ public class VoucherController {
         return ResponseEntity
             .status(HttpStatus.CONFLICT)
             .body(Map.of("message", exception.getMessage()));
+    }
+
+    @ExceptionHandler(EmptyResultDataAccessException.class)
+    public ResponseEntity<Map<String, String>> notFound() {
+        return ResponseEntity
+            .status(HttpStatus.NOT_FOUND)
+            .body(Map.of("message", "Voucher was not found or is not eligible for editing."));
     }
 
     @ExceptionHandler({DuplicateKeyException.class, DataIntegrityViolationException.class})

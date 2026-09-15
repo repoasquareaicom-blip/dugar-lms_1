@@ -156,6 +156,7 @@ class ContractListServiceTest {
         return new ContractListDto(
             14507L,
             "14507",
+            0,
             "OLD-14507",
             "HP",
             "BR-01",

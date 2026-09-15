@@ -1,0 +1,2 @@
+ALTER TABLE contract_flags
+    ADD COLUMN IF NOT EXISTS remarks VARCHAR(500);

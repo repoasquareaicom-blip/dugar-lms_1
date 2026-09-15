@@ -6,6 +6,7 @@ import java.time.LocalDate;
 public record ContractListDto(
     Long contractId,
     String contractNumber,
+    Integer flagCount,
     String legacyContractNumber,
     String product,
     String branch,

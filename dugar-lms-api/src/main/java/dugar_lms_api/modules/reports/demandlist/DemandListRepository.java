@@ -213,6 +213,16 @@ public class DemandListRepository {
         rs.getBigDecimal("installment_amount")
     );
 
+    private static final RowMapper<ContractFollowUpDto> FOLLOW_UP_ROW_MAPPER = (rs, rowNum) -> new ContractFollowUpDto(
+        rs.getLong("contract_follow_up_id"),
+        rs.getLong("contract_id"),
+        rs.getString("comment_text"),
+        rs.getObject("follow_up_date", java.time.LocalDate.class),
+        rs.getObject("created_by", Long.class),
+        rs.getString("created_by_username"),
+        rs.getObject("created_at", java.time.LocalDateTime.class)
+    );
+
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
     public DemandListRepository(NamedParameterJdbcTemplate namedParameterJdbcTemplate) {
@@ -232,6 +242,72 @@ public class DemandListRepository {
             REPAYMENT_SQL,
             new MapSqlParameterSource().addValue("contractIds", contractIds),
             REPAYMENT_ROW_MAPPER
+        );
+    }
+
+    public List<ContractFollowUpDto> findFollowUps(Long contractId) {
+        return namedParameterJdbcTemplate.query(
+            """
+            SELECT
+                follow_up.contract_follow_up_id,
+                follow_up.contract_id,
+                follow_up.comment_text,
+                follow_up.follow_up_date,
+                follow_up.created_by,
+                COALESCE(NULLIF(TRIM(users.username), ''), NULLIF(TRIM(users.full_name), ''), follow_up.created_by::text) AS created_by_username,
+                follow_up.created_at
+            FROM contract_follow_ups follow_up
+            LEFT JOIN users
+              ON users.user_id = follow_up.created_by
+            WHERE follow_up.contract_id = :contractId
+            ORDER BY follow_up.created_at DESC, follow_up.contract_follow_up_id DESC
+            """,
+            new MapSqlParameterSource("contractId", contractId),
+            FOLLOW_UP_ROW_MAPPER
+        );
+    }
+
+    public ContractFollowUpDto addFollowUp(Long contractId, ContractFollowUpRequest request, Long userId) {
+        Long followUpId = namedParameterJdbcTemplate.queryForObject(
+            """
+            INSERT INTO contract_follow_ups (
+                contract_id,
+                comment_text,
+                follow_up_date,
+                created_by
+            )
+            VALUES (
+                :contractId,
+                :commentText,
+                :followUpDate,
+                :userId
+            )
+            RETURNING contract_follow_up_id
+            """,
+            new MapSqlParameterSource()
+                .addValue("contractId", contractId)
+                .addValue("commentText", request.commentText().trim())
+                .addValue("followUpDate", request.followUpDate())
+                .addValue("userId", userId),
+            Long.class
+        );
+        return namedParameterJdbcTemplate.queryForObject(
+            """
+            SELECT
+                follow_up.contract_follow_up_id,
+                follow_up.contract_id,
+                follow_up.comment_text,
+                follow_up.follow_up_date,
+                follow_up.created_by,
+                COALESCE(NULLIF(TRIM(users.username), ''), NULLIF(TRIM(users.full_name), ''), follow_up.created_by::text) AS created_by_username,
+                follow_up.created_at
+            FROM contract_follow_ups follow_up
+            LEFT JOIN users
+              ON users.user_id = follow_up.created_by
+            WHERE follow_up.contract_follow_up_id = :followUpId
+            """,
+            new MapSqlParameterSource("followUpId", followUpId),
+            FOLLOW_UP_ROW_MAPPER
         );
     }
 

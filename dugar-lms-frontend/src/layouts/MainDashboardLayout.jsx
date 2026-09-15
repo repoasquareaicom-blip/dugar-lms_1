@@ -12,7 +12,7 @@ const MainDashboardLayout = () => {
   
   const savedUser = localStorage.getItem('user');
   const userData = savedUser ? JSON.parse(savedUser) : null;
-  const menuTree = normalizeMenuTree(userData?.menuTree || userData?.menus || []);
+  const menuTree = normalizeMenuTree(userData?.menus?.length ? userData.menus : userData?.menuTree || []);
 
   // Function to fix the Fullscreen issue
   const initializeWorkspace = () => {

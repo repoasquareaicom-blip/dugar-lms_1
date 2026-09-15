@@ -1871,7 +1871,7 @@ const ContractEditForm = () => {
 </div>
         </div>
 
-        <div className="flex shrink-0 gap-2 items-center">
+        {!isViewMode && <div className="flex shrink-0 gap-2 items-center">
           {/* Move to LOS - Light Blue */}
           <button disabled={isViewMode} className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-500 text-[12px] font-black uppercase flex items-center gap-1.5 hover:bg-blue-100 rounded-sm transition-all disabled:opacity-40">
             <RotateCcw size={14} /> MOVE TO LOS
@@ -1904,7 +1904,7 @@ const ContractEditForm = () => {
           >
             <CheckCircle size={16} /> {savingDraft ? 'SAVING...' : 'SUBMIT'}
           </button>
-        </div>
+        </div>}
       </div>
 
       <MessageModal message={draftMessage} onClose={() => setDraftMessage('')} />
@@ -2623,11 +2623,11 @@ const ContractEditForm = () => {
       <span className="relative z-10">Next Section</span>
       <ChevronRight size={14} strokeWidth={3} className="relative z-10 transition-transform group-hover:translate-x-1" />
     </button>
-  ) : (
+  ) : !isViewMode ? (
     <button className="px-6 py-2 bg-emerald-600 text-white text-[11px] font-black rounded-md flex items-center gap-2 hover:bg-emerald-800 uppercase tracking-[0.15em] transition-all shadow-[0_5px_15px_rgba(16,185,129,0.2)] active:scale-95">
       Final Review <CheckCircle size={14} strokeWidth={3} />
     </button>
-  )}
+  ) : null}
 
   {/* Shimmer Keyframes */}
   <style dangerouslySetInnerHTML={{ __html: `

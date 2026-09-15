@@ -19,8 +19,21 @@ export async function fetchVoucher(voucherHeaderId) {
   return response.data;
 }
 
+export async function fetchEditableVoucherByNumber(voucherNumber) {
+  const response = await apiClient.get('/accounts/vouchers/editable', { params: { voucherNumber } });
+  return response.data;
+}
+
 export async function updateVoucher(voucherHeaderId, payload) {
   const response = await apiClient.put(`/accounts/vouchers/${voucherHeaderId}`, payload);
+  return response.data;
+}
+
+export async function editAuthorisedVoucher(voucherHeaderId, payload, editReason) {
+  const response = await apiClient.put(`/accounts/vouchers/${voucherHeaderId}/authorised-edit`, {
+    editReason,
+    voucher: payload,
+  });
   return response.data;
 }
 

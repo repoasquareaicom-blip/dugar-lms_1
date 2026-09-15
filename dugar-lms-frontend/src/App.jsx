@@ -47,7 +47,7 @@ const MainDashboardLayout = () => {
   const [isPropBoxOpen, setIsPropBoxOpen] = useState(false);
   const savedUser = localStorage.getItem('user');
   const userData = savedUser ? JSON.parse(savedUser) : null;
-  const menuTree = normalizeMenuTree(userData?.menuTree || userData?.menus || []);
+  const menuTree = normalizeMenuTree(userData?.menus?.length ? userData.menus : userData?.menuTree || []);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -474,10 +474,15 @@ function App() {
           <Route path="/credit/trans/contract-management/active-contracts" element={<ContractGrid />} />
           <Route path="/credit/trans/contract-management/draft-contracts" element={<ContractGrid isDraft title="Draft Contracts" />} />
           <Route path="/credit/trans/contract-management/edit-contracts" element={<ContractGrid isDraft workflowStatus="E" title="Edit Contracts" showCreate={false} />} />
+          <Route path="/branch/transaction/request-to-flag-loan" element={<ContractGrid title="Request To Flag Loan" showCreate={false} enableFlagging />} />
           <Route path="/credit/trans/contract/form" element={<ContractEditForm />} />
           <Route path="/accounts/masters/ledger-code" element={<LedgerCodeMaster />} />
           <Route path="/accounts/masters/ledger" element={<LedgerCodeMaster />} />
           <Route path="/accounts/trans/voucher/receipt" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/entry/payment-cash" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/entry/payment-bank" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/entry/receipt-cash" element={<ReceiptVoucher />} />
+          <Route path="/accounts/transaction/entry/receipt-bank" element={<ReceiptVoucher />} />
           <Route path="/accounts/transaction/entry/payment/cash" element={<ReceiptVoucher />} />
           <Route path="/accounts/transaction/entry/payment/bank" element={<ReceiptVoucher />} />
           <Route path="/accounts/transaction/entry/receipt/cash" element={<ReceiptVoucher />} />
@@ -490,6 +495,7 @@ function App() {
           <Route path="/accounts/transaction/authorization-request" element={<VoucherAuthorisation />} />
           <Route path="/accounts/transaction/authorisation-request" element={<VoucherAuthorisation />} />
           <Route path="/accounts/transaction/authorizateion-request" element={<VoucherAuthorisation />} />
+          <Route path="/accounts/transaction/voucher-edit" element={<ReceiptVoucher />} />
           <Route path="/accounts/transaction/edit/payment/cash" element={<ReceiptVoucher />} />
           <Route path="/accounts/transaction/edit/payment/bank" element={<ReceiptVoucher />} />
           <Route path="/accounts/transaction/edit/receipt/cash" element={<ReceiptVoucher />} />
