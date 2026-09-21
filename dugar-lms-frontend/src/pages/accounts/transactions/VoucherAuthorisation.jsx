@@ -28,9 +28,6 @@ const columns = [
   { field: 'headerControlName', headerName: 'Party Name', minWidth: 220 },
   { field: 'contractNumber', headerName: 'Contract Number', minWidth: 150 },
   { field: 'voucherAmount', headerName: 'Voucher Amount', minWidth: 150, sortable: true, align: 'right', headerAlign: 'right', formatter: money },
-  { field: 'submittedBy', headerName: 'Submitted By', minWidth: 130, sortable: true },
-  { field: 'submittedAt', headerName: 'Submitted At', minWidth: 180, sortable: true, formatter: displayDate },
-  { field: 'status', headerName: 'Current Status', minWidth: 140 },
   {
     field: 'action',
     headerName: 'Action',

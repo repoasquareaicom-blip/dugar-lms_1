@@ -121,6 +121,10 @@ function voucherMode(path) {
   return '';
 }
 
+function isVoucherEntryPath(path) {
+  return path === '/accounts/trans/voucher/receipt' || path.startsWith('/accounts/transaction/entry/');
+}
+
 function voucherCode(kind, pathOrMode = '') {
   if (kind === 'journal') return 'JV';
   const lower = String(pathOrMode || '').toLowerCase();
@@ -163,6 +167,37 @@ function readParty(contract) {
   };
 }
 
+async function resolveLedgerOptionByCode(ledgerCode, ledgerName = '') {
+  const code = String(ledgerCode || '').trim();
+  if (!code) return null;
+
+  const fallback = { ledgerCode: code, ledgerName: ledgerName || '' };
+  try {
+    const data = await fetchLedgerCodes({ keyword: code, pageSize: 200, filters: { isActive: true } });
+    const options = data?.content || [];
+    return options.find((item) => String(item.ledgerCode || '').trim().toUpperCase() === code.toUpperCase()) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function resolveContractOptionByReference(reference) {
+  const candidate = String(reference || '').trim();
+  if (!candidate) return null;
+
+  try {
+    const data = await fetchContractsPage({ keyword: candidate, pageSize: 50, isDraft: false });
+    const contracts = data?.content || data?.items || data?.data || [];
+    const normalizedCandidate = candidate.toUpperCase();
+    return contracts.find((item) => (
+      String(item.contractNumber || '').trim().toUpperCase() === normalizedCandidate
+      || String(item.legacyContractNumber || '').trim().toUpperCase() === normalizedCandidate
+    )) || null;
+  } catch {
+    return null;
+  }
+}
+
 function rowHasEntry(row) {
   return Boolean(
     row.detailsCode
@@ -193,6 +228,20 @@ function duplicateDetailRows(rows) {
     seen.add(key);
   }
   return false;
+}
+
+function uniqueDetailValues(details, field) {
+  const values = (details || [])
+    .map((detail) => String(detail?.[field] || '').trim())
+    .filter(Boolean);
+  return [...new Set(values)].join(', ') || '-';
+}
+
+function headerControlLabel(voucher) {
+  const code = String(voucher?.headerControlCode || '').trim();
+  const name = String(voucher?.headerControlName || '').trim();
+  if (!code) return '-';
+  return name ? `${code} - ${name}` : code;
 }
 
 function focusNextInput(currentElement) {
@@ -395,6 +444,14 @@ const ReceiptVoucher = () => {
     setSelectedVoucherType(voucherCode(routeKind, routeMode));
   };
 
+  useEffect(() => {
+    if (!isVoucherEntryPath(location.pathname.toLowerCase())) return;
+    if (!location.state?.resetVoucherEntry) return;
+    resetNewVoucherForm();
+    setMessage(null);
+    setRedirectAfterMessage('');
+  }, [location.key]);
+
   const showSuccessAndReturn = (text) => {
     setRedirectAfterMessage(returnTo);
     setMessage({ type: 'success', text });
@@ -475,36 +532,32 @@ const ReceiptVoucher = () => {
     performSave(allowDuplicate);
   };
 
-  const loadVoucherForEdit = (voucher) => {
+  const loadVoucherForEdit = async (voucher) => {
     setEditingVoucherId(voucher.voucherHeaderId);
     setSelectedVoucherType(voucher.voucherType || voucherCode(routeKind, routeMode));
     setVoucherNo(voucher.voucherNumber || '');
     setVoucherDate(voucher.voucherDate || today);
     setSystemDate(voucher.systemDate || today);
     setVoucherStatus(voucher.status || '');
-    setHeaderControlCode(voucher.headerControlCode ? {
-      ledgerCode: voucher.headerControlCode,
-      ledgerName: voucher.headerControlName || '',
-    } : null);
+    setHeaderControlCode(await resolveLedgerOptionByCode(voucher.headerControlCode, voucher.headerControlName));
     setVoucherAmount(String(voucher.voucherAmount || ''));
     const nextCategory = voucher.details?.find((detail) => detail.category)?.category || category;
     setCategory(nextCategory);
-    const loadedRows = (voucher.details || []).map((detail) => ({
-      id: crypto.randomUUID(),
-      detailsCode: {
-        ledgerCode: detail.ledgerCode,
-        ledgerName: detail.ledgerName || '',
-      },
-      loanReference: detail.loanReference ? {
-        contractNumber: detail.loanReference,
-        legacyContractNumber: detail.loanReference,
-        customerName: detail.partyName || '',
-        customerAddress: detail.address || '',
-      } : null,
-      areaCode: '',
-      debit: detail.debitAmount ? String(detail.debitAmount) : '',
-      credit: detail.creditAmount ? String(detail.creditAmount) : '',
-      narration: detail.narration || '',
+    const isLoadedLoanCategory = String(nextCategory || '').trim().toUpperCase() === 'LOAN';
+    const loadedRows = await Promise.all((voucher.details || []).map(async (detail) => {
+      const loanReference = isLoadedLoanCategory ? await resolveContractOptionByReference(detail.subLedgerCode) : null;
+      return {
+        id: crypto.randomUUID(),
+        detailsCode: {
+          ledgerCode: detail.ledgerCode,
+          ledgerName: detail.ledgerName || '',
+        },
+        loanReference,
+        areaCode: readParty(loanReference)?.areaCode || '',
+        debit: detail.debitAmount ? String(detail.debitAmount) : '',
+        credit: detail.creditAmount ? String(detail.creditAmount) : '',
+        narration: detail.narration || '',
+      };
     }));
     setRows(loadedRows.length > 0 ? loadedRows : [emptyRow()]);
     setSearchOpen(false);
@@ -518,6 +571,17 @@ const ReceiptVoucher = () => {
       .catch((error) => setMessage({ type: 'error', text: requestErrorMessage(error, 'load voucher') }))
       .finally(() => setLoadingVoucher(false));
   }, [requestedVoucherId]);
+
+  const closeVoucherSearch = () => {
+    if (!voucherEditMode) {
+      setSearchOpen(false);
+      return;
+    }
+    resetNewVoucherForm();
+    setMessage(null);
+    setRedirectAfterMessage('');
+    navigate('/dashboard');
+  };
 
   const saveBeforeAuthorisationAction = () => {
     const error = validate();
@@ -868,7 +932,7 @@ const ReceiptVoucher = () => {
           kind={kind}
           transactionType={mode}
           voucherEditMode={voucherEditMode}
-          onClose={() => setSearchOpen(false)}
+          onClose={closeVoucherSearch}
           onSelect={loadVoucherForEdit}
         />
       )}
@@ -1111,9 +1175,17 @@ const VoucherSearchModal = ({ kind, transactionType, voucherEditMode = false, on
                 <Th>Date</Th>
                 <Th>Type</Th>
                 <Th>Mode</Th>
-                <Th>Contract</Th>
+                {voucherEditMode ? (
+                  <>
+                    <Th>Header Control</Th>
+                    <Th>Ledger Code</Th>
+                    <Th>Sub Ledger Code</Th>
+                  </>
+                ) : (
+                  <Th>Contract</Th>
+                )}
                 <Th className="text-right">Amount</Th>
-                <Th className="text-center">Rows</Th>
+                <Th className="text-center">{voucherEditMode ? 'Action' : 'Rows'}</Th>
               </tr>
             </thead>
             <tbody>
@@ -1123,7 +1195,15 @@ const VoucherSearchModal = ({ kind, transactionType, voucherEditMode = false, on
                   <Td>{displayDate(row.voucherDate)}</Td>
                   <Td>{row.voucherType}</Td>
                   <Td>{row.transactionType || voucherModeFromCode(row.voucherType) || '-'}</Td>
-                  <Td>{row.contractNumber || '-'}</Td>
+                  {voucherEditMode ? (
+                    <>
+                      <Td>{headerControlLabel(row)}</Td>
+                      <Td>{uniqueDetailValues(row.details, 'ledgerCode')}</Td>
+                      <Td>{uniqueDetailValues(row.details, 'subLedgerCode')}</Td>
+                    </>
+                  ) : (
+                    <Td>{row.contractNumber || '-'}</Td>
+                  )}
                   <Td className="text-right font-black">{money(row.voucherAmount)}</Td>
                   <Td className="text-center">
                     <button type="button" onClick={() => selectVoucher(row)} className="rounded bg-blue-800 px-4 py-1.5 text-[12px] font-black uppercase text-white">
@@ -1134,7 +1214,7 @@ const VoucherSearchModal = ({ kind, transactionType, voucherEditMode = false, on
               ))}
               {!loading && results.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="px-3 py-10 text-center text-[13px] font-black uppercase text-gray-500">No vouchers found</td>
+                  <td colSpan={voucherEditMode ? 9 : 7} className="px-3 py-10 text-center text-[13px] font-black uppercase text-gray-500">No vouchers found</td>
                 </tr>
               )}
             </tbody>

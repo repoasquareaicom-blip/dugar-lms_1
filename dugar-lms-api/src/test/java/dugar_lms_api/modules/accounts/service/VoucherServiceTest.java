@@ -2,10 +2,12 @@ package dugar_lms_api.modules.accounts.service;
 
 import dugar_lms_api.modules.accounts.dto.VoucherDetailDto;
 import dugar_lms_api.modules.accounts.dto.VoucherDetailRequest;
+import dugar_lms_api.modules.accounts.dto.VoucherEditRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherReviewDto;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveResponse;
 import dugar_lms_api.modules.accounts.repository.VoucherRepository;
+import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -17,7 +19,9 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -106,11 +110,74 @@ class VoucherServiceTest {
         verify(repository).resubmit(10L, 7L);
     }
 
+    @Test
+    void loanCategoryWithMissingContractCannotSaveAuthorisedEdit() {
+        VoucherSaveRequest request = request("BR", "LOAN", null, BigDecimal.ZERO, new BigDecimal("100.00"));
+        when(repository.activeLedgerExists("BANK")).thenReturn(true);
+        when(repository.activeLedgerExists("EXP")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.editAuthorised(10L, new VoucherEditRequest("Fix contract", request), 7L, new ReportAccessScope(false)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Contract number is required for loan category vouchers.");
+
+        verify(repository, never()).editAuthorised(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void loanCategoryWithSelectedActiveContractCanSaveAuthorisedEdit() {
+        VoucherSaveRequest request = request("BR", "LOAN", "CN-1", BigDecimal.ZERO, new BigDecimal("100.00"));
+        when(repository.activeLedgerExists("BANK")).thenReturn(true);
+        when(repository.activeLedgerExists("EXP")).thenReturn(true);
+        when(repository.openActiveContractExists("CN-1")).thenReturn(true);
+        when(repository.editAuthorised(10L, request, 7L, new ReportAccessScope(false), "Fix contract"))
+            .thenReturn(new VoucherSaveResponse(10L, "BR", "123456", request.voucherDate(), request.voucherAmount(), 1));
+
+        service.editAuthorised(10L, new VoucherEditRequest("Fix contract", request), 7L, new ReportAccessScope(false));
+
+        verify(repository).editAuthorised(10L, request, 7L, new ReportAccessScope(false), "Fix contract");
+    }
+
+    @Test
+    void loanCategoryWithInactiveOrClosedContractCannotSaveAuthorisedEdit() {
+        VoucherSaveRequest request = request("BR", "LOAN", "CN-1", BigDecimal.ZERO, new BigDecimal("100.00"));
+        when(repository.activeLedgerExists("BANK")).thenReturn(true);
+        when(repository.activeLedgerExists("EXP")).thenReturn(true);
+        when(repository.openActiveContractExists("CN-1")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.editAuthorised(10L, new VoucherEditRequest("Fix contract", request), 7L, new ReportAccessScope(false)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Contract number CN-1 is closed, inactive, or was not found.");
+
+        verify(repository, never()).editAuthorised(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void nonLoanCategoryWithBlankContractCanSaveAuthorisedEdit() {
+        VoucherSaveRequest request = request("BR", "GENERAL", null, BigDecimal.ZERO, new BigDecimal("100.00"));
+        when(repository.activeLedgerExists("BANK")).thenReturn(true);
+        when(repository.activeLedgerExists("EXP")).thenReturn(true);
+        when(repository.editAuthorised(10L, request, 7L, new ReportAccessScope(false), "Fix general"))
+            .thenReturn(new VoucherSaveResponse(10L, "BR", "123456", request.voucherDate(), request.voucherAmount(), 1));
+
+        service.editAuthorised(10L, new VoucherEditRequest("Fix general", request), 7L, new ReportAccessScope(false));
+
+        verify(repository).editAuthorised(10L, request, 7L, new ReportAccessScope(false), "Fix general");
+        verify(repository, never()).openActiveContractExists(any());
+    }
+
     private VoucherSaveRequest request(String type, BigDecimal debit, BigDecimal credit) {
         return request(type, "123456", debit, credit);
     }
 
     private VoucherSaveRequest request(String type, String voucherNumber, BigDecimal debit, BigDecimal credit) {
+        return request(type, voucherNumber, "GENERAL", null, debit, credit);
+    }
+
+    private VoucherSaveRequest request(String type, String category, String contractNumber, BigDecimal debit, BigDecimal credit) {
+        return request(type, "123456", category, contractNumber, debit, credit);
+    }
+
+    private VoucherSaveRequest request(String type, String voucherNumber, String category, String contractNumber, BigDecimal debit, BigDecimal credit) {
         return new VoucherSaveRequest(
             type,
             type,
@@ -119,16 +186,16 @@ class VoucherServiceTest {
             LocalDate.now(),
             "CASH",
             new BigDecimal("100.00"),
-            "GENERAL",
+            category,
             null,
-            null,
+            contractNumber,
             null,
             null,
             "BANK",
             "Bank",
             null,
             false,
-            List.of(new VoucherDetailRequest(1, "GENERAL", "EXP", "Expense", null, debit, credit, null, null, null, "Test", null))
+            List.of(new VoucherDetailRequest(1, category, "EXP", "Expense", null, debit, credit, null, null, null, "Test", null))
         );
     }
 
@@ -164,7 +231,7 @@ class VoucherServiceTest {
             null,
             debitTotal,
             creditTotal,
-            List.of(new VoucherDetailDto(1L, 1, "GENERAL", "LEDGER1", "Ledger", debitTotal, creditTotal, null, null, null, "Test", null)),
+            List.of(new VoucherDetailDto(1L, 1, "GENERAL", "LEDGER1", "Ledger", null, debitTotal, creditTotal, null, null, null, "Test", null)),
             List.of()
         );
     }

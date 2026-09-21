@@ -8,6 +8,7 @@ public record VoucherDetailDto(
     String category,
     String ledgerCode,
     String ledgerName,
+    String subLedgerCode,
     BigDecimal debitAmount,
     BigDecimal creditAmount,
     String partyCode,

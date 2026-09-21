@@ -3,6 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 import { fetchContractAreaOptions } from '../../services/contractsService';
 
 const fieldClass = 'h-8 w-full border-0 bg-white px-2 text-[12px] text-black outline-none focus:bg-blue-50';
+const reportTypeOptions = [
+  { value: 'CONSOLIDATED', label: 'Consolidated' },
+  { value: 'THREE_DUES_ABOVE', label: '3 Dues & Above' },
+  { value: 'REPOSSESSED_STOCK', label: 'Repossessed Stock' },
+  { value: 'LITIGATION_MATTERS', label: 'Litigation Matters' },
+  { value: 'FULL_NAME_ADDRESS', label: 'Full Name & Address' },
+];
 
 function areaLabel(area) {
   if (!area?.areaCode) return '';
@@ -56,14 +63,15 @@ export default function DemandListFilters({
 
   return (
     <div className="no-print border-b border-black/20 bg-white px-2 py-2 text-[12px] text-black">
-      <table className="w-full max-w-4xl border-collapse border border-black/30">
+      <table className="w-full max-w-5xl border-collapse border border-black/30">
         <thead>
           <tr className="bg-slate-100">
-            <th className="w-1/5 border border-black/30 px-2 py-1 text-left font-bold uppercase">As On Date</th>
-            <th className="w-1/5 border border-black/30 px-2 py-1 text-left font-bold uppercase">Area</th>
-            <th className="w-1/5 border border-black/30 px-2 py-1 text-left font-bold uppercase">Contract No</th>
-            <th className="w-1/5 border border-black/30 px-2 py-1 text-left font-bold uppercase">No. of Overdues</th>
-            <th className="w-1/5 border border-black/30 px-2 py-1 text-left font-bold uppercase">Overdue Sorting</th>
+            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">As On Date</th>
+            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">Area</th>
+            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">Contract No</th>
+            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">No. of Overdues</th>
+            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">Overdue Sorting</th>
+            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">Report Type</th>
           </tr>
         </thead>
         <tbody>
@@ -115,6 +123,13 @@ export default function DemandListFilters({
               <select className={fieldClass} value={filters.overdueSort} onChange={(event) => setField('overdueSort', event.target.value)}>
                 <option value="count">No. of Overdues</option>
                 <option value="amount">Overdue Amount</option>
+              </select>
+            </td>
+            <td className="border border-black/30">
+              <select className={fieldClass} value={filters.reportType} onChange={(event) => setField('reportType', event.target.value)}>
+                {reportTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </td>
           </tr>

@@ -150,7 +150,16 @@ public class BranchWiseAgeingProcedureRepository {
                     SELECT
                         cf.contract_id,
                         COUNT(*)::int AS flag_count,
-                        STRING_AGG(cfm.flag_name, ', ' ORDER BY cfm.display_order, cfm.flag_name) AS flag_names
+                        STRING_AGG(cfm.flag_name, ', ' ORDER BY cfm.display_order, cfm.flag_name) AS flag_names,
+                        STRING_AGG(cfm.flag_code, ', ' ORDER BY cfm.display_order, cfm.flag_name) AS flag_codes,
+                        STRING_AGG(
+                            CASE
+                                WHEN NULLIF(TRIM(cf.remarks), '') IS NULL THEN NULL
+                                ELSE cfm.flag_name || ': ' || TRIM(cf.remarks)
+                            END,
+                            E'\n'
+                            ORDER BY cfm.display_order, cfm.flag_name
+                        ) AS flag_remarks
                     FROM contract_flags cf
                     JOIN contract_flag_master cfm
                       ON cfm.contract_flag_master_id = cf.contract_flag_master_id
@@ -204,6 +213,8 @@ public class BranchWiseAgeingProcedureRepository {
                     lp.last_paid_emi_date,
                     COALESCE(flags.flag_count, 0) AS flag_count,
                     COALESCE(flags.flag_names, '') AS flag_names,
+                    COALESCE(flags.flag_codes, '') AS flag_codes,
+                    COALESCE(flags.flag_remarks, '') AS flag_remarks,
                     COALESCE(follow_ups.follow_up_count, 0) AS follow_up_count,
                     r.ageing_bucket
                 FROM tmp_contract_report r
@@ -276,6 +287,8 @@ public class BranchWiseAgeingProcedureRepository {
                             rs.getObject("last_paid_emi_date", LocalDate.class),
                             rs.getInt("flag_count"),
                             rs.getString("flag_names"),
+                            rs.getString("flag_codes"),
+                            rs.getString("flag_remarks"),
                             rs.getInt("follow_up_count"),
                             rs.getString("ageing_bucket")
                         ));
@@ -457,6 +470,8 @@ public class BranchWiseAgeingProcedureRepository {
         LocalDate lastPaidEmiDate,
         Integer flagCount,
         String flagNames,
+        String flagCodes,
+        String flagRemarks,
         Integer followUpCount,
         String ageingBucket
     ) {

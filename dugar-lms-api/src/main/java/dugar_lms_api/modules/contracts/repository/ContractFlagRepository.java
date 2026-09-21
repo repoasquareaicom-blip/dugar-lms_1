@@ -30,7 +30,8 @@ public class ContractFlagRepository {
         SELECT
             master.contract_flag_master_id,
             master.flag_code,
-            master.flag_name
+            master.flag_name,
+            contract_flag.remarks
         FROM contract_flags contract_flag
         JOIN contract_flag_master master
           ON master.contract_flag_master_id = contract_flag.contract_flag_master_id
@@ -54,15 +55,24 @@ public class ContractFlagRepository {
         INSERT INTO contract_flags (
             contract_id,
             contract_flag_master_id,
+            remarks,
             created_by,
             updated_by
         )
         VALUES (
             :contractId,
             :contractFlagMasterId,
+            :remarks,
             :auditUser,
             :auditUser
         )
+        ON CONFLICT (contract_id, contract_flag_master_id) DO UPDATE
+        SET remarks = CASE
+                WHEN :preserveRemarks = TRUE THEN contract_flags.remarks
+                ELSE EXCLUDED.remarks
+            END,
+            updated_at = CURRENT_TIMESTAMP,
+            updated_by = EXCLUDED.updated_by
         """;
 
     private static final RowMapper<ContractFlagMasterDto> MASTER_ROW_MAPPER = (rs, rowNum) -> new ContractFlagMasterDto(
@@ -75,7 +85,8 @@ public class ContractFlagRepository {
     private static final RowMapper<ContractFlagDto> FLAG_ROW_MAPPER = (rs, rowNum) -> new ContractFlagDto(
         rs.getLong("contract_flag_master_id"),
         rs.getString("flag_code"),
-        rs.getString("flag_name")
+        rs.getString("flag_name"),
+        rs.getString("remarks")
     );
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
@@ -108,8 +119,8 @@ public class ContractFlagRepository {
     }
 
     public void replaceContractFlags(Long contractId, List<ContractFlagSelectionDto> flags, String auditUser) {
-        jdbcTemplate.update(DELETE_BY_CONTRACT_SQL, new MapSqlParameterSource("contractId", contractId));
         if (flags == null || flags.isEmpty()) {
+            jdbcTemplate.update(DELETE_BY_CONTRACT_SQL, new MapSqlParameterSource("contractId", contractId));
             return;
         }
 
@@ -117,9 +128,21 @@ public class ContractFlagRepository {
             .map(flag -> new MapSqlParameterSource()
                 .addValue("contractId", contractId)
                 .addValue("contractFlagMasterId", flag.contractFlagMasterId())
+                .addValue("remarks", flag.remarks())
+                .addValue("preserveRemarks", flag.remarks() == null)
                 .addValue("auditUser", auditUser))
             .toArray(MapSqlParameterSource[]::new);
 
         jdbcTemplate.batchUpdate(INSERT_FLAG_SQL, batch);
+        jdbcTemplate.update(
+            """
+            DELETE FROM contract_flags
+            WHERE contract_id = :contractId
+              AND contract_flag_master_id NOT IN (:flagIds)
+            """,
+            new MapSqlParameterSource()
+                .addValue("contractId", contractId)
+                .addValue("flagIds", flags.stream().map(ContractFlagSelectionDto::contractFlagMasterId).toList())
+        );
     }
 }

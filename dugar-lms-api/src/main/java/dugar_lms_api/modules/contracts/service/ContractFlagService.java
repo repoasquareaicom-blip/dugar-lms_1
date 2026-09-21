@@ -69,7 +69,10 @@ public class ContractFlagService {
             if (selection == null || selection.contractFlagMasterId() == null) {
                 throw new IllegalArgumentException("Flag ID is required.");
             }
-            unique.put(selection.contractFlagMasterId(), new ContractFlagSelectionDto(selection.contractFlagMasterId()));
+            unique.put(selection.contractFlagMasterId(), new ContractFlagSelectionDto(
+                selection.contractFlagMasterId(),
+                selection.remarks() == null ? null : selection.remarks().trim()
+            ));
         }
         return new ArrayList<>(unique.values());
     }

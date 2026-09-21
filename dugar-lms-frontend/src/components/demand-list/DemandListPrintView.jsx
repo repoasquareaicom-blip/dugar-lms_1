@@ -14,11 +14,11 @@ function PrintStack({ values }) {
 
 export default function DemandListPrintView({ data, filters }) {
   const rows = data?.rows?.content || [];
-  const columns = visibleDemandListColumns({ showArea: !filters?.areaCode?.trim() });
+  const columns = visibleDemandListColumns({ showArea: !filters?.areaCode?.trim(), reportType: filters?.reportType });
 
   return (
     <div className="demand-print-root">
-      <h1 className="demand-print-title">Demand List as on {formatDate(filters.asOnDate)}</h1>
+      <h1 className="demand-print-title">Demand List - {String(filters?.reportType || 'CONSOLIDATED').replaceAll('_', ' ')} as on {formatDate(filters.asOnDate)}</h1>
       <table className="demand-print-table">
         <thead>
           <tr>

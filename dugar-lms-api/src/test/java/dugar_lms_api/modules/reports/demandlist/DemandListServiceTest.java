@@ -21,7 +21,7 @@ class DemandListServiceTest {
     void asOnDateIsMandatory() {
         DemandListService service = service(List.of());
 
-        assertThatThrownBy(() -> service.getDemandList(new DemandListRequest(null, null, null, null, null, null, null, null, null, null, null, 0, 25, null, null), null))
+        assertThatThrownBy(() -> service.getDemandList(new DemandListRequest(null, null, null, null, null, null, null, null, null, null, null, null, 0, 25, null, null), null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("As On Date is required");
     }
@@ -42,7 +42,7 @@ class DemandListServiceTest {
     void contractNumberFilterIsAppliedAgainstProcedureRows() {
         DemandListService service = service(List.of(procedureRow(1L, "A", 1), procedureRow(2L, "B", 1)));
 
-        DemandListResponse response = service.getDemandList(new DemandListRequest(LocalDate.of(2026, 1, 1), "AREA", null, null, null, null, null, null, "B", null, null, 0, 25, null, null), null);
+        DemandListResponse response = service.getDemandList(new DemandListRequest(LocalDate.of(2026, 1, 1), "AREA", null, null, null, null, null, null, "B", null, null, null, 0, 25, null, null), null);
 
         assertThat(response.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("B");
     }
@@ -75,14 +75,56 @@ class DemandListServiceTest {
     void overdueInstallmentCountFilterIsAppliedAfterCalculation() {
         DemandListService service = service(List.of(procedureRow(1L, "A", 1), procedureRow(2L, "B", 2)));
 
-        DemandListResponse response = service.getDemandList(new DemandListRequest(LocalDate.of(2026, 1, 1), "AREA", null, null, null, null, null, null, null, 1, null, 0, 25, null, null), null);
+        DemandListResponse response = service.getDemandList(new DemandListRequest(LocalDate.of(2026, 1, 1), "AREA", null, null, null, null, null, null, null, 1, null, null, 0, 25, null, null), null);
 
         assertThat(response.rows().content()).hasSize(1);
         assertThat(response.rows().content()).allMatch(row -> row.overdueInstallmentCount() == 1);
     }
 
+    @Test
+    void threeDuesAboveReportUsesProcedureOverdueCount() {
+        DemandListService service = service(List.of(procedureRow(1L, "A", 2), procedureRow(2L, "B", 3), procedureRow(3L, "C", 4)));
+
+        DemandListResponse response = service.getDemandList(new DemandListRequest(LocalDate.of(2026, 1, 1), "AREA", null, null, null, null, null, null, null, null, "THREE_DUES_ABOVE", null, 0, 25, null, null), null);
+
+        assertThat(response.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("B", "C");
+    }
+
+    @Test
+    void repossessedAndLitigationReportsUseExistingFlagCodes() {
+        DemandListService service = service(List.of(
+            procedureRow(1L, "A", 1, "REPOSSESSED_VEHICLE"),
+            procedureRow(2L, "B", 1, "LITIGATION"),
+            procedureRow(3L, "C", 1, "")
+        ));
+
+        DemandListResponse repossessed = service.getDemandList(new DemandListRequest(LocalDate.of(2026, 1, 1), "AREA", null, null, null, null, null, null, null, null, "REPOSSESSED_STOCK", null, 0, 25, null, null), null);
+        DemandListResponse litigation = service.getDemandList(new DemandListRequest(LocalDate.of(2026, 1, 1), "AREA", null, null, null, null, null, null, null, null, "LITIGATION_MATTERS", null, 0, 25, null, null), null);
+
+        assertThat(repossessed.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("A");
+        assertThat(litigation.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("B");
+    }
+
+    @Test
+    void commentAllowsBlankFollowUpDateButPtpRequiresDate() {
+        DemandListRepository repository = mock(DemandListRepository.class);
+        ContractAccessRepository accessRepository = mock(ContractAccessRepository.class);
+        DemandListService service = new DemandListService(repository, new DemandListCalculationService(), mock(BranchWiseAgeingProcedureRepository.class), accessRepository);
+        org.springframework.security.core.Authentication authentication = mock(org.springframework.security.core.Authentication.class);
+        java.util.Map<String, Object> details = java.util.Map.of("userId", 42L);
+        when(authentication.getDetails()).thenReturn(details);
+        when(repository.addFollowUp(eq(1L), any(), eq(42L))).thenReturn(new ContractFollowUpDto(1L, 1L, "Call done", "COMMENT", null, 42L, "user", null));
+
+        ContractFollowUpDto dto = service.addFollowUp(1L, new ContractFollowUpRequest("Call done", "COMMENT", null), authentication);
+
+        assertThat(dto.followUpType()).isEqualTo("COMMENT");
+        assertThatThrownBy(() -> service.addFollowUp(1L, new ContractFollowUpRequest("Promise", "PTP", null), authentication))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Promised date is required");
+    }
+
     private DemandListRequest request(int page, int size, String sortColumn, String sortDirection) {
-        return new DemandListRequest(LocalDate.of(2026, 1, 1), "AREA", null, null, null, null, null, null, null, null, null, page, size, sortColumn, sortDirection);
+        return new DemandListRequest(LocalDate.of(2026, 1, 1), "AREA", null, null, null, null, null, null, null, null, null, null, page, size, sortColumn, sortDirection);
     }
 
     private DemandListService service(List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> rows) {
@@ -92,6 +134,10 @@ class DemandListServiceTest {
     }
 
     private BranchWiseAgeingProcedureRepository.ProcedureContractReportRow procedureRow(Long id, String loanNumber, int overdueCount) {
+        return procedureRow(id, loanNumber, overdueCount, "");
+    }
+
+    private BranchWiseAgeingProcedureRepository.ProcedureContractReportRow procedureRow(Long id, String loanNumber, int overdueCount, String flagCodes) {
         return new BranchWiseAgeingProcedureRepository.ProcedureContractReportRow(
             id,
             loanNumber,
@@ -130,8 +176,10 @@ class DemandListServiceTest {
             BigDecimal.ZERO,
             null,
             null,
-            0,
-            "",
+            flagCodes == null || flagCodes.isBlank() ? 0 : 1,
+            flagCodes == null || flagCodes.isBlank() ? "" : flagCodes,
+            flagCodes,
+            flagCodes == null || flagCodes.isBlank() ? "" : "Flag: Remark",
             0,
             overdueCount > 0 ? "1--30" : "Current"
         );
@@ -177,6 +225,8 @@ class DemandListServiceTest {
             LocalDate.of(2026, 2, 1),
             null,
             0,
+            "",
+            "",
             "",
             0,
             "Current"

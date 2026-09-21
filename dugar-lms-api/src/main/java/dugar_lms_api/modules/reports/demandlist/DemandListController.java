@@ -42,6 +42,7 @@ public class DemandListController {
         @RequestParam(required = false) BigDecimal maximumOverdueAmount,
         @RequestParam(required = false) String contractNumber,
         @RequestParam(required = false) Integer overdueInstallmentCount,
+        @RequestParam(required = false) String reportType,
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) Integer page,
         @RequestParam(required = false) Integer size,
@@ -49,7 +50,7 @@ public class DemandListController {
         @RequestParam(required = false) String sortDirection,
         Authentication authentication
     ) {
-        return ResponseEntity.ok(demandListService.getDemandList(request(asOnDate, areaCode, branchId, fieldOfficerCode, contractType, productType, minimumOverdueAmount, maximumOverdueAmount, contractNumber, overdueInstallmentCount, keyword, page, size, sortColumn, sortDirection), authentication));
+        return ResponseEntity.ok(demandListService.getDemandList(request(asOnDate, areaCode, branchId, fieldOfficerCode, contractType, productType, minimumOverdueAmount, maximumOverdueAmount, contractNumber, overdueInstallmentCount, reportType, keyword, page, size, sortColumn, sortDirection), authentication));
     }
 
     @GetMapping("/print")
@@ -64,12 +65,13 @@ public class DemandListController {
         @RequestParam(required = false) BigDecimal maximumOverdueAmount,
         @RequestParam(required = false) String contractNumber,
         @RequestParam(required = false) Integer overdueInstallmentCount,
+        @RequestParam(required = false) String reportType,
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) String sortColumn,
         @RequestParam(required = false) String sortDirection,
         Authentication authentication
     ) {
-        return ResponseEntity.ok(demandListService.getPrintDemandList(request(asOnDate, areaCode, branchId, fieldOfficerCode, contractType, productType, minimumOverdueAmount, maximumOverdueAmount, contractNumber, overdueInstallmentCount, keyword, 0, DemandListService.PRINT_ROW_LIMIT, sortColumn, sortDirection), authentication));
+        return ResponseEntity.ok(demandListService.getPrintDemandList(request(asOnDate, areaCode, branchId, fieldOfficerCode, contractType, productType, minimumOverdueAmount, maximumOverdueAmount, contractNumber, overdueInstallmentCount, reportType, keyword, 0, DemandListService.PRINT_ROW_LIMIT, sortColumn, sortDirection), authentication));
     }
 
     @GetMapping("/contracts/{contractId}/follow-ups")
@@ -100,13 +102,14 @@ public class DemandListController {
         BigDecimal maximumOverdueAmount,
         String contractNumber,
         Integer overdueInstallmentCount,
+        String reportType,
         String keyword,
         Integer page,
         Integer size,
         String sortColumn,
         String sortDirection
     ) {
-        return new DemandListRequest(asOnDate, areaCode, branchId, fieldOfficerCode, contractType, productType, minimumOverdueAmount, maximumOverdueAmount, contractNumber, overdueInstallmentCount, keyword, page, size, sortColumn, sortDirection);
+        return new DemandListRequest(asOnDate, areaCode, branchId, fieldOfficerCode, contractType, productType, minimumOverdueAmount, maximumOverdueAmount, contractNumber, overdueInstallmentCount, reportType, keyword, page, size, sortColumn, sortDirection);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

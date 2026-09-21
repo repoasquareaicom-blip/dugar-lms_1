@@ -341,7 +341,7 @@ function transformContractsResponse(data) {
   };
 }
 
-const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowStatus = null, showCreate = true, enableFlagging = false }) => {
+const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowStatus = null, showCreate = true, enableFlagging = false, viewOnly = false }) => {
   const navigate = useNavigate();
   const sourceWorkflow = workflowStatus || (isDraft ? 'DRAFT' : 'ACTIVE');
   const isActiveContracts = !isDraft && !workflowStatus;
@@ -623,6 +623,10 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
   });
 
   const contextMenuItems = (row) => {
+    if (viewOnly) {
+      return [viewContextMenuItem(row)];
+    }
+
     if (isActiveContracts) {
       return [
         viewContextMenuItem(row),
@@ -673,7 +677,7 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
           </button>
         ) : null}
         transformResponse={transformContractsResponse}
-        onRowDoubleClick={(row) => openContractForm(row, enableFlagging ? 'view' : 'edit')}
+        onRowDoubleClick={(row) => openContractForm(row, viewOnly || enableFlagging ? 'view' : 'edit')}
       />
       {flagModal.open && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/30 px-4 py-6">

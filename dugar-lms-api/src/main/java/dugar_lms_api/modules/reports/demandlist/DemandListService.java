@@ -91,9 +91,10 @@ public class DemandListService {
         if (userId == null) {
             throw new IllegalArgumentException("User id is required to add a follow-up.");
         }
+        String followUpType = followUpType(request);
         return demandListRepository.addFollowUp(
             contractId,
-            new ContractFollowUpRequest(request.commentText().trim(), request.followUpDate()),
+            new ContractFollowUpRequest(request.commentText().trim(), followUpType, request.followUpDate()),
             userId
         );
     }
@@ -104,6 +105,7 @@ public class DemandListService {
         return sourceRows.stream()
             .filter(row -> contractNumberMatches(row, request.contractNumber()))
             .filter(row -> overdueCountMatches(row, request.overdueInstallmentCount()))
+            .filter(row -> reportTypeMatches(row, request.reportType()))
             .map(this::demandListRow)
             .toList();
     }
@@ -137,6 +139,7 @@ public class DemandListService {
             request.maximumOverdueAmount(),
             clean(request.contractNumber()),
             validOverdueCount(request.overdueInstallmentCount()),
+            reportType(request.reportType()),
             clean(request.keyword()),
             0,
             PRINT_ROW_LIMIT,
@@ -184,6 +187,8 @@ public class DemandListService {
             row.lastPaidEmiDate(),
             row.flagCount(),
             row.flagNames(),
+            row.flagCodes(),
+            row.flagRemarks(),
             row.followUpCount(),
             row.areaCode(),
             row.areaName(),
@@ -213,6 +218,55 @@ public class DemandListService {
             return true;
         }
         return contractNumber.equalsIgnoreCase(String.valueOf(row.contractNumber()).trim());
+    }
+
+    private boolean reportTypeMatches(BranchWiseAgeingProcedureRepository.ProcedureContractReportRow row, String reportType) {
+        return switch (reportType(reportType)) {
+            case "THREE_DUES_ABOVE" -> row.overdueEmiCount() != null && row.overdueEmiCount() >= 3;
+            case "REPOSSESSED_STOCK" -> hasFlagCode(row, "REPOSSESSED_VEHICLE");
+            case "LITIGATION_MATTERS" -> hasFlagCode(row, "LITIGATION");
+            default -> true;
+        };
+    }
+
+    private boolean hasFlagCode(BranchWiseAgeingProcedureRepository.ProcedureContractReportRow row, String flagCode) {
+        if (row.flagCodes() == null || flagCode == null) {
+            return false;
+        }
+        for (String code : row.flagCodes().split(",")) {
+            if (flagCode.equalsIgnoreCase(code.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String reportType(String value) {
+        String cleaned = clean(value);
+        if (cleaned == null) {
+            return "CONSOLIDATED";
+        }
+        String normalized = cleaned.trim().toUpperCase().replace('-', '_').replace(' ', '_').replace('&', '_');
+        return switch (normalized) {
+            case "THREE_DUES_ABOVE", "3_DUES_ABOVE" -> "THREE_DUES_ABOVE";
+            case "REPOSSESSED_STOCK" -> "REPOSSESSED_STOCK";
+            case "LITIGATION_MATTERS" -> "LITIGATION_MATTERS";
+            case "FULL_NAME_ADDRESS", "FULL_NAME_AND_ADDRESS" -> "FULL_NAME_ADDRESS";
+            default -> "CONSOLIDATED";
+        };
+    }
+
+    private String followUpType(ContractFollowUpRequest request) {
+        String normalized = request.followUpType() == null || request.followUpType().isBlank()
+            ? "COMMENT"
+            : request.followUpType().trim().toUpperCase();
+        if (!"COMMENT".equals(normalized) && !"PTP".equals(normalized)) {
+            throw new IllegalArgumentException("Follow-up type must be COMMENT or PTP.");
+        }
+        if ("PTP".equals(normalized) && request.followUpDate() == null) {
+            throw new IllegalArgumentException("Promised date is required for PTP.");
+        }
+        return normalized;
     }
 
     private Integer validOverdueCount(Integer value) {

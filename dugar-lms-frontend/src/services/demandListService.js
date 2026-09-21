@@ -12,6 +12,7 @@ function paramsFrom(filters = {}) {
   addParam(params, 'areaCode', String(filters.areaCode || '').trim());
   addParam(params, 'contractNumber', String(filters.contractNumber || '').trim());
   addParam(params, 'overdueInstallmentCount', filters.overdueInstallmentCount);
+  addParam(params, 'reportType', filters.reportType);
   return params;
 }
 

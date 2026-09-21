@@ -7,6 +7,7 @@ import DemandListPrintView from '../../../components/demand-list/DemandListPrint
 import DemandListSummary from '../../../components/demand-list/DemandListSummary';
 import { fetchAgingContractDetail, fetchAgingContractEmis, fetchAgingContractReceipts, fetchAgingRawVoucher } from '../../../services/agingAnalysisService';
 import { addDemandFollowUp, fetchDemandFollowUps, fetchDemandList } from '../../../services/demandListService';
+import { fetchContractFlagMaster, fetchContractFlags, saveContractFlags } from '../../../services/contractsService';
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -16,6 +17,7 @@ const defaultFilters = {
   contractNumber: '',
   overdueInstallmentCount: '',
   overdueSort: 'count',
+  reportType: 'CONSOLIDATED',
 };
 const pageSizeOptions = [10, 25, 50, 100];
 
@@ -36,13 +38,6 @@ function excelCell(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-function firstValue(row, keys) {
-  for (const key of keys) {
-    if (row[key] !== null && row[key] !== undefined && row[key] !== '') return row[key];
-  }
-  return '';
 }
 
 function alignClass(align) {
@@ -126,8 +121,8 @@ function PartyDetails({ person }) {
   );
 }
 
-function DemandListTable({ rows, page, pageSize, onOpen, onParty, onFlag, onFollowUp, showArea }) {
-  const columns = visibleDemandListColumns({ showArea });
+function DemandListTable({ rows, page, pageSize, onOpen, onParty, onFlag, onFollowUp, showArea, reportType }) {
+  const columns = visibleDemandListColumns({ showArea, reportType });
 
   const renderCell = (displayRow, column) => {
     if (column.key === 'loanNumber') {
@@ -292,8 +287,8 @@ export default function DemandListPage() {
   const [drilldown, setDrilldown] = useState({ open: false, loading: false, contracts: [], detail: null, emis: [], receipts: [] });
   const [printData, setPrintData] = useState(null);
   const [partyPopup, setPartyPopup] = useState(null);
-  const [flagPopup, setFlagPopup] = useState(null);
-  const [followUpPopup, setFollowUpPopup] = useState({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', followUpDate: '', message: '' });
+  const [flagPopup, setFlagPopup] = useState({ open: false, row: null, master: [], selected: {}, loading: false, saving: false, message: '' });
+  const [followUpPopup, setFollowUpPopup] = useState({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', followUpType: 'COMMENT', followUpDate: '', message: '' });
 
   useEffect(() => {
     if (!appliedFilters) return;
@@ -350,8 +345,8 @@ export default function DemandListPage() {
     setPrintData(null);
     setDrilldown({ open: false, loading: false, contracts: [], detail: null, emis: [], receipts: [] });
     setPartyPopup(null);
-    setFlagPopup(null);
-    setFollowUpPopup({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', followUpDate: '', message: '' });
+    setFlagPopup({ open: false, row: null, master: [], selected: {}, loading: false, saving: false, message: '' });
+    setFollowUpPopup({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', followUpType: 'COMMENT', followUpDate: '', message: '' });
   };
 
   const closeDrilldown = () => {
@@ -434,7 +429,7 @@ export default function DemandListPage() {
   const showAreaColumn = !appliedFilters?.areaCode?.trim();
 
   const openFollowUp = async (row) => {
-    setFollowUpPopup({ open: true, row, history: [], loading: true, saving: false, commentText: '', followUpDate: '', message: '' });
+    setFollowUpPopup({ open: true, row, history: [], loading: true, saving: false, commentText: '', followUpType: 'COMMENT', followUpDate: '', message: '' });
     try {
       const history = await fetchDemandFollowUps(row.contractId);
       setFollowUpPopup((current) => ({ ...current, history: Array.isArray(history) ? history : [], loading: false }));
@@ -450,10 +445,15 @@ export default function DemandListPage() {
       setFollowUpPopup((current) => ({ ...current, message: 'Comments are mandatory.' }));
       return;
     }
+    if (followUpPopup.followUpType === 'PTP' && !followUpPopup.followUpDate) {
+      setFollowUpPopup((current) => ({ ...current, message: 'Promised date is required for PTP.' }));
+      return;
+    }
     setFollowUpPopup((current) => ({ ...current, saving: true, message: '' }));
     try {
       await addDemandFollowUp(row.contractId, {
         commentText,
+        followUpType: followUpPopup.followUpType,
         followUpDate: followUpPopup.followUpDate || null,
       });
       const history = await fetchDemandFollowUps(row.contractId);
@@ -465,6 +465,7 @@ export default function DemandListPage() {
         history: Array.isArray(history) ? history : [],
         saving: false,
         commentText: '',
+        followUpType: 'COMMENT',
         followUpDate: '',
         message: 'Follow-up saved.',
       }));
@@ -483,6 +484,79 @@ export default function DemandListPage() {
     setPage(Math.min(Math.max(0, nextPage), totalPages - 1));
   };
 
+  const openFlagEditor = async (row) => {
+    setFlagPopup({ open: true, row, master: [], selected: {}, loading: true, saving: false, message: '' });
+    try {
+      const [master, existing] = await Promise.all([
+        fetchContractFlagMaster(),
+        fetchContractFlags(row.contractId),
+      ]);
+      const selected = {};
+      (existing.flags || []).forEach((flag) => {
+        selected[flag.contractFlagMasterId] = {
+          checked: true,
+          remarks: flag.remarks || '',
+        };
+      });
+      setFlagPopup({ open: true, row, master, selected, loading: false, saving: false, message: '' });
+    } catch (error) {
+      setFlagPopup((current) => ({ ...current, loading: false, message: error?.response?.data?.message || error?.message || 'Unable to load contract flags.' }));
+    }
+  };
+
+  const toggleFlag = (flagId) => {
+    setFlagPopup((current) => {
+      const selected = { ...current.selected };
+      if (selected[flagId]?.checked) {
+        delete selected[flagId];
+      } else {
+        selected[flagId] = { checked: true, remarks: '' };
+      }
+      return { ...current, selected, message: '' };
+    });
+  };
+
+  const updateFlagRemark = (flagId, remarks) => {
+    setFlagPopup((current) => ({
+      ...current,
+      selected: {
+        ...current.selected,
+        [flagId]: { checked: true, remarks },
+      },
+      message: '',
+    }));
+  };
+
+  const saveFlags = async () => {
+    const row = flagPopup.row;
+    if (!row?.contractId) return;
+    const flags = Object.entries(flagPopup.selected)
+      .filter(([, value]) => value?.checked)
+      .map(([flagId, value]) => ({
+        contractFlagMasterId: Number(flagId),
+        remarks: value.remarks || '',
+      }));
+    setFlagPopup((current) => ({ ...current, saving: true, message: '' }));
+    try {
+      const response = await saveContractFlags(row.contractId, flags);
+      const savedFlags = Array.isArray(response.flags) ? response.flags : [];
+      const flagNames = savedFlags.map((flag) => flag.flagName).filter(Boolean).join(', ');
+      const flagCodes = savedFlags.map((flag) => flag.flagCode).filter(Boolean).join(', ');
+      const flagRemarks = savedFlags
+        .filter((flag) => String(flag.remarks || '').trim())
+        .map((flag) => `${flag.flagName}: ${String(flag.remarks).trim()}`)
+        .join('\n');
+      setRows((current) => current.map((item) => (
+        item.contractId === row.contractId
+          ? { ...item, flagCount: savedFlags.length, flagNames, flagCodes, flagRemarks }
+          : item
+      )));
+      setFlagPopup({ open: false, row: null, master: [], selected: {}, loading: false, saving: false, message: '' });
+    } catch (error) {
+      setFlagPopup((current) => ({ ...current, saving: false, message: error?.response?.data?.message || error?.message || 'Unable to save contract flags.' }));
+    }
+  };
+
   const print = () => {
     const data = currentReport();
     if (!data) return;
@@ -494,41 +568,23 @@ export default function DemandListPage() {
     const data = currentReport();
     if (!data) return;
     const rowsForExport = data?.rows?.content || [];
-    const title = `Demand List as on ${appliedFilters.asOnDate}`;
+    const title = `Demand List - ${String(appliedFilters.reportType || 'CONSOLIDATED').replaceAll('_', ' ')} as on ${appliedFilters.asOnDate}`;
     const showArea = !appliedFilters?.areaCode?.trim();
-    const headerColSpan = showArea ? 10 : 9;
+    const columns = visibleDemandListColumns({ showArea, reportType: appliedFilters.reportType });
+    const headerColSpan = columns.length;
+    const headerCells = columns.map((column) => `<th>${column.label.map(excelCell).join('<br/>')}</th>`).join('');
+    const bodyRows = rowsForExport.map((row, index) => {
+      const displayRow = { ...row, serialNumber: index + 1 };
+      return `<tr>${columns.map((column) => `<td>${lineValues(displayRow, column.key).map(excelCell).join('<br/>')}</td>`).join('')}</tr>`;
+    }).join('');
     const html = `
       <html>
         <head><meta charset="utf-8" /></head>
         <body>
           <table border="1">
             <tr><th colspan="${headerColSpan}">${excelCell(title)}</th></tr>
-            <tr>
-              <th>Sl. No</th>
-              <th>Loan No.</th>
-              <th>Name of Borrower<br/>Name of Guarantor</th>
-              ${showArea ? '<th>Area</th>' : ''}
-              <th>Product Type<br/>Make of Vehicle/<br/>Regn No./Location<br/>No .of Owner<br/>Product usage</th>
-              <th>Contract Value<br/>Principal O/S<br/>Interest O/S<br/>Total O/S</th>
-              <th>No.of Overdues<br/>O/D Amount<br/>From Date<br/>End Date</th>
-              <th>Current Due</th>
-              <th>Due Date</th>
-              <th>Last Paid EMI Date</th>
-            </tr>
-            ${rowsForExport.map((row, index) => `
-              <tr>
-                <td>${index + 1}</td>
-                <td>${excelCell(row.loanNumber)}<br/>${row.agreementDate ? `Agreement: ${excelCell(lineValues(row, 'loanNumber')[1]?.replace('Agreement: ', ''))}` : ''}</td>
-                <td>${excelCell(row.borrowerName)}<br/>${excelCell(row.guarantorName)}${row.guarantor2Name ? `<br/>${excelCell(row.guarantor2Name)}` : ''}</td>
-                ${showArea ? `<td>${excelCell(row.areaName ? `${row.areaCode} - ${row.areaName}` : (row.areaCode || row.area || ''))}</td>` : ''}
-                <td>${excelCell(row.productType)}<br/>${excelCell(row.assetDescription)}<br/>${excelCell(row.registrationOrLocation)}<br/>${excelCell(row.ownerNumber)}<br/>${excelCell(row.vehicleTypeCode || row.usage)}</td>
-                <td style="text-align:right">${excelCell(row.contractValue)}<br/>${excelCell(row.principalOutstanding)}<br/>${excelCell(row.interestOutstanding)}<br/>${excelCell(row.totalOutstanding)}</td>
-                <td style="text-align:right">${excelCell(firstValue(row, ['overdueInstallmentCount', 'noOfOverdues', 'numberOfOverdues', 'overdue_count']))}<br/>${excelCell(firstValue(row, ['overdueAmount', 'odAmount', 'overdue_amount']))}<br/>${excelCell(firstValue(row, ['overdueFromDate', 'fromDate', 'overdue_from_date']))}<br/>${excelCell(firstValue(row, ['overdueEndDate', 'endDate', 'overdue_end_date']))}</td>
-                <td style="text-align:right">${excelCell(row.currentDueAmount)}</td>
-                <td>${excelCell(row.currentDueDate)}</td>
-                <td>${excelCell(row.lastPaidEmiDate || '-')}</td>
-              </tr>
-            `).join('')}
+            <tr>${headerCells}</tr>
+            ${bodyRows}
           </table>
         </body>
       </html>
@@ -592,9 +648,10 @@ export default function DemandListPage() {
         pageSize={pageSize}
         onOpen={openDemandDrilldown}
         onParty={setPartyPopup}
-        onFlag={setFlagPopup}
+        onFlag={openFlagEditor}
         onFollowUp={openFollowUp}
         showArea={showAreaColumn}
+        reportType={appliedFilters?.reportType || filters.reportType}
       />
 
       <DemandListPagination
@@ -616,25 +673,57 @@ export default function DemandListPage() {
         </InfoModal>
       )}
 
-      {flagPopup && (
-        <InfoModal title={`Flags - ${flagPopup.loanNumber || flagPopup.contractId}`} onClose={() => setFlagPopup(null)}>
-          {Number(flagPopup.flagCount || 0) > 0 ? (
-            <div className="space-y-1">
-              {String(flagPopup.flagNames || '').split(',').map((flag) => flag.trim()).filter(Boolean).map((flag) => (
-                <div key={flag} className="border border-red-100 bg-red-50 px-2 py-1 font-bold text-red-800">{flag}</div>
-              ))}
-            </div>
+      {flagPopup.open && (
+        <InfoModal title={`Flags - ${flagPopup.row?.loanNumber || flagPopup.row?.contractId}`} onClose={() => setFlagPopup({ open: false, row: null, master: [], selected: {}, loading: false, saving: false, message: '' })}>
+          {flagPopup.loading ? (
+            <div className="font-bold text-black/60">Loading flags...</div>
           ) : (
-            <div className="font-bold text-black/60">No flags marked for this contract.</div>
+            <div className="space-y-2">
+              {flagPopup.master.map((flag) => {
+                const state = flagPopup.selected[flag.contractFlagMasterId] || {};
+                return (
+                  <div key={flag.contractFlagMasterId} className={`border p-2 ${state.checked ? 'border-blue-300 bg-blue-50' : 'border-black/20 bg-white'}`}>
+                    <label className="flex items-center gap-2 font-black uppercase">
+                      <input type="checkbox" checked={Boolean(state.checked)} onChange={() => toggleFlag(flag.contractFlagMasterId)} />
+                      {flag.flagName}
+                    </label>
+                    {state.checked && (
+                      <textarea
+                        value={state.remarks || ''}
+                        onChange={(event) => updateFlagRemark(flag.contractFlagMasterId, event.target.value)}
+                        placeholder="Remarks"
+                        className="mt-2 h-16 w-full resize-none border border-black/30 bg-white p-2 text-[12px] font-bold outline-none focus:border-[#0052CC]"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+              {flagPopup.message && <div className="font-bold text-red-700">{flagPopup.message}</div>}
+              <button type="button" disabled={flagPopup.saving} onClick={saveFlags} className="border border-[#0052CC] bg-[#0052CC] px-3 py-1.5 text-[12px] font-black uppercase text-white disabled:opacity-50">
+                {flagPopup.saving ? 'Saving...' : 'Save Flags'}
+              </button>
+            </div>
           )}
         </InfoModal>
       )}
 
       {followUpPopup.open && (
-        <InfoModal title={`Follow-up - ${followUpPopup.row?.loanNumber || ''}`} onClose={() => setFollowUpPopup({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', followUpDate: '', message: '' })}>
+        <InfoModal title={`Follow-up - ${followUpPopup.row?.loanNumber || ''}`} onClose={() => setFollowUpPopup({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', followUpType: 'COMMENT', followUpDate: '', message: '' })}>
           <div className="space-y-3">
             <div className="border border-black/20 bg-slate-50 p-2">
               <div className="mb-2 font-black uppercase text-[#0052CC]">Add Follow-up</div>
+              <div className="mb-2 grid grid-cols-2 gap-2">
+                {['COMMENT', 'PTP'].map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setFollowUpPopup((current) => ({ ...current, followUpType: type, message: '' }))}
+                    className={`h-8 border text-[12px] font-black uppercase ${followUpPopup.followUpType === type ? 'border-[#0052CC] bg-[#0052CC] text-white' : 'border-black/30 bg-white text-black'}`}
+                  >
+                    {type === 'PTP' ? 'PTP / Promised Date' : 'Comment'}
+                  </button>
+                ))}
+              </div>
               <label className="block">
                 <span className="mb-1 block font-black uppercase text-black/60">Comments *</span>
                 <textarea
@@ -644,7 +733,7 @@ export default function DemandListPage() {
                 />
               </label>
               <label className="mt-2 block">
-                <span className="mb-1 block font-black uppercase text-black/60">Follow-up Date</span>
+                <span className="mb-1 block font-black uppercase text-black/60">{followUpPopup.followUpType === 'PTP' ? 'Promised Date *' : 'Follow-up Date'}</span>
                 <input
                   type="date"
                   value={followUpPopup.followUpDate}
@@ -665,7 +754,7 @@ export default function DemandListPage() {
                 {followUpPopup.history.map((item) => (
                   <div key={item.contractFollowUpId} className="border border-black/20 bg-white p-2">
                     <div className="font-black text-black">{formatDateTime(item.createdAt)}</div>
-                    <div className="font-bold text-black/70">Follow-up: {lineValues({ lastPaidEmiDate: item.followUpDate }, 'lastPaidEmiDate')[0]}</div>
+                    <div className="font-bold text-black/70">{item.followUpType === 'PTP' ? 'PTP' : 'Comment'}{item.followUpDate ? `: ${lineValues({ lastPaidEmiDate: item.followUpDate }, 'lastPaidEmiDate')[0]}` : ''}</div>
                     <div className="font-bold text-black/70">{item.createdByUsername || item.createdBy || '-'}</div>
                     <div className="mt-1 whitespace-pre-wrap font-bold leading-5">{item.commentText}</div>
                   </div>

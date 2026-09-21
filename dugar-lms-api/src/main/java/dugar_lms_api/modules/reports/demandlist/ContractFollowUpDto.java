@@ -7,6 +7,7 @@ public record ContractFollowUpDto(
     Long contractFollowUpId,
     Long contractId,
     String commentText,
+    String followUpType,
     LocalDate followUpDate,
     Long createdBy,
     String createdByUsername,

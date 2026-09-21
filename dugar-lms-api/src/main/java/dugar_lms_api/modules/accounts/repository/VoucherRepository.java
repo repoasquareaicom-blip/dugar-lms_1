@@ -78,6 +78,7 @@ public class VoucherRepository {
         rs.getString("category"),
         rs.getString("ledger_code"),
         rs.getString("ledger_name"),
+        rs.getString("sub_ledger_code"),
         rs.getBigDecimal("debit_amount"),
         rs.getBigDecimal("credit_amount"),
         rs.getString("party_code"),
@@ -346,6 +347,7 @@ public class VoucherRepository {
                 category,
                 ledger_code,
                 ledger_name,
+                sub_ledger_code,
                 debit_amount,
                 credit_amount,
                 party_code,
@@ -388,17 +390,6 @@ public class VoucherRepository {
             FROM voucher_headers h
             WHERE h.voucher_number = :voucherNumber
               AND h.status = 'AUTHORISED'
-              AND EXISTS (
-                  SELECT 1
-                  FROM contracts c
-                  WHERE (
-                      c.contract_id = h.contract_id
-                      OR UPPER(TRIM(c.contract_number)) = UPPER(TRIM(COALESCE(h.contract_number, '')))
-                      OR UPPER(TRIM(COALESCE(c.legacy_contract_number, ''))) = UPPER(TRIM(COALESCE(h.contract_number, '')))
-                  )
-                    AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
-                    AND c.loan_close_date IS NULL
-              )
             """
         );
         appendAccessFilter(sql, params, accessScope, "h");
@@ -484,7 +475,6 @@ public class VoucherRepository {
     public VoucherSaveResponse editAuthorised(Long voucherHeaderId, VoucherSaveRequest request, Long userId, ReportAccessScope accessScope, String editReason) {
         StatusVersion current = lockStatus(voucherHeaderId, accessScope);
         requireStatus(current, "AUTHORISED");
-        requireActiveLoanVoucher(voucherHeaderId);
         requireVoucherNumberUnchanged(voucherHeaderId, request.voucherNumber());
 
         String beforeSnapshot = snapshot(voucherHeaderId);
@@ -1212,31 +1202,6 @@ public class VoucherRepository {
                 .addValue("voucherHeaderId", voucherHeaderId)
                 .addValue("versionNumber", versionNumber)
         );
-    }
-
-    private void requireActiveLoanVoucher(Long voucherHeaderId) {
-        Boolean exists = jdbcTemplate.queryForObject(
-            """
-            SELECT EXISTS (
-                SELECT 1
-                FROM voucher_headers h
-                JOIN contracts c
-                  ON (
-                      c.contract_id = h.contract_id
-                      OR UPPER(TRIM(c.contract_number)) = UPPER(TRIM(COALESCE(h.contract_number, '')))
-                      OR UPPER(TRIM(COALESCE(c.legacy_contract_number, ''))) = UPPER(TRIM(COALESCE(h.contract_number, '')))
-                  )
-                WHERE h.voucher_header_id = :voucherHeaderId
-                  AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
-                  AND c.loan_close_date IS NULL
-            )
-            """,
-            new MapSqlParameterSource("voucherHeaderId", voucherHeaderId),
-            Boolean.class
-        );
-        if (!Boolean.TRUE.equals(exists)) {
-            throw new IllegalStateException("Only active-loan authorised vouchers can be edited.");
-        }
     }
 
     private void requireVoucherNumberUnchanged(Long voucherHeaderId, String requestedVoucherNumber) {

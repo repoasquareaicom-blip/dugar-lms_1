@@ -203,6 +203,9 @@ const TopNavbar = ({ menuTree, userData, notificationsCount = 5 }) => {
   className="flex items-center gap-4 pr-3 md:pr-6 md:border-r border-blue-300/40 h-12 shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
 >
   <img src={logoIcon} alt="Dugar Loan Edge" className="h-11 w-auto object-contain" />
+  <span className="hidden sm:inline text-[14px] font-black uppercase tracking-tight text-slate-900 leading-tight">
+    Dugar Loan Edge LMS
+  </span>
 </Link>
 
           {/* Desktop Navigation - Using the Sorted Menu */}

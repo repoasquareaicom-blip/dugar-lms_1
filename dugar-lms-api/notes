@@ -19,7 +19,8 @@ sudo systemctl restart dugar-lms
 check status
 sudo systemctl status dugar-lms
 
-
+sudo systemctl restart corelms
+sudo systemctl status corelms
 
 legacy insert query to psg
 HPNEW.ACCMAS  to legacy.accmas

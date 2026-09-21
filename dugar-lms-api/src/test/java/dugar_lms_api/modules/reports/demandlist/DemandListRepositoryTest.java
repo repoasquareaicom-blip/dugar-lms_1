@@ -25,7 +25,7 @@ class DemandListRepositoryTest {
     void receiptSqlIncludesOnlyAuthorisedVouchersLedgers3001And4201AndAsOnDate() {
         when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(List.of());
 
-        repository.findSourceRows(new DemandListRequest(LocalDate.of(2026, 8, 6), null, null, null, null, null, null, null, null, null, null, 0, 25, null, null));
+        repository.findSourceRows(new DemandListRequest(LocalDate.of(2026, 8, 6), null, null, null, null, null, null, null, null, null, null, null, 0, 25, null, null));
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<SqlParameterSource> params = ArgumentCaptor.forClass(SqlParameterSource.class);
@@ -43,7 +43,7 @@ class DemandListRepositoryTest {
     void filtersAndKeywordAreAppliedInRepositorySql() {
         when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(List.of());
 
-        repository.findSourceRows(new DemandListRequest(LocalDate.of(2026, 8, 6), "A1", "B1", "FO1", "HP", "Vehicle", null, null, "CN123", null, "ravi", 0, 25, null, null));
+        repository.findSourceRows(new DemandListRequest(LocalDate.of(2026, 8, 6), "A1", "B1", "FO1", "HP", "Vehicle", null, null, "CN123", null, null, "ravi", 0, 25, null, null));
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<SqlParameterSource> params = ArgumentCaptor.forClass(SqlParameterSource.class);

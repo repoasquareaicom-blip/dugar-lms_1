@@ -7,6 +7,7 @@ import java.time.LocalDate;
 public record ContractFollowUpRequest(
     @NotBlank
     String commentText,
+    String followUpType,
     LocalDate followUpDate
 ) {
 }

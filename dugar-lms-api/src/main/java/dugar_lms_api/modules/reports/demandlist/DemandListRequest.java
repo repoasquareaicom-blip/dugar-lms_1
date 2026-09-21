@@ -14,6 +14,7 @@ public record DemandListRequest(
     BigDecimal maximumOverdueAmount,
     String contractNumber,
     Integer overdueInstallmentCount,
+    String reportType,
     String keyword,
     Integer page,
     Integer size,

@@ -1,6 +1,7 @@
 package dugar_lms_api.modules.accounts.repository;
 
 import dugar_lms_api.modules.accounts.dto.VoucherAuthorisationCriteria;
+import dugar_lms_api.modules.accounts.dto.VoucherDto;
 import dugar_lms_api.modules.accounts.dto.VoucherDetailRequest;
 import dugar_lms_api.modules.accounts.dto.VoucherSaveRequest;
 import dugar_lms_api.modules.reports.ReportAccessScope;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -21,6 +23,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -166,6 +169,45 @@ class VoucherRepositoryTest {
         assertThat(sqlCaptor.getValue()).doesNotContain("h.created_by");
     }
 
+    @Test
+    void findEditableAuthorisedVoucherWithMissingContractOpensForEdit() throws Exception {
+        VoucherRepository repository = new VoucherRepository(jdbcTemplate);
+        when(jdbcTemplate.queryForObject(any(String.class), any(SqlParameterSource.class), eq(Long.class))).thenReturn(186355L);
+
+        ResultSet headerResult = headerResult("AUTHORISED", null);
+        when(jdbcTemplate.queryForObject(any(String.class), any(SqlParameterSource.class), any(RowMapper.class)))
+            .thenAnswer(invocation -> {
+                RowMapper<?> mapper = invocation.getArgument(2);
+                return mapper.mapRow(headerResult, 0);
+            });
+        when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(List.of());
+
+        VoucherDto response = repository.findEditableByVoucherNumber("388650", new ReportAccessScope(false));
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).queryForObject(sqlCaptor.capture(), any(SqlParameterSource.class), eq(Long.class));
+        assertThat(sqlCaptor.getValue()).contains("h.voucher_number = :voucherNumber");
+        assertThat(sqlCaptor.getValue()).contains("h.status = 'AUTHORISED'");
+        assertThat(sqlCaptor.getValue()).contains("access_user.user_id = h.updated_by");
+        assertThat(sqlCaptor.getValue()).doesNotContain("loan_close_date IS NULL");
+        assertThat(sqlCaptor.getValue()).doesNotContain("c.contract_id = h.contract_id");
+        assertThat(response.contractNumber()).isNull();
+    }
+
+    @Test
+    void findEditableRequiresAuthorisedStatus() {
+        VoucherRepository repository = new VoucherRepository(jdbcTemplate);
+        when(jdbcTemplate.queryForObject(any(String.class), any(SqlParameterSource.class), eq(Long.class)))
+            .thenThrow(new EmptyResultDataAccessException(1));
+
+        assertThatThrownBy(() -> repository.findEditableByVoucherNumber("388650", new ReportAccessScope(false)))
+            .isInstanceOf(EmptyResultDataAccessException.class);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).queryForObject(sqlCaptor.capture(), any(SqlParameterSource.class), eq(Long.class));
+        assertThat(sqlCaptor.getValue()).contains("h.status = 'AUTHORISED'");
+    }
+
     private VoucherSaveRequest request() {
         return new VoucherSaveRequest(
             "PAYMENT",
@@ -186,5 +228,25 @@ class VoucherRepositoryTest {
             false,
             List.of(new VoucherDetailRequest(1, "GENERAL", "EXP", "Expense", null, new BigDecimal("100.00"), BigDecimal.ZERO, null, null, null, "Test", null))
         );
+    }
+
+    private ResultSet headerResult(String status, String contractNumber) throws Exception {
+        ResultSet headerResult = org.mockito.Mockito.mock(ResultSet.class);
+        when(headerResult.getLong("voucher_header_id")).thenReturn(186355L);
+        when(headerResult.getString("voucher_type")).thenReturn("BR");
+        when(headerResult.getString("voucher_type_description")).thenReturn(null);
+        when(headerResult.getString("voucher_number")).thenReturn("388650");
+        when(headerResult.getObject("voucher_date", LocalDate.class)).thenReturn(LocalDate.of(2026, 8, 6));
+        when(headerResult.getObject("system_date", LocalDate.class)).thenReturn(LocalDate.of(2026, 8, 6));
+        when(headerResult.getString("transaction_type")).thenReturn(null);
+        when(headerResult.getBigDecimal("voucher_amount")).thenReturn(new BigDecimal("157500.00"));
+        when(headerResult.getString("contract_number")).thenReturn(contractNumber);
+        when(headerResult.getObject("contract_id", Long.class)).thenReturn(null);
+        when(headerResult.getString("header_control_code")).thenReturn("BANK");
+        when(headerResult.getString("header_control_name")).thenReturn("Bank");
+        when(headerResult.getString("remarks")).thenReturn(null);
+        when(headerResult.getString("status")).thenReturn(status);
+        when(headerResult.getObject("version_number", Integer.class)).thenReturn(1);
+        return headerResult;
     }
 }

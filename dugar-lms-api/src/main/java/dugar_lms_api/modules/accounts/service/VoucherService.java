@@ -279,6 +279,10 @@ public class VoucherService {
     }
 
     private void validateOpenActiveLoans(VoucherSaveRequest request) {
+        boolean loanCategory = isLoanCategory(request.category());
+        if (loanCategory && (request.contractNumber() == null || request.contractNumber().isBlank())) {
+            throw new IllegalArgumentException("Contract number is required for loan category vouchers.");
+        }
         if (request.contractNumber() != null && !request.contractNumber().isBlank() && !repository.openActiveContractExists(request.contractNumber())) {
             throw new IllegalArgumentException("Contract number " + request.contractNumber() + " is closed, inactive, or was not found.");
         }
@@ -287,6 +291,10 @@ public class VoucherService {
                 throw new IllegalArgumentException("Loan reference " + detail.loanReference() + " is closed, inactive, or was not found.");
             }
         }
+    }
+
+    private boolean isLoanCategory(String category) {
+        return "LOAN".equals(category == null ? "" : category.trim().toUpperCase(Locale.ROOT));
     }
 
     private String voucherNature(String type) {

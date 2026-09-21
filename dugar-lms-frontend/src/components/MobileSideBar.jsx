@@ -4,6 +4,8 @@ import { X, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { resolveMenuPath } from '../utils/menuRouteMap';
 
+const isVoucherEntryPath = (path) => path === '/accounts/trans/voucher/receipt' || path.startsWith('/accounts/transaction/entry/');
+
 const MobileSidebar = ({ isOpen, onClose, menuTree }) => {
   useEffect(() => {
     if (isOpen) {
@@ -67,12 +69,14 @@ const MobileAccordionItem = ({ item, depth = 0 }) => {
   const targetPath = resolveMenuPath(item);
   const isLink = !hasSubMenu && targetPath && targetPath !== '#';
   const IconComponent = Icons[item.icon] || Icons.Circle;
+  const linkState = isVoucherEntryPath(targetPath) ? { resetVoucherEntry: true } : undefined;
 
   return (
     <div className="w-full border-b border-slate-50">
       {isLink ? (
         <Link
           to={targetPath}
+          state={linkState}
           className={`w-full flex items-center gap-3 py-4 px-5 transition-colors duration-200 ${
             depth === 0 ? 'font-black text-slate-900' : 'font-bold text-slate-700 text-[12px]'
           } bg-white hover:bg-blue-50/50 hover:text-[#0052CC]`}

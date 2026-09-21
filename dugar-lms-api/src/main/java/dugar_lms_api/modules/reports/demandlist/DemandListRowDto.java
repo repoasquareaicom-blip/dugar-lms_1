@@ -41,6 +41,8 @@ public record DemandListRowDto(
     LocalDate lastPaidEmiDate,
     Integer flagCount,
     String flagNames,
+    String flagCodes,
+    String flagRemarks,
     Integer followUpCount,
     String areaCode,
     String areaName,

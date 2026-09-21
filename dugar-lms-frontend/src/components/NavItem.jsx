@@ -4,6 +4,8 @@ import { ChevronRight, Circle } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { resolveMenuPath } from '../utils/menuRouteMap';
 
+const isVoucherEntryPath = (path) => path === '/accounts/trans/voucher/receipt' || path.startsWith('/accounts/transaction/entry/');
+
 const NavItem = ({ item, depth = 0 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const closeTimerRef = useRef(null);
@@ -16,6 +18,7 @@ const NavItem = ({ item, depth = 0 }) => {
   const targetPath = resolveMenuPath(item);
   const isLink = !hasSubMenu && targetPath && targetPath !== "#";
   const isActive = location.pathname === targetPath;
+  const linkState = isVoucherEntryPath(targetPath) ? { resetVoucherEntry: true } : undefined;
 
   const getIcon = (name) => {
     if (!name) return Circle;
@@ -48,8 +51,8 @@ const NavItem = ({ item, depth = 0 }) => {
   const commonClasses = `
     flex items-center gap-2 transition-all duration-200 relative whitespace-nowrap uppercase tracking-tight
     ${depth === 0 
-      ? 'px-1.5 h-9 rounded-md text-[13px] font-bold' 
-      : 'w-full py-2 px-3 rounded-md text-[12px] font-bold'}
+      ? 'px-1.5 h-9 rounded-md text-[14px] font-bold' 
+      : 'w-full py-2 px-3 rounded-md text-[13px] font-bold'}
     ${isActive && depth === 0 ? 'text-[#0052CC] bg-blue-50/80' : 'text-black'}
     ${isHovered && depth === 0 ? 'text-[#0052CC] bg-blue-50/50' : ''}
     ${isHovered && depth > 0 ? 'bg-[#0052CC] text-white' : ''}
@@ -67,6 +70,7 @@ const NavItem = ({ item, depth = 0 }) => {
       {isLink ? (
         <Link 
           to={targetPath} 
+          state={linkState}
           className={commonClasses}
         >
           {createElement(IconComponent, {

@@ -67,6 +67,8 @@ public class DemandListCalculationService {
             null,
             0,
             "",
+            "",
+            "",
             0,
             source.areaCode(),
             source.areaName(),

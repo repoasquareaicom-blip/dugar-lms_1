@@ -192,6 +192,8 @@ class AgingAnalysisServiceTest {
             null,
             0,
             "",
+            "",
+            "",
             0,
             area,
             null,
@@ -249,6 +251,8 @@ class AgingAnalysisServiceTest {
             null,
             null,
             0,
+            "",
+            "",
             "",
             0,
             overdueAmount.compareTo(BigDecimal.ZERO) > 0 ? "1--30" : "Current"

@@ -193,6 +193,11 @@ const MainDashboardLayout = () => {
 // 2. WELCOME DASHBOARD
 const WelcomeDashboard = () => {
   const currentYear = new Date().getFullYear();
+  const businessDate = new Date().toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).toUpperCase();
   const [dashboardData, setDashboardData] = useState({ branchData: [], disbursementData: [] });
   const [dashboardError, setDashboardError] = useState('');
   const [branchLimit, setBranchLimit] = useState(10);
@@ -253,7 +258,7 @@ const WelcomeDashboard = () => {
   
 const metrics = [
   { 
-    label: '2.45%', 
+    label: '2.07%', 
     count: 'NPA', 
     icon: <AlertCircle size={18} />, 
     // bg-[#0052CC]/15 creates a light blue tint
@@ -261,15 +266,15 @@ const metrics = [
     trend: '-0.2%' 
   },
   { 
-    label: '42', 
-    count: 'Litigation Cases', 
+    label: '18', 
+    count: 'Litigation', 
     icon: <CheckSquare size={18} />, 
     // bg-[#D97706]/15 creates a light amber tint
     bg: 'bg-red-600/45 border-red-600/30 text-red-600',
     trend: '+2' 
   },
   { 
-    label: '18', 
+    label: '22', 
     count: 'Repo Inventory', 
     icon: <Wallet size={18} />, 
     // bg-[#059669]/15 creates a light emerald tint
@@ -277,8 +282,8 @@ const metrics = [
     trend: 'Stable' 
   },
   { 
-    label: '14.8%', 
-    count: 'Average IRR', 
+    label: '23.89%', 
+    count: 'Avg IRR', 
     icon: <TrendingUp size={18} />, 
     // bg-[#7C3AED]/15 creates a light purple tint
     bg: 'bg-[#7C3AED]/65 border-[#7C3AED]/30 text-[#7C3AED]', 
@@ -304,20 +309,20 @@ const metrics = [
         </div>
         <div className="bg-gray-100 p-3 rounded-2xl px-6 border border-gray-300 text-right">
           <p className="text-[10px] font-bold text-black uppercase leading-none mb-1">Business Date</p>
-          <p className="text-lg font-bold text-black tracking-tight">10 APR 2026</p>
+          <p className="text-lg font-bold text-black tracking-tight">{businessDate}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 2xl:gap-6">
         {metrics.map((m, i) => (
-          <div key={i} className={`relative overflow-hidden p-4 2xl:p-6 rounded-2xl 2xl:rounded-3xl transition-all duration-500 hover:-translate-y-1 group shadow-xl ${m.bg}`}>
+          <div key={i} className={`relative overflow-hidden p-2 2xl:p-3 rounded-2xl 2xl:rounded-3xl transition-all duration-500 hover:-translate-y-1 group shadow-xl ${m.bg}`}>
             <div className="relative z-10">
-              <div className="flex justify-between items-start mb-3 2xl:mb-6">
-                <div className="bg-white/20 backdrop-blur-md text-white p-2.5 2xl:p-3 rounded-xl 2xl:rounded-2xl shadow-lg">{m.icon}</div>
-                <span className="text-[18px] 2xl:text-[24px] font-bold px-2.5 py-1 rounded bg-black/20 text-white border border-white/10">{m.trend}</span>
+              <div className="flex justify-between items-start mb-1 2xl:mb-2">
+                <div className="bg-white/20 backdrop-blur-md text-white p-1.5 2xl:p-2 rounded-xl 2xl:rounded-2xl shadow-lg">{m.icon}</div>
+                <span className="text-[12px] 2xl:text-[16px] font-bold px-2 py-0.5 rounded bg-black/20 text-white border border-white/10">{m.trend}</span>
               </div>
-              <p className="text-[18px] 2xl:text-[24px] font-bold text-white mb-1 tracking-tight">{m.count}</p>
-              <p className="text-[18px] 2xl:text-[24px] font-bold text-white uppercase tracking-[0.1em]">{m.label}</p>
+              <p className="text-[16px] 2xl:text-[18px] font-bold text-white leading-tight tracking-tight">{m.count}</p>
+              <p className="text-[16px] 2xl:text-[18px] font-bold text-white uppercase leading-tight tracking-[0.1em]">{m.label}</p>
             </div>
           </div>
         ))}
@@ -472,6 +477,10 @@ function App() {
           <Route path="/credit/transaction/contract/edit" element={<ContractGrid isDraft workflowStatus="E" title="Edit Contracts" showCreate={false} />} />
           <Route path="/credit/trans/contract/edit" element={<ContractGrid isDraft workflowStatus="E" title="Edit Contracts" showCreate={false} />} />
           <Route path="/credit/trans/contract-management/active-contracts" element={<ContractGrid />} />
+          <Route path="/branch/active-contracts" element={<ContractGrid title="Branch Active Contracts" showCreate={false} viewOnly />} />
+          <Route path="/branch/demand-list" element={<DemandListPage />} />
+          <Route path="/branch/afc" element={<AfcReportPage />} />
+          <Route path="/branch/aging-analysis" element={<AgingAnalysisPage />} />
           <Route path="/credit/trans/contract-management/draft-contracts" element={<ContractGrid isDraft title="Draft Contracts" />} />
           <Route path="/credit/trans/contract-management/edit-contracts" element={<ContractGrid isDraft workflowStatus="E" title="Edit Contracts" showCreate={false} />} />
           <Route path="/branch/transaction/request-to-flag-loan" element={<ContractGrid title="Request To Flag Loan" showCreate={false} enableFlagging />} />

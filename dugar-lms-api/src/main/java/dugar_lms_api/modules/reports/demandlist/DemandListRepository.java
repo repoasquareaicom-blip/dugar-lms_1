@@ -217,6 +217,7 @@ public class DemandListRepository {
         rs.getLong("contract_follow_up_id"),
         rs.getLong("contract_id"),
         rs.getString("comment_text"),
+        rs.getString("follow_up_type"),
         rs.getObject("follow_up_date", java.time.LocalDate.class),
         rs.getObject("created_by", Long.class),
         rs.getString("created_by_username"),
@@ -252,6 +253,7 @@ public class DemandListRepository {
                 follow_up.contract_follow_up_id,
                 follow_up.contract_id,
                 follow_up.comment_text,
+                COALESCE(NULLIF(TRIM(follow_up.follow_up_type), ''), 'COMMENT') AS follow_up_type,
                 follow_up.follow_up_date,
                 follow_up.created_by,
                 COALESCE(NULLIF(TRIM(users.username), ''), NULLIF(TRIM(users.full_name), ''), follow_up.created_by::text) AS created_by_username,
@@ -273,12 +275,14 @@ public class DemandListRepository {
             INSERT INTO contract_follow_ups (
                 contract_id,
                 comment_text,
+                follow_up_type,
                 follow_up_date,
                 created_by
             )
             VALUES (
                 :contractId,
                 :commentText,
+                :followUpType,
                 :followUpDate,
                 :userId
             )
@@ -287,6 +291,7 @@ public class DemandListRepository {
             new MapSqlParameterSource()
                 .addValue("contractId", contractId)
                 .addValue("commentText", request.commentText().trim())
+                .addValue("followUpType", request.followUpType())
                 .addValue("followUpDate", request.followUpDate())
                 .addValue("userId", userId),
             Long.class
@@ -297,6 +302,7 @@ public class DemandListRepository {
                 follow_up.contract_follow_up_id,
                 follow_up.contract_id,
                 follow_up.comment_text,
+                COALESCE(NULLIF(TRIM(follow_up.follow_up_type), ''), 'COMMENT') AS follow_up_type,
                 follow_up.follow_up_date,
                 follow_up.created_by,
                 COALESCE(NULLIF(TRIM(users.username), ''), NULLIF(TRIM(users.full_name), ''), follow_up.created_by::text) AS created_by_username,
