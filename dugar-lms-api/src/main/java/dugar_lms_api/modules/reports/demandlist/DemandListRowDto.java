@@ -2,6 +2,7 @@ package dugar_lms_api.modules.reports.demandlist;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 public record DemandListRowDto(
     Long contractId,
@@ -44,6 +45,9 @@ public record DemandListRowDto(
     String flagCodes,
     String flagRemarks,
     Integer followUpCount,
+    String latestComment,
+    LocalDateTime latestCommentCreatedAt,
+    LocalDate latestPtpDate,
     String areaCode,
     String areaName,
     String fieldOfficer,

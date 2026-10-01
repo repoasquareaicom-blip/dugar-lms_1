@@ -6,7 +6,7 @@ import apiClient, { saveCleanAuthToken } from '../api/apiClient';
 import { normalizeMenuTree } from '../utils/menuNormalizer';
 
 const Login = () => {
-    const lmsName = 'CORELMS';
+    const lmsName = 'PROLMS';
     const [isSplash, setIsSplash] = useState(true);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');

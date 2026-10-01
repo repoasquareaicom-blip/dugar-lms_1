@@ -6,6 +6,8 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Repository
 public class DemandListRepository {
@@ -224,6 +226,15 @@ public class DemandListRepository {
         rs.getObject("created_at", java.time.LocalDateTime.class)
     );
 
+    private static final RowMapper<ContractPtpDto> PTP_ROW_MAPPER = (rs, rowNum) -> new ContractPtpDto(
+        rs.getLong("contract_ptp_id"),
+        rs.getLong("contract_id"),
+        rs.getObject("ptp_date", java.time.LocalDate.class),
+        rs.getObject("created_by", Long.class),
+        rs.getString("created_by_username"),
+        rs.getObject("created_at", java.time.LocalDateTime.class)
+    );
+
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
     public DemandListRepository(NamedParameterJdbcTemplate namedParameterJdbcTemplate) {
@@ -246,7 +257,7 @@ public class DemandListRepository {
         );
     }
 
-    public List<ContractFollowUpDto> findFollowUps(Long contractId) {
+    public List<ContractFollowUpDto> findCommentHistory(Long contractId, Long userId) {
         return namedParameterJdbcTemplate.query(
             """
             SELECT
@@ -262,14 +273,48 @@ public class DemandListRepository {
             LEFT JOIN users
               ON users.user_id = follow_up.created_by
             WHERE follow_up.contract_id = :contractId
+              AND follow_up.created_by = :userId
+              AND UPPER(TRIM(COALESCE(follow_up.follow_up_type, 'COMMENT'))) = 'COMMENT'
             ORDER BY follow_up.created_at DESC, follow_up.contract_follow_up_id DESC
             """,
-            new MapSqlParameterSource("contractId", contractId),
+            new MapSqlParameterSource()
+                .addValue("contractId", contractId)
+                .addValue("userId", userId),
             FOLLOW_UP_ROW_MAPPER
         );
     }
 
-    public ContractFollowUpDto addFollowUp(Long contractId, ContractFollowUpRequest request, Long userId) {
+    public Map<Long, ContractFollowUpDto> findLatestComments(List<Long> contractIds, Long userId) {
+        if (contractIds == null || contractIds.isEmpty() || userId == null) {
+            return Map.of();
+        }
+        return namedParameterJdbcTemplate.query(
+            """
+            SELECT DISTINCT ON (follow_up.contract_id)
+                follow_up.contract_follow_up_id,
+                follow_up.contract_id,
+                follow_up.comment_text,
+                COALESCE(NULLIF(TRIM(follow_up.follow_up_type), ''), 'COMMENT') AS follow_up_type,
+                follow_up.follow_up_date,
+                follow_up.created_by,
+                COALESCE(NULLIF(TRIM(users.username), ''), NULLIF(TRIM(users.full_name), ''), follow_up.created_by::text) AS created_by_username,
+                follow_up.created_at
+            FROM contract_follow_ups follow_up
+            LEFT JOIN users
+              ON users.user_id = follow_up.created_by
+            WHERE follow_up.contract_id IN (:contractIds)
+              AND follow_up.created_by = :userId
+              AND UPPER(TRIM(COALESCE(follow_up.follow_up_type, 'COMMENT'))) = 'COMMENT'
+            ORDER BY follow_up.contract_id, follow_up.created_at DESC, follow_up.contract_follow_up_id DESC
+            """,
+            new MapSqlParameterSource()
+                .addValue("contractIds", contractIds)
+                .addValue("userId", userId),
+            FOLLOW_UP_ROW_MAPPER
+        ).stream().collect(Collectors.toMap(ContractFollowUpDto::contractId, item -> item));
+    }
+
+    public ContractFollowUpDto addComment(Long contractId, String commentText, Long userId) {
         Long followUpId = namedParameterJdbcTemplate.queryForObject(
             """
             INSERT INTO contract_follow_ups (
@@ -282,17 +327,15 @@ public class DemandListRepository {
             VALUES (
                 :contractId,
                 :commentText,
-                :followUpType,
-                :followUpDate,
+                'COMMENT',
+                NULL,
                 :userId
             )
             RETURNING contract_follow_up_id
             """,
             new MapSqlParameterSource()
                 .addValue("contractId", contractId)
-                .addValue("commentText", request.commentText().trim())
-                .addValue("followUpType", request.followUpType())
-                .addValue("followUpDate", request.followUpDate())
+                .addValue("commentText", commentText.trim())
                 .addValue("userId", userId),
             Long.class
         );
@@ -314,6 +357,99 @@ public class DemandListRepository {
             """,
             new MapSqlParameterSource("followUpId", followUpId),
             FOLLOW_UP_ROW_MAPPER
+        );
+    }
+
+    public List<ContractPtpDto> findPtpHistory(Long contractId, Long userId) {
+        return namedParameterJdbcTemplate.query(
+            """
+            SELECT
+                ptp.contract_ptp_id,
+                ptp.contract_id,
+                ptp.ptp_date,
+                ptp.created_by,
+                COALESCE(NULLIF(TRIM(users.username), ''), NULLIF(TRIM(users.full_name), ''), ptp.created_by::text) AS created_by_username,
+                ptp.created_at
+            FROM contract_ptps ptp
+            LEFT JOIN users
+              ON users.user_id = ptp.created_by
+            WHERE ptp.contract_id = :contractId
+              AND ptp.created_by = :userId
+            ORDER BY ptp.created_at DESC, ptp.contract_ptp_id DESC
+            """,
+            new MapSqlParameterSource()
+                .addValue("contractId", contractId)
+                .addValue("userId", userId),
+            PTP_ROW_MAPPER
+        );
+    }
+
+    public Map<Long, ContractPtpDto> findLatestPtps(List<Long> contractIds, Long userId) {
+        if (contractIds == null || contractIds.isEmpty() || userId == null) {
+            return Map.of();
+        }
+        return namedParameterJdbcTemplate.query(
+            """
+            SELECT DISTINCT ON (ptp.contract_id)
+                ptp.contract_ptp_id,
+                ptp.contract_id,
+                ptp.ptp_date,
+                ptp.created_by,
+                COALESCE(NULLIF(TRIM(users.username), ''), NULLIF(TRIM(users.full_name), ''), ptp.created_by::text) AS created_by_username,
+                ptp.created_at
+            FROM contract_ptps ptp
+            LEFT JOIN users
+              ON users.user_id = ptp.created_by
+            WHERE ptp.contract_id IN (:contractIds)
+              AND ptp.created_by = :userId
+            ORDER BY ptp.contract_id, ptp.created_at DESC, ptp.contract_ptp_id DESC
+            """,
+            new MapSqlParameterSource()
+                .addValue("contractIds", contractIds)
+                .addValue("userId", userId),
+            PTP_ROW_MAPPER
+        ).stream().collect(Collectors.toMap(ContractPtpDto::contractId, item -> item));
+    }
+
+    public ContractPtpDto addPtp(Long contractId, ContractPtpRequest request, Long userId) {
+        Long ptpId = namedParameterJdbcTemplate.queryForObject(
+            """
+            INSERT INTO contract_ptps (
+                contract_id,
+                ptp_date,
+                created_by,
+                updated_by
+            )
+            VALUES (
+                :contractId,
+                :ptpDate,
+                :userId,
+                :userId
+            )
+            RETURNING contract_ptp_id
+            """,
+            new MapSqlParameterSource()
+                .addValue("contractId", contractId)
+                .addValue("ptpDate", request.ptpDate())
+                .addValue("userId", userId),
+            Long.class
+        );
+        return namedParameterJdbcTemplate.queryForObject(
+            """
+            SELECT
+                ptp.contract_ptp_id,
+                ptp.contract_id,
+                ptp.ptp_date,
+                ptp.created_by,
+                COALESCE(NULLIF(TRIM(users.username), ''), NULLIF(TRIM(users.full_name), ''), ptp.created_by::text) AS created_by_username,
+                ptp.created_at
+            FROM contract_ptps ptp
+            LEFT JOIN users
+              ON users.user_id = ptp.created_by
+            WHERE ptp.contract_ptp_id = :ptpId
+            """,
+            new MapSqlParameterSource("ptpId", ptpId),
+            PTP_ROW_MAPPER
         );
     }
 

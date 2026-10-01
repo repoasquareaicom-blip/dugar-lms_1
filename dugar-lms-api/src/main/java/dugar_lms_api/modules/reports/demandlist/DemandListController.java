@@ -91,6 +91,40 @@ public class DemandListController {
         return ResponseEntity.ok(demandListService.addFollowUp(contractId, request, authentication));
     }
 
+    @GetMapping("/contracts/{contractId}/comments")
+    public ResponseEntity<List<ContractFollowUpDto>> getComments(
+        @PathVariable Long contractId,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(demandListService.getComments(contractId, authentication));
+    }
+
+    @PostMapping("/contracts/{contractId}/comments")
+    public ResponseEntity<ContractFollowUpDto> addComment(
+        @PathVariable Long contractId,
+        @Valid @RequestBody ContractFollowUpRequest request,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(demandListService.addComment(contractId, request, authentication));
+    }
+
+    @GetMapping("/contracts/{contractId}/ptps")
+    public ResponseEntity<List<ContractPtpDto>> getPtps(
+        @PathVariable Long contractId,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(demandListService.getPtps(contractId, authentication));
+    }
+
+    @PostMapping("/contracts/{contractId}/ptps")
+    public ResponseEntity<ContractPtpDto> addPtp(
+        @PathVariable Long contractId,
+        @Valid @RequestBody ContractPtpRequest request,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(demandListService.addPtp(contractId, request, authentication));
+    }
+
     private DemandListRequest request(
         LocalDate asOnDate,
         String areaCode,

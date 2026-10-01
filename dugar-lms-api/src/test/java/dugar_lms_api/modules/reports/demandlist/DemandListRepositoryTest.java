@@ -63,4 +63,56 @@ class DemandListRepositoryTest {
         assertThat(source.getValue("contractNumber")).isEqualTo("CN123");
         assertThat(source.getValue("keyword")).isEqualTo("%ravi%");
     }
+
+    @Test
+    void commentHistoryFiltersByContractCurrentUserAndCommentType() {
+        when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(List.of());
+
+        repository.findCommentHistory(11L, 42L);
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<SqlParameterSource> params = ArgumentCaptor.forClass(SqlParameterSource.class);
+        verify(jdbcTemplate).query(sql.capture(), params.capture(), any(RowMapper.class));
+
+        assertThat(sql.getValue()).contains("follow_up.contract_id = :contractId");
+        assertThat(sql.getValue()).contains("follow_up.created_by = :userId");
+        assertThat(sql.getValue()).contains("UPPER(TRIM(COALESCE(follow_up.follow_up_type, 'COMMENT'))) = 'COMMENT'");
+        assertThat(sql.getValue()).contains("ORDER BY follow_up.created_at DESC, follow_up.contract_follow_up_id DESC");
+        MapSqlParameterSource source = (MapSqlParameterSource) params.getValue();
+        assertThat(source.getValue("contractId")).isEqualTo(11L);
+        assertThat(source.getValue("userId")).isEqualTo(42L);
+    }
+
+    @Test
+    void latestCommentAndPtpQueriesAreBulkUserScoped() {
+        when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(List.of());
+
+        repository.findLatestComments(List.of(11L, 12L), 42L);
+        repository.findLatestPtps(List.of(11L, 12L), 42L);
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<SqlParameterSource> params = ArgumentCaptor.forClass(SqlParameterSource.class);
+        verify(jdbcTemplate, org.mockito.Mockito.times(2)).query(sql.capture(), params.capture(), any(RowMapper.class));
+
+        assertThat(sql.getAllValues().get(0)).contains("follow_up.contract_id IN (:contractIds)", "follow_up.created_by = :userId", "DISTINCT ON (follow_up.contract_id)");
+        assertThat(sql.getAllValues().get(1)).contains("ptp.contract_id IN (:contractIds)", "ptp.created_by = :userId", "DISTINCT ON (ptp.contract_id)");
+        assertThat(((MapSqlParameterSource) params.getAllValues().get(0)).getValue("contractIds")).isEqualTo(List.of(11L, 12L));
+        assertThat(((MapSqlParameterSource) params.getAllValues().get(1)).getValue("userId")).isEqualTo(42L);
+    }
+
+    @Test
+    void ptpSaveInsertsHistoryRowInsteadOfUpdating() {
+        when(jdbcTemplate.queryForObject(any(String.class), any(SqlParameterSource.class), org.mockito.ArgumentMatchers.eq(Long.class))).thenReturn(99L);
+        when(jdbcTemplate.queryForObject(any(String.class), any(SqlParameterSource.class), any(RowMapper.class)))
+            .thenReturn(new ContractPtpDto(99L, 11L, LocalDate.of(2026, 10, 5), 42L, "user", null));
+
+        repository.addPtp(11L, new ContractPtpRequest(LocalDate.of(2026, 10, 5)), 42L);
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).queryForObject(sql.capture(), any(SqlParameterSource.class), org.mockito.ArgumentMatchers.eq(Long.class));
+
+        assertThat(sql.getValue()).contains("INSERT INTO contract_ptps");
+        assertThat(sql.getValue()).doesNotContain("ON CONFLICT");
+        assertThat(sql.getValue()).doesNotContain("UPDATE contract_ptps");
+    }
 }

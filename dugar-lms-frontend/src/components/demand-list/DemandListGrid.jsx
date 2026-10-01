@@ -2,6 +2,7 @@ const groupedColumns = [
   { key: 'serialNumber', label: ['Sl. No'], align: 'right', sortField: 'serialNumber', width: 'w-[70px]' },
   { key: 'loanNumber', label: ['Loan No.'], sortField: 'loanNumber', width: 'w-[135px]' },
   { key: 'party', label: ['Name of Borrower', 'Name of Guarantor'], sortField: 'borrowerName', width: 'w-[260px]' },
+  { key: 'loanFlag', label: ['Loan Flag'], sortField: 'flagNames', width: 'w-[230px]' },
   { key: 'area', label: ['Area'], sortField: 'areaCode', width: 'w-[150px]' },
   {
     key: 'asset',
@@ -26,7 +27,6 @@ const groupedColumns = [
   { key: 'currentDue', label: ['Current Due'], align: 'right', sortField: 'currentDueAmount', width: 'w-[125px]' },
   { key: 'currentDueDate', label: ['Due Date'], align: 'center', sortField: 'currentDueDate', width: 'w-[110px]' },
   { key: 'lastPaidEmiDate', label: ['Last Paid', 'EMI Date'], align: 'center', sortField: 'lastPaidEmiDate', width: 'w-[115px]' },
-  { key: 'flagRemarks', label: ['Flag Remarks'], sortField: 'flagRemarks', width: 'w-[240px]' },
 ];
 
 function formatDate(value) {
@@ -106,6 +106,14 @@ function lineValues(row, key) {
       ].filter(Boolean);
     case 'flag':
       return [Number(row.flagCount || 0) > 0 ? row.flagNames || 'Flagged' : 'No flags'];
+    case 'loanFlag':
+      return [
+        ...(Number(row.flagCount || 0) > 0
+        ? String(row.flagNames || 'Flagged').split(',').map((value) => value.trim()).filter(Boolean)
+        : ['Not Flagged']),
+        row.latestComment || 'No Comment',
+        formatDate(row.latestPtpDate) || 'No PTP',
+      ];
     default:
       return [''];
   }
@@ -134,16 +142,15 @@ function StackCell({ values, align = 'left' }) {
 }
 
 function visibleDemandListColumns({ showArea = true, reportType = 'CONSOLIDATED' } = {}) {
-  const columns = groupedColumns.filter((column) => column.key !== 'flag' && (showArea || column.key !== 'area'));
+  const columns = groupedColumns.filter((column) => column.key !== 'flag' && column.key !== 'area');
   if (reportType === 'FULL_NAME_ADDRESS') {
     return [
       { key: 'serialNumber', label: ['Sl. No'], align: 'right', sortField: 'serialNumber', width: 'w-[70px]' },
       { key: 'fullNameAddress', label: ['Contract / Agreement', 'Borrower Full Name', 'Complete Address'], sortField: 'borrowerName', width: 'w-[420px]' },
-      ...(showArea ? [{ key: 'area', label: ['Area'], sortField: 'areaCode', width: 'w-[150px]' }] : []),
+      { key: 'loanFlag', label: ['Loan Flag'], sortField: 'flagNames', width: 'w-[230px]' },
       { key: 'overdue', label: ['No.of Overdues', 'O/D Amount', 'From Date', 'End Date'], align: 'right', sortField: 'overdueInstallmentCount', width: 'w-[165px]' },
       { key: 'currentDue', label: ['Current Due'], align: 'right', sortField: 'currentDueAmount', width: 'w-[125px]' },
       { key: 'currentDueDate', label: ['Due Date'], align: 'center', sortField: 'currentDueDate', width: 'w-[110px]' },
-      { key: 'flagRemarks', label: ['Flag Remarks'], sortField: 'flagRemarks', width: 'w-[240px]' },
     ];
   }
   return columns;

@@ -197,6 +197,8 @@ public class BranchWiseAgeingProcedureRepository {
                     r.registration_number,
                     r.owner_serial_no,
                     r.category,
+                    asset_details.product_type,
+                    asset_details.vehicle_type_code,
                     COALESCE(r.total_contract_value, 0) AS total_contract_value,
                     COALESCE(r.original_principal, 0) AS loan_amount,
                     COALESCE(r.total_received, 0) AS total_received,
@@ -237,6 +239,15 @@ public class BranchWiseAgeingProcedureRepository {
                   ON flags.contract_id = r.contract_id
                 LEFT JOIN follow_ups
                   ON follow_ups.contract_id = r.contract_id
+                LEFT JOIN LATERAL (
+                    SELECT
+                        NULLIF(TRIM(asset.product_type), '') AS product_type,
+                        NULLIF(TRIM(asset.vehicle_type_code), '') AS vehicle_type_code
+                    FROM assets asset
+                    WHERE asset.contract_id = r.contract_id
+                    ORDER BY asset.asset_id
+                    LIMIT 1
+                ) asset_details ON TRUE
                 WHERE (? IS NULL OR UPPER(TRIM(COALESCE(r.area_code, ''))) = ?)
                 ORDER BY r.area_code, r.contract_number
                 """;
@@ -271,6 +282,8 @@ public class BranchWiseAgeingProcedureRepository {
                             rs.getString("registration_number"),
                             rs.getString("owner_serial_no"),
                             rs.getString("category"),
+                            rs.getString("product_type"),
+                            rs.getString("vehicle_type_code"),
                             money(rs.getBigDecimal("total_contract_value")),
                             money(rs.getBigDecimal("loan_amount")),
                             money(rs.getBigDecimal("total_received")),
@@ -454,6 +467,8 @@ public class BranchWiseAgeingProcedureRepository {
         String registrationNumber,
         String ownerSerialNo,
         String category,
+        String productType,
+        String vehicleTypeCode,
         BigDecimal totalContractValue,
         BigDecimal loanAmount,
         BigDecimal totalReceived,

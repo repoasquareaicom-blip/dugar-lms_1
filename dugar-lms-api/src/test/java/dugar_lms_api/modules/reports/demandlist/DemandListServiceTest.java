@@ -7,12 +7,15 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class DemandListServiceTest {
@@ -72,6 +75,17 @@ class DemandListServiceTest {
     }
 
     @Test
+    void demandListUsesAssetProductTypeAndVehicleTypeForProductUsage() {
+        DemandListService service = service(List.of(procedureRow(17308L, "17308", 1)));
+
+        DemandListRowDto row = service.getDemandList(request(0, 25, null, null), null).rows().content().get(0);
+
+        assertThat(row.productType()).isEqualTo("Vehicles");
+        assertThat(row.vehicleTypeCode()).isEqualTo("Private Car");
+        assertThat(row.usage()).isEqualTo("Private Car");
+    }
+
+    @Test
     void overdueInstallmentCountFilterIsAppliedAfterCalculation() {
         DemandListService service = service(List.of(procedureRow(1L, "A", 1), procedureRow(2L, "B", 2)));
 
@@ -106,21 +120,65 @@ class DemandListServiceTest {
     }
 
     @Test
-    void commentAllowsBlankFollowUpDateButPtpRequiresDate() {
+    void commentSavesWithoutFollowUpDate() {
         DemandListRepository repository = mock(DemandListRepository.class);
         ContractAccessRepository accessRepository = mock(ContractAccessRepository.class);
         DemandListService service = new DemandListService(repository, new DemandListCalculationService(), mock(BranchWiseAgeingProcedureRepository.class), accessRepository);
-        org.springframework.security.core.Authentication authentication = mock(org.springframework.security.core.Authentication.class);
-        java.util.Map<String, Object> details = java.util.Map.of("userId", 42L);
-        when(authentication.getDetails()).thenReturn(details);
-        when(repository.addFollowUp(eq(1L), any(), eq(42L))).thenReturn(new ContractFollowUpDto(1L, 1L, "Call done", "COMMENT", null, 42L, "user", null));
+        org.springframework.security.core.Authentication authentication = authentication(42L);
+        when(repository.addComment(eq(1L), eq("Call done"), eq(42L))).thenReturn(new ContractFollowUpDto(1L, 1L, "Call done", "COMMENT", null, 42L, "user", null));
 
-        ContractFollowUpDto dto = service.addFollowUp(1L, new ContractFollowUpRequest("Call done", "COMMENT", null), authentication);
+        ContractFollowUpDto dto = service.addComment(1L, new ContractFollowUpRequest(" Call done ", null, null), authentication);
 
         assertThat(dto.followUpType()).isEqualTo("COMMENT");
-        assertThatThrownBy(() -> service.addFollowUp(1L, new ContractFollowUpRequest("Promise", "PTP", null), authentication))
+        verify(repository).addComment(1L, "Call done", 42L);
+    }
+
+    @Test
+    void ptpSaveCreatesHistoryRowForCurrentUser() {
+        DemandListRepository repository = mock(DemandListRepository.class);
+        ContractAccessRepository accessRepository = mock(ContractAccessRepository.class);
+        DemandListService service = new DemandListService(repository, new DemandListCalculationService(), mock(BranchWiseAgeingProcedureRepository.class), accessRepository);
+        org.springframework.security.core.Authentication authentication = authentication(42L);
+        ContractPtpRequest request = new ContractPtpRequest(LocalDate.of(2026, 10, 5));
+        when(repository.addPtp(eq(1L), eq(request), eq(42L))).thenReturn(new ContractPtpDto(10L, 1L, request.ptpDate(), 42L, "user", null));
+
+        ContractPtpDto dto = service.addPtp(1L, request, authentication);
+
+        assertThat(dto.ptpDate()).isEqualTo(LocalDate.of(2026, 10, 5));
+        verify(repository).addPtp(1L, request, 42L);
+    }
+
+    @Test
+    void ptpDateIsMandatory() {
+        DemandListService service = new DemandListService(mock(DemandListRepository.class), new DemandListCalculationService(), mock(BranchWiseAgeingProcedureRepository.class), mock(ContractAccessRepository.class));
+
+        assertThatThrownBy(() -> service.addPtp(1L, new ContractPtpRequest(null), authentication(42L)))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Promised date is required");
+            .hasMessageContaining("PTP date is required");
+    }
+
+    @Test
+    void demandListBulkLoadsLatestUserCommentAndPtp() {
+        DemandListRepository repository = mock(DemandListRepository.class);
+        BranchWiseAgeingProcedureRepository procedureRepository = mock(BranchWiseAgeingProcedureRepository.class);
+        when(procedureRepository.getContractReportRows(eq(LocalDate.of(2026, 1, 1)), eq("AREA"), any())).thenReturn(List.of(
+            procedureRow(1L, "A", 1),
+            procedureRow(2L, "B", 1)
+        ));
+        when(repository.findLatestComments(eq(List.of(1L, 2L)), eq(42L))).thenReturn(Map.of(
+            1L, new ContractFollowUpDto(1L, 1L, "Latest mine", "COMMENT", null, 42L, "user", null)
+        ));
+        when(repository.findLatestPtps(eq(List.of(1L, 2L)), eq(42L))).thenReturn(Map.of(
+            2L, new ContractPtpDto(2L, 2L, LocalDate.of(2026, 10, 6), 42L, "user", null)
+        ));
+        DemandListService service = new DemandListService(repository, new DemandListCalculationService(), procedureRepository, mock(ContractAccessRepository.class));
+
+        DemandListResponse response = service.getDemandList(request(0, 25, null, null), authentication(42L));
+
+        assertThat(response.rows().content().get(0).latestComment()).isEqualTo("Latest mine");
+        assertThat(response.rows().content().get(1).latestPtpDate()).isEqualTo(LocalDate.of(2026, 10, 6));
+        verify(repository, times(1)).findLatestComments(List.of(1L, 2L), 42L);
+        verify(repository, times(1)).findLatestPtps(List.of(1L, 2L), 42L);
     }
 
     private DemandListRequest request(int page, int size, String sortColumn, String sortDirection) {
@@ -131,6 +189,12 @@ class DemandListServiceTest {
         BranchWiseAgeingProcedureRepository procedureRepository = mock(BranchWiseAgeingProcedureRepository.class);
         when(procedureRepository.getContractReportRows(eq(LocalDate.of(2026, 1, 1)), eq("AREA"), any())).thenReturn(rows);
         return new DemandListService(mock(DemandListRepository.class), new DemandListCalculationService(), procedureRepository, mock(ContractAccessRepository.class));
+    }
+
+    private org.springframework.security.core.Authentication authentication(Long userId) {
+        org.springframework.security.core.Authentication authentication = mock(org.springframework.security.core.Authentication.class);
+        when(authentication.getDetails()).thenReturn(Map.of("userId", userId));
+        return authentication;
     }
 
     private BranchWiseAgeingProcedureRepository.ProcedureContractReportRow procedureRow(Long id, String loanNumber, int overdueCount) {
@@ -162,6 +226,8 @@ class DemandListServiceTest {
             null,
             "OWN" + id,
             "HP",
+            "Vehicles",
+            "Private Car",
             new BigDecimal("1200.00"),
             new BigDecimal("1000.00"),
             BigDecimal.ZERO,
@@ -210,6 +276,8 @@ class DemandListServiceTest {
             null,
             "OWN" + id,
             "HP",
+            "Vehicles",
+            "Private Car",
             new BigDecimal("1200.00"),
             new BigDecimal("1000.00"),
             new BigDecimal("1200.00"),

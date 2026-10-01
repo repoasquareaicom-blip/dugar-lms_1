@@ -30,12 +30,22 @@ export async function fetchDemandListPrint(filters) {
   return response.data;
 }
 
-export async function fetchDemandFollowUps(contractId) {
-  const response = await apiClient.get(`/reports/demand-list/contracts/${contractId}/follow-ups`);
+export async function fetchDemandComments(contractId) {
+  const response = await apiClient.get(`/reports/demand-list/contracts/${contractId}/comments`);
   return response.data;
 }
 
-export async function addDemandFollowUp(contractId, payload) {
-  const response = await apiClient.post(`/reports/demand-list/contracts/${contractId}/follow-ups`, payload);
+export async function addDemandComment(contractId, payload) {
+  const response = await apiClient.post(`/reports/demand-list/contracts/${contractId}/comments`, payload);
+  return response.data;
+}
+
+export async function fetchDemandPtps(contractId) {
+  const response = await apiClient.get(`/reports/demand-list/contracts/${contractId}/ptps`);
+  return response.data;
+}
+
+export async function addDemandPtp(contractId, payload) {
+  const response = await apiClient.post(`/reports/demand-list/contracts/${contractId}/ptps`, payload);
   return response.data;
 }

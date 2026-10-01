@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Flag, MessageSquare, X } from 'lucide-react';
+import { CalendarDays, Flag, MessageSquare, X } from 'lucide-react';
 import AgingDrilldownDrawer from '../../../components/aging-analysis/AgingDrilldownDrawer';
 import DemandListFilters from '../../../components/demand-list/DemandListFilters';
 import { lineValues, visibleDemandListColumns } from '../../../components/demand-list/DemandListGrid';
@@ -7,7 +7,7 @@ import DemandListPrintView from '../../../components/demand-list/DemandListPrint
 import DemandListSummary from '../../../components/demand-list/DemandListSummary';
 import ReceiptVoucher from '../../accounts/transactions/ReceiptVoucher';
 import { fetchAgingContractDetail, fetchAgingContractEmis, fetchAgingContractReceipts, fetchAgingRawVoucher } from '../../../services/agingAnalysisService';
-import { addDemandFollowUp, fetchDemandFollowUps, fetchDemandList } from '../../../services/demandListService';
+import { addDemandComment, addDemandPtp, fetchDemandComments, fetchDemandList, fetchDemandPtps } from '../../../services/demandListService';
 import { fetchContractFlagMaster, fetchContractFlags, saveContractFlags } from '../../../services/contractsService';
 
 const today = new Date().toISOString().slice(0, 10);
@@ -142,7 +142,14 @@ function PartyDetails({ person }) {
   );
 }
 
-function DemandListTable({ rows, page, pageSize, onOpen, onParty, onFlag, onFollowUp, showArea, reportType }) {
+function splitFlags(row) {
+  return String(row.flagNames || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function DemandListTable({ rows, page, pageSize, onOpen, onParty, onFlag, onComment, onPtp, showArea, reportType }) {
   const columns = visibleDemandListColumns({ showArea, reportType });
 
   const renderCell = (displayRow, column) => {
@@ -157,14 +164,6 @@ function DemandListTable({ rows, page, pageSize, onOpen, onParty, onFlag, onFoll
             {displayRow.loanNumber || ''}
           </button>
           {displayRow.agreementDate && <div className="text-[11px] font-bold text-black/70">Agreement: {lineValues(displayRow, 'loanNumber')[1]?.replace('Agreement: ', '')}</div>}
-          <div className="flex gap-1">
-            <button type="button" title={Number(displayRow.flagCount || 0) > 0 ? 'View marked flags' : 'No flags'} onClick={() => onFlag(displayRow)} className="grid h-6 w-6 place-items-center border border-black/20 bg-white">
-              <Flag size={14} className={Number(displayRow.flagCount || 0) > 0 ? 'fill-red-600 text-red-700' : 'text-[#0052CC]'} />
-            </button>
-            <button type="button" title={Number(displayRow.followUpCount || 0) > 0 ? 'View follow-up comments' : 'No follow-up comments'} onClick={() => onFollowUp(displayRow)} className="grid h-6 w-6 place-items-center border border-black/20 bg-white">
-              <MessageSquare size={14} className={Number(displayRow.followUpCount || 0) > 0 ? 'fill-red-100 text-red-700' : 'text-[#0052CC]'} />
-            </button>
-          </div>
         </div>
       );
     }
@@ -191,11 +190,32 @@ function DemandListTable({ rows, page, pageSize, onOpen, onParty, onFlag, onFoll
         </div>
       );
     }
-    if (column.key === 'flag') {
+    if (column.key === 'loanFlag') {
+      const flags = splitFlags(displayRow);
+      const hasFlags = flags.length > 0;
+      const hasComment = Boolean(String(displayRow.latestComment || '').trim());
+      const hasPtp = Boolean(displayRow.latestPtpDate);
       return (
-        <button type="button" title={Number(displayRow.flagCount || 0) > 0 ? 'View marked flags' : 'No flags'} onClick={() => onFlag(displayRow)} className="mx-auto grid h-7 w-7 place-items-center border border-black/20 bg-white">
-          <Flag size={15} className={Number(displayRow.flagCount || 0) > 0 ? 'fill-red-600 text-red-700' : 'text-[#0052CC]'} />
-        </button>
+        <div className="space-y-1 text-left font-bold leading-4">
+          <button type="button" title={hasFlags ? 'Edit loan flags' : 'Add loan flag'} onClick={() => onFlag(displayRow)} className="w-full space-y-1 text-left hover:text-[#0052CC]">
+            {(hasFlags ? flags : ['Not Flagged']).map((flag) => (
+              <span key={flag} className="flex items-start gap-1">
+                <Flag size={13} className={`mt-0.5 shrink-0 ${hasFlags ? 'fill-red-600 text-red-700' : 'text-[#0052CC]'}`} />
+                <span className="break-words">{flag}</span>
+              </span>
+            ))}
+          </button>
+          <div className="border-t border-black/10" />
+          <button type="button" title={hasComment ? 'View your comments' : 'Add comment'} onClick={() => onComment(displayRow)} className="flex w-full items-start gap-1 text-left hover:text-[#0052CC]">
+            <MessageSquare size={14} className={`mt-0.5 shrink-0 ${hasComment ? 'fill-red-100 text-red-700' : 'text-[#0052CC]'}`} />
+            <span className="line-clamp-3 break-words">{hasComment ? displayRow.latestComment : 'No Comment'}</span>
+          </button>
+          <div className="border-t border-black/10" />
+          <button type="button" title={hasPtp ? 'View your PTPs' : 'Add PTP'} onClick={() => onPtp(displayRow)} className="flex w-full items-center gap-1 text-left hover:text-[#0052CC]">
+            <CalendarDays size={14} className={`shrink-0 ${hasPtp ? 'text-red-700' : 'text-[#0052CC]'}`} />
+            <span>{hasPtp ? lineValues({ lastPaidEmiDate: displayRow.latestPtpDate }, 'lastPaidEmiDate')[0] : 'No PTP'}</span>
+          </button>
+        </div>
       );
     }
     return <StackCell values={lineValues(displayRow, column.key)} align={column.align || 'left'} />;
@@ -309,7 +329,8 @@ export default function DemandListPage() {
   const [printData, setPrintData] = useState(null);
   const [partyPopup, setPartyPopup] = useState(null);
   const [flagPopup, setFlagPopup] = useState({ open: false, row: null, master: [], selected: {}, loading: false, saving: false, message: '' });
-  const [followUpPopup, setFollowUpPopup] = useState({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', followUpType: 'COMMENT', followUpDate: '', message: '' });
+  const [commentPopup, setCommentPopup] = useState({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', message: '' });
+  const [ptpPopup, setPtpPopup] = useState({ open: false, row: null, history: [], loading: false, saving: false, ptpDate: '', message: '' });
   const [voucherEditModal, setVoucherEditModal] = useState({ open: false, voucherNumber: '' });
 
   useEffect(() => {
@@ -368,7 +389,8 @@ export default function DemandListPage() {
     setDrilldown({ open: false, loading: false, contracts: [], detail: null, emis: [], receipts: [] });
     setPartyPopup(null);
     setFlagPopup({ open: false, row: null, master: [], selected: {}, loading: false, saving: false, message: '' });
-    setFollowUpPopup({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', followUpType: 'COMMENT', followUpDate: '', message: '' });
+    setCommentPopup({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', message: '' });
+    setPtpPopup({ open: false, row: null, history: [], loading: false, saving: false, ptpDate: '', message: '' });
   };
 
   const closeDrilldown = () => {
@@ -456,49 +478,76 @@ export default function DemandListPage() {
   }, [page, pageSize, rows]);
   const showAreaColumn = !appliedFilters?.areaCode?.trim();
 
-  const openFollowUp = async (row) => {
-    setFollowUpPopup({ open: true, row, history: [], loading: true, saving: false, commentText: '', followUpType: 'COMMENT', followUpDate: '', message: '' });
+  const openComment = async (row) => {
+    setCommentPopup({ open: true, row, history: [], loading: true, saving: false, commentText: '', message: '' });
     try {
-      const history = await fetchDemandFollowUps(row.contractId);
-      setFollowUpPopup((current) => ({ ...current, history: Array.isArray(history) ? history : [], loading: false }));
+      const history = await fetchDemandComments(row.contractId);
+      setCommentPopup((current) => ({ ...current, history: Array.isArray(history) ? history : [], loading: false }));
     } catch (error) {
-      setFollowUpPopup((current) => ({ ...current, loading: false, message: error?.response?.data?.message || error?.message || 'Unable to load follow-up comments.' }));
+      setCommentPopup((current) => ({ ...current, loading: false, message: error?.response?.data?.message || error?.message || 'Unable to load comments.' }));
     }
   };
 
-  const submitFollowUp = async () => {
-    const row = followUpPopup.row;
-    const commentText = followUpPopup.commentText.trim();
+  const submitComment = async () => {
+    const row = commentPopup.row;
+    const commentText = commentPopup.commentText.trim();
     if (!row?.contractId || !commentText) {
-      setFollowUpPopup((current) => ({ ...current, message: 'Comments are mandatory.' }));
+      setCommentPopup((current) => ({ ...current, message: 'Comment is mandatory.' }));
       return;
     }
-    if (followUpPopup.followUpType === 'PTP' && !followUpPopup.followUpDate) {
-      setFollowUpPopup((current) => ({ ...current, message: 'Promised date is required for PTP.' }));
-      return;
-    }
-    setFollowUpPopup((current) => ({ ...current, saving: true, message: '' }));
+    setCommentPopup((current) => ({ ...current, saving: true, message: '' }));
     try {
-      await addDemandFollowUp(row.contractId, {
+      const saved = await addDemandComment(row.contractId, {
         commentText,
-        followUpType: followUpPopup.followUpType,
-        followUpDate: followUpPopup.followUpDate || null,
       });
-      const history = await fetchDemandFollowUps(row.contractId);
+      const history = await fetchDemandComments(row.contractId);
       setRows((current) => current.map((item) => (
-        item.contractId === row.contractId ? { ...item, followUpCount: Math.max(Number(item.followUpCount || 0), 1) } : item
+        item.contractId === row.contractId ? { ...item, latestComment: saved?.commentText || commentText, latestCommentCreatedAt: saved?.createdAt || null } : item
       )));
-      setFollowUpPopup((current) => ({
+      setCommentPopup((current) => ({
         ...current,
         history: Array.isArray(history) ? history : [],
         saving: false,
         commentText: '',
-        followUpType: 'COMMENT',
-        followUpDate: '',
-        message: 'Follow-up saved.',
+        message: 'Comment saved.',
       }));
     } catch (error) {
-      setFollowUpPopup((current) => ({ ...current, saving: false, message: error?.response?.data?.message || error?.message || 'Unable to save follow-up.' }));
+      setCommentPopup((current) => ({ ...current, saving: false, message: error?.response?.data?.message || error?.message || 'Unable to save comment.' }));
+    }
+  };
+
+  const openPtp = async (row) => {
+    setPtpPopup({ open: true, row, history: [], loading: true, saving: false, ptpDate: row.latestPtpDate || '', message: '' });
+    try {
+      const history = await fetchDemandPtps(row.contractId);
+      setPtpPopup((current) => ({ ...current, history: Array.isArray(history) ? history : [], loading: false }));
+    } catch (error) {
+      setPtpPopup((current) => ({ ...current, loading: false, message: error?.response?.data?.message || error?.message || 'Unable to load PTP history.' }));
+    }
+  };
+
+  const submitPtp = async () => {
+    const row = ptpPopup.row;
+    if (!row?.contractId || !ptpPopup.ptpDate) {
+      setPtpPopup((current) => ({ ...current, message: 'PTP date is required.' }));
+      return;
+    }
+    setPtpPopup((current) => ({ ...current, saving: true, message: '' }));
+    try {
+      const saved = await addDemandPtp(row.contractId, { ptpDate: ptpPopup.ptpDate });
+      const history = await fetchDemandPtps(row.contractId);
+      setRows((current) => current.map((item) => (
+        item.contractId === row.contractId ? { ...item, latestPtpDate: saved?.ptpDate || ptpPopup.ptpDate } : item
+      )));
+      setPtpPopup((current) => ({
+        ...current,
+        history: Array.isArray(history) ? history : [],
+        saving: false,
+        ptpDate: saved?.ptpDate || current.ptpDate,
+        message: 'PTP saved.',
+      }));
+    } catch (error) {
+      setPtpPopup((current) => ({ ...current, saving: false, message: error?.response?.data?.message || error?.message || 'Unable to save PTP.' }));
     }
   };
 
@@ -521,10 +570,7 @@ export default function DemandListPage() {
       ]);
       const selected = {};
       (existing.flags || []).forEach((flag) => {
-        selected[flag.contractFlagMasterId] = {
-          checked: true,
-          remarks: flag.remarks || '',
-        };
+        selected[flag.contractFlagMasterId] = true;
       });
       setFlagPopup({ open: true, row, master, selected, loading: false, saving: false, message: '' });
     } catch (error) {
@@ -535,34 +581,22 @@ export default function DemandListPage() {
   const toggleFlag = (flagId) => {
     setFlagPopup((current) => {
       const selected = { ...current.selected };
-      if (selected[flagId]?.checked) {
+      if (selected[flagId]) {
         delete selected[flagId];
       } else {
-        selected[flagId] = { checked: true, remarks: '' };
+        selected[flagId] = true;
       }
       return { ...current, selected, message: '' };
     });
-  };
-
-  const updateFlagRemark = (flagId, remarks) => {
-    setFlagPopup((current) => ({
-      ...current,
-      selected: {
-        ...current.selected,
-        [flagId]: { checked: true, remarks },
-      },
-      message: '',
-    }));
   };
 
   const saveFlags = async () => {
     const row = flagPopup.row;
     if (!row?.contractId) return;
     const flags = Object.entries(flagPopup.selected)
-      .filter(([, value]) => value?.checked)
-      .map(([flagId, value]) => ({
+      .filter(([, checked]) => checked)
+      .map(([flagId]) => ({
         contractFlagMasterId: Number(flagId),
-        remarks: value.remarks || '',
       }));
     setFlagPopup((current) => ({ ...current, saving: true, message: '' }));
     try {
@@ -677,7 +711,8 @@ export default function DemandListPage() {
         onOpen={openDemandDrilldown}
         onParty={setPartyPopup}
         onFlag={openFlagEditor}
-        onFollowUp={openFollowUp}
+        onComment={openComment}
+        onPtp={openPtp}
         showArea={showAreaColumn}
         reportType={appliedFilters?.reportType || filters.reportType}
       />
@@ -715,21 +750,13 @@ export default function DemandListPage() {
           ) : (
             <div className="space-y-2">
               {flagPopup.master.map((flag) => {
-                const state = flagPopup.selected[flag.contractFlagMasterId] || {};
+                const checked = Boolean(flagPopup.selected[flag.contractFlagMasterId]);
                 return (
-                  <div key={flag.contractFlagMasterId} className={`border p-2 ${state.checked ? 'border-blue-300 bg-blue-50' : 'border-black/20 bg-white'}`}>
+                  <div key={flag.contractFlagMasterId} className={`border p-2 ${checked ? 'border-blue-300 bg-blue-50' : 'border-black/20 bg-white'}`}>
                     <label className="flex items-center gap-2 font-black uppercase">
-                      <input type="checkbox" checked={Boolean(state.checked)} onChange={() => toggleFlag(flag.contractFlagMasterId)} />
+                      <input type="checkbox" checked={checked} onChange={() => toggleFlag(flag.contractFlagMasterId)} />
                       {flag.flagName}
                     </label>
-                    {state.checked && (
-                      <textarea
-                        value={state.remarks || ''}
-                        onChange={(event) => updateFlagRemark(flag.contractFlagMasterId, event.target.value)}
-                        placeholder="Remarks"
-                        className="mt-2 h-16 w-full resize-none border border-black/30 bg-white p-2 text-[12px] font-bold outline-none focus:border-[#0052CC]"
-                      />
-                    )}
                   </div>
                 );
               })}
@@ -742,56 +769,69 @@ export default function DemandListPage() {
         </InfoModal>
       )}
 
-      {followUpPopup.open && (
-        <InfoModal title={`Follow-up - ${followUpPopup.row?.loanNumber || ''}`} onClose={() => setFollowUpPopup({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', followUpType: 'COMMENT', followUpDate: '', message: '' })}>
+      {commentPopup.open && (
+        <InfoModal title={`Comment - ${commentPopup.row?.loanNumber || ''}`} onClose={() => setCommentPopup({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', message: '' })}>
           <div className="space-y-3">
             <div className="border border-black/20 bg-slate-50 p-2">
-              <div className="mb-2 font-black uppercase text-[#0052CC]">Add Follow-up</div>
-              <div className="mb-2 grid grid-cols-2 gap-2">
-                {['COMMENT', 'PTP'].map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setFollowUpPopup((current) => ({ ...current, followUpType: type, message: '' }))}
-                    className={`h-8 border text-[12px] font-black uppercase ${followUpPopup.followUpType === type ? 'border-[#0052CC] bg-[#0052CC] text-white' : 'border-black/30 bg-white text-black'}`}
-                  >
-                    {type === 'PTP' ? 'PTP / Promised Date' : 'Comment'}
-                  </button>
-                ))}
-              </div>
+              <div className="mb-2 font-black uppercase text-[#0052CC]">Add Comment</div>
               <label className="block">
-                <span className="mb-1 block font-black uppercase text-black/60">Comments *</span>
+                <span className="mb-1 block font-black uppercase text-black/60">Comment *</span>
                 <textarea
-                  value={followUpPopup.commentText}
-                  onChange={(event) => setFollowUpPopup((current) => ({ ...current, commentText: event.target.value, message: '' }))}
+                  value={commentPopup.commentText}
+                  onChange={(event) => setCommentPopup((current) => ({ ...current, commentText: event.target.value, message: '' }))}
                   className="h-20 w-full resize-none border border-black/30 bg-white p-2 text-[12px] font-bold outline-none focus:border-[#0052CC]"
                 />
               </label>
-              <label className="mt-2 block">
-                <span className="mb-1 block font-black uppercase text-black/60">{followUpPopup.followUpType === 'PTP' ? 'Promised Date *' : 'Follow-up Date'}</span>
-                <input
-                  type="date"
-                  value={followUpPopup.followUpDate}
-                  onChange={(event) => setFollowUpPopup((current) => ({ ...current, followUpDate: event.target.value }))}
-                  className="h-8 w-full border border-black/30 bg-white px-2 text-[12px] font-bold outline-none focus:border-[#0052CC]"
-                />
-              </label>
-              {followUpPopup.message && <div className="mt-2 font-bold text-[#0052CC]">{followUpPopup.message}</div>}
-              <button type="button" disabled={followUpPopup.saving} onClick={submitFollowUp} className="mt-2 border border-[#0052CC] bg-[#0052CC] px-3 py-1.5 text-[12px] font-black uppercase text-white disabled:opacity-50">
-                {followUpPopup.saving ? 'Saving...' : 'Submit'}
+              {commentPopup.message && <div className="mt-2 font-bold text-[#0052CC]">{commentPopup.message}</div>}
+              <button type="button" disabled={commentPopup.saving} onClick={submitComment} className="mt-2 border border-[#0052CC] bg-[#0052CC] px-3 py-1.5 text-[12px] font-black uppercase text-white disabled:opacity-50">
+                {commentPopup.saving ? 'Saving...' : 'Save'}
               </button>
             </div>
             <div>
               <div className="mb-2 font-black uppercase text-black/70">History</div>
-              {followUpPopup.loading && <div className="font-bold text-black/60">Loading history...</div>}
-              {!followUpPopup.loading && followUpPopup.history.length === 0 && <div className="font-bold text-black/60">No follow-up comments.</div>}
+              {commentPopup.loading && <div className="font-bold text-black/60">Loading history...</div>}
+              {!commentPopup.loading && commentPopup.history.length === 0 && <div className="font-bold text-black/60">No comments.</div>}
               <div className="max-h-64 space-y-2 overflow-auto">
-                {followUpPopup.history.map((item) => (
+                {commentPopup.history.map((item) => (
                   <div key={item.contractFollowUpId} className="border border-black/20 bg-white p-2">
                     <div className="font-black text-black">{formatDateTime(item.createdAt)}</div>
-                    <div className="font-bold text-black/70">{item.followUpType === 'PTP' ? 'PTP' : 'Comment'}{item.followUpDate ? `: ${lineValues({ lastPaidEmiDate: item.followUpDate }, 'lastPaidEmiDate')[0]}` : ''}</div>
-                    <div className="font-bold text-black/70">{item.createdByUsername || item.createdBy || '-'}</div>
                     <div className="mt-1 whitespace-pre-wrap font-bold leading-5">{item.commentText}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </InfoModal>
+      )}
+
+      {ptpPopup.open && (
+        <InfoModal title={`PTP - ${ptpPopup.row?.loanNumber || ''}`} onClose={() => setPtpPopup({ open: false, row: null, history: [], loading: false, saving: false, ptpDate: '', message: '' })}>
+          <div className="space-y-3">
+            <div className="border border-black/20 bg-slate-50 p-2">
+              <div className="mb-2 font-black uppercase text-[#0052CC]">Add PTP</div>
+              <label className="block">
+                <span className="mb-1 block font-black uppercase text-black/60">PTP Date *</span>
+                <input
+                  type="date"
+                  value={ptpPopup.ptpDate}
+                  onChange={(event) => setPtpPopup((current) => ({ ...current, ptpDate: event.target.value, message: '' }))}
+                  className="h-8 w-full border border-black/30 bg-white px-2 text-[12px] font-bold outline-none focus:border-[#0052CC]"
+                />
+              </label>
+              {ptpPopup.message && <div className="mt-2 font-bold text-[#0052CC]">{ptpPopup.message}</div>}
+              <button type="button" disabled={ptpPopup.saving} onClick={submitPtp} className="mt-2 border border-[#0052CC] bg-[#0052CC] px-3 py-1.5 text-[12px] font-black uppercase text-white disabled:opacity-50">
+                {ptpPopup.saving ? 'Saving...' : 'Save PTP'}
+              </button>
+            </div>
+            <div>
+              <div className="mb-2 font-black uppercase text-black/70">History</div>
+              {ptpPopup.loading && <div className="font-bold text-black/60">Loading history...</div>}
+              {!ptpPopup.loading && ptpPopup.history.length === 0 && <div className="font-bold text-black/60">No PTP.</div>}
+              <div className="max-h-64 space-y-2 overflow-auto">
+                {ptpPopup.history.map((item) => (
+                  <div key={item.contractPtpId} className="border border-black/20 bg-white p-2">
+                    <div className="font-black text-black">{lineValues({ lastPaidEmiDate: item.ptpDate }, 'lastPaidEmiDate')[0]}</div>
+                    <div className="font-bold text-black/70">{formatDateTime(item.createdAt)}</div>
                   </div>
                 ))}
               </div>

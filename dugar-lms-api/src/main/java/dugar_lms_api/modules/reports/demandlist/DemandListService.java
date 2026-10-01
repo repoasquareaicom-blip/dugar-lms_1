@@ -78,35 +78,66 @@ public class DemandListService {
     }
 
     public List<ContractFollowUpDto> getFollowUps(Long contractId, Authentication authentication) {
+        return getComments(contractId, authentication);
+    }
+
+    public List<ContractFollowUpDto> getComments(Long contractId, Authentication authentication) {
         requireContractAccess(contractId, authentication);
-        return demandListRepository.findFollowUps(contractId);
+        return demandListRepository.findCommentHistory(contractId, requireUserId(authentication, "load comments"));
     }
 
     public ContractFollowUpDto addFollowUp(Long contractId, ContractFollowUpRequest request, Authentication authentication) {
+        return addComment(contractId, request, authentication);
+    }
+
+    public ContractFollowUpDto addComment(Long contractId, ContractFollowUpRequest request, Authentication authentication) {
         requireContractAccess(contractId, authentication);
         if (request == null || request.commentText() == null || request.commentText().trim().isEmpty()) {
             throw new IllegalArgumentException("Comments are mandatory.");
         }
-        Long userId = userId(authentication);
-        if (userId == null) {
-            throw new IllegalArgumentException("User id is required to add a follow-up.");
+        Long userId = requireUserId(authentication, "add a comment");
+        return demandListRepository.addComment(contractId, request.commentText().trim(), userId);
+    }
+
+    public List<ContractPtpDto> getPtps(Long contractId, Authentication authentication) {
+        requireContractAccess(contractId, authentication);
+        return demandListRepository.findPtpHistory(contractId, requireUserId(authentication, "load PTPs"));
+    }
+
+    public ContractPtpDto addPtp(Long contractId, ContractPtpRequest request, Authentication authentication) {
+        requireContractAccess(contractId, authentication);
+        if (request == null || request.ptpDate() == null) {
+            throw new IllegalArgumentException("PTP date is required.");
         }
-        String followUpType = followUpType(request);
-        return demandListRepository.addFollowUp(
-            contractId,
-            new ContractFollowUpRequest(request.commentText().trim(), followUpType, request.followUpDate()),
-            userId
-        );
+        return demandListRepository.addPtp(contractId, request, requireUserId(authentication, "add a PTP"));
     }
 
     private List<DemandListRowDto> procedureRows(DemandListRequest request, ReportAccessScope accessScope) {
         List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> sourceRows =
             branchWiseAgeingProcedureRepository.getContractReportRows(request.asOnDate(), request.areaCode(), accessScope);
-        return sourceRows.stream()
+        List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> filteredRows = sourceRows.stream()
             .filter(row -> contractNumberMatches(row, request.contractNumber()))
             .filter(row -> overdueCountMatches(row, request.overdueInstallmentCount()))
             .filter(row -> reportTypeMatches(row, request.reportType()))
-            .map(this::demandListRow)
+            .toList();
+        return demandListRows(filteredRows, accessScope.userId());
+    }
+
+    private List<DemandListRowDto> demandListRows(List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> sourceRows, Long userId) {
+        List<Long> contractIds = sourceRows.stream()
+            .map(BranchWiseAgeingProcedureRepository.ProcedureContractReportRow::contractId)
+            .filter(id -> id != null)
+            .distinct()
+            .toList();
+        Map<Long, ContractFollowUpDto> latestComments = userId == null
+            ? Map.of()
+            : demandListRepository.findLatestComments(contractIds, userId);
+        Map<Long, ContractPtpDto> latestPtps = userId == null
+            ? Map.of()
+            : demandListRepository.findLatestPtps(contractIds, userId);
+
+        return sourceRows.stream()
+            .map(row -> demandListRow(row, latestComments.get(row.contractId()), latestPtps.get(row.contractId())))
             .toList();
     }
 
@@ -148,7 +179,7 @@ public class DemandListService {
         );
     }
 
-    private DemandListRowDto demandListRow(BranchWiseAgeingProcedureRepository.ProcedureContractReportRow row) {
+    private DemandListRowDto demandListRow(BranchWiseAgeingProcedureRepository.ProcedureContractReportRow row, ContractFollowUpDto latestComment, ContractPtpDto latestPtp) {
         return new DemandListRowDto(
             row.contractId(),
             row.contractNumber(),
@@ -165,12 +196,12 @@ public class DemandListService {
             row.guarantor2Name(),
             row.guarantor2Phone(),
             row.guarantor2Address(),
-            first(row.category(), row.contractType()),
+            row.productType(),
             row.vehicleMake(),
-            null,
+            row.vehicleTypeCode(),
             row.registrationNumber(),
             row.ownerSerialNo(),
-            row.contractType(),
+            row.vehicleTypeCode(),
             money(row.loanAmount()),
             money(row.flatInterestRate()),
             money(row.totalContractValue()),
@@ -190,6 +221,9 @@ public class DemandListService {
             row.flagCodes(),
             row.flagRemarks(),
             row.followUpCount(),
+            latestComment == null ? null : latestComment.commentText(),
+            latestComment == null ? null : latestComment.createdAt(),
+            latestPtp == null ? null : latestPtp.ptpDate(),
             row.areaCode(),
             row.areaName(),
             null,
@@ -256,19 +290,6 @@ public class DemandListService {
         };
     }
 
-    private String followUpType(ContractFollowUpRequest request) {
-        String normalized = request.followUpType() == null || request.followUpType().isBlank()
-            ? "COMMENT"
-            : request.followUpType().trim().toUpperCase();
-        if (!"COMMENT".equals(normalized) && !"PTP".equals(normalized)) {
-            throw new IllegalArgumentException("Follow-up type must be COMMENT or PTP.");
-        }
-        if ("PTP".equals(normalized) && request.followUpDate() == null) {
-            throw new IllegalArgumentException("Promised date is required for PTP.");
-        }
-        return normalized;
-    }
-
     private Integer validOverdueCount(Integer value) {
         return value == null || value < 0 ? null : value;
     }
@@ -292,11 +313,6 @@ public class DemandListService {
 
     private BigDecimal money(BigDecimal value) {
         return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private String first(String first, String second) {
-        String cleanedFirst = clean(first);
-        return cleanedFirst == null ? clean(second) : cleanedFirst;
     }
 
     private String auditUser(Authentication authentication) {
@@ -329,5 +345,13 @@ public class DemandListService {
         } catch (NumberFormatException exception) {
             return null;
         }
+    }
+
+    private Long requireUserId(Authentication authentication, String action) {
+        Long userId = userId(authentication);
+        if (userId == null) {
+            throw new IllegalArgumentException("User id is required to " + action + ".");
+        }
+        return userId;
     }
 }
