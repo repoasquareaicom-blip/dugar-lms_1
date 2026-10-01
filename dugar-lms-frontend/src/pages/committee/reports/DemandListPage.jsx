@@ -5,6 +5,7 @@ import DemandListFilters from '../../../components/demand-list/DemandListFilters
 import { lineValues, visibleDemandListColumns } from '../../../components/demand-list/DemandListGrid';
 import DemandListPrintView from '../../../components/demand-list/DemandListPrintView';
 import DemandListSummary from '../../../components/demand-list/DemandListSummary';
+import ReceiptVoucher from '../../accounts/transactions/ReceiptVoucher';
 import { fetchAgingContractDetail, fetchAgingContractEmis, fetchAgingContractReceipts, fetchAgingRawVoucher } from '../../../services/agingAnalysisService';
 import { addDemandFollowUp, fetchDemandFollowUps, fetchDemandList } from '../../../services/demandListService';
 import { fetchContractFlagMaster, fetchContractFlags, saveContractFlags } from '../../../services/contractsService';
@@ -97,6 +98,26 @@ function InfoModal({ title, children, onClose }) {
           </button>
         </div>
         <div className="p-3 text-[12px] text-black">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function VoucherEditReportModal({ voucherNumber, onClose }) {
+  if (!voucherNumber) return null;
+  return (
+    <div className="no-print fixed inset-0 z-[2100] flex items-center justify-center bg-black/45 p-3">
+      <div className="relative flex h-[94vh] w-[96vw] max-w-[1500px] flex-col overflow-hidden border-2 border-blue-950 bg-white shadow-2xl">
+        <button type="button" onClick={onClose} className="absolute right-[6px] top-[6px] z-[80] grid h-8 w-8 place-items-center border border-red-300 bg-white text-red-700 shadow hover:bg-red-50" title="Close Voucher Edit" aria-label="Close Voucher Edit">
+          <X size={16} />
+        </button>
+        <div className="flex items-center justify-between border-b border-black/20 bg-blue-50 px-3 py-2">
+          <div className="text-[13px] font-black uppercase text-[#0052CC]">Voucher Edit - {voucherNumber}</div>
+          <div className="h-8 w-8" />
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <ReceiptVoucher embedded initialVoucherNumber={voucherNumber} onClose={onClose} />
+        </div>
       </div>
     </div>
   );
@@ -289,6 +310,7 @@ export default function DemandListPage() {
   const [partyPopup, setPartyPopup] = useState(null);
   const [flagPopup, setFlagPopup] = useState({ open: false, row: null, master: [], selected: {}, loading: false, saving: false, message: '' });
   const [followUpPopup, setFollowUpPopup] = useState({ open: false, row: null, history: [], loading: false, saving: false, commentText: '', followUpType: 'COMMENT', followUpDate: '', message: '' });
+  const [voucherEditModal, setVoucherEditModal] = useState({ open: false, voucherNumber: '' });
 
   useEffect(() => {
     if (!appliedFilters) return;
@@ -404,6 +426,12 @@ export default function DemandListPage() {
     } catch (error) {
       setDrilldown((current) => ({ ...current, rawVoucherLoading: false, rawVoucherMessage: error?.response?.data?.message || error?.message || 'Unable to load raw voucher details.' }));
     }
+  };
+
+  const openVoucherEdit = (receipt) => {
+    const voucherNumber = String(receipt?.voucherNumber || '').trim();
+    if (!voucherNumber) return;
+    setVoucherEditModal({ open: true, voucherNumber });
   };
 
   const currentReport = () => {
@@ -665,7 +693,14 @@ export default function DemandListPage() {
 
       {printData && <DemandListPrintView data={printData} filters={appliedFilters} />}
 
-      <AgingDrilldownDrawer state={drilldown} onClose={closeDrilldown} onSelectContract={(contractId) => loadDrilldownContract(contractId, appliedFilters?.asOnDate || filters.asOnDate)} onSelectReceipt={selectDrilldownReceipt} />
+      <AgingDrilldownDrawer state={drilldown} onClose={closeDrilldown} onSelectContract={(contractId) => loadDrilldownContract(contractId, appliedFilters?.asOnDate || filters.asOnDate)} onSelectReceipt={selectDrilldownReceipt} onOpenVoucherEdit={openVoucherEdit} />
+
+      {voucherEditModal.open && (
+        <VoucherEditReportModal
+          voucherNumber={voucherEditModal.voucherNumber}
+          onClose={() => setVoucherEditModal({ open: false, voucherNumber: '' })}
+        />
+      )}
 
       {partyPopup && (
         <InfoModal title={partyPopup.role} onClose={() => setPartyPopup(null)}>

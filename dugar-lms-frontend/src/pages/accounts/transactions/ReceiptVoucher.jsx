@@ -89,13 +89,13 @@ function requestErrorMessage(error, action = 'save voucher') {
   if (status === 403) {
     return `You do not have permission to ${action}. Please contact the administrator.`;
   }
+  if (serverMessage) return serverMessage;
   if (status === 404) {
     return `The ${action} API is not available. Please restart the API server.`;
   }
   if (status >= 500) {
     return `The API could not ${action}. Please check the API log for the exact server error.`;
   }
-  if (serverMessage) return serverMessage;
   return error?.message || `Unable to ${action}.`;
 }
 
@@ -274,15 +274,16 @@ const VoucherDateInput = ({ value, onChange }) => {
   );
 };
 
-const ReceiptVoucher = () => {
+const ReceiptVoucher = ({ embedded = false, initialVoucherNumber = null, onClose = null } = {}) => {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const selectedContract = location.state?.contract || null;
   const requestedVoucherId = location.state?.voucherHeaderId || searchParams.get('voucherHeaderId');
+  const requestedVoucherNumber = embedded ? initialVoucherNumber : location.state?.voucherNumber || searchParams.get('voucherNumber');
   const authorisationMode = location.state?.authorisationMode || searchParams.get('authorisation') === 'true';
   const returnTo = location.state?.returnTo || '/accounts/transaction/authorisation';
-  const voucherEditMode = location.pathname.toLowerCase() === '/accounts/transaction/voucher-edit';
+  const voucherEditMode = embedded || location.pathname.toLowerCase() === '/accounts/transaction/voucher-edit';
   const routeKind = voucherKind(location.pathname);
   const routeMode = voucherMode(location.pathname);
   const [selectedVoucherType, setSelectedVoucherType] = useState(voucherCode(routeKind, routeMode));
@@ -310,7 +311,7 @@ const ReceiptVoucher = () => {
   ]);
   const [message, setMessage] = useState(null);
   const [duplicateConfirm, setDuplicateConfirm] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(editMode && !requestedVoucherId);
+  const [searchOpen, setSearchOpen] = useState(editMode && !requestedVoucherId && !(voucherEditMode && requestedVoucherNumber));
   const [editingVoucherId, setEditingVoucherId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loadingVoucher, setLoadingVoucher] = useState(false);
@@ -572,8 +573,18 @@ const ReceiptVoucher = () => {
       .finally(() => setLoadingVoucher(false));
   }, [requestedVoucherId]);
 
+  useEffect(() => {
+    if (!voucherEditMode || !requestedVoucherNumber || requestedVoucherId) return;
+    fetchEditableVoucherByNumber(requestedVoucherNumber)
+      .then(loadVoucherForEdit)
+      .catch((error) => {
+        setMessage({ type: 'error', text: requestErrorMessage(error, 'find editable voucher') });
+        setSearchOpen(true);
+      });
+  }, [voucherEditMode, requestedVoucherNumber, requestedVoucherId]);
+
   const closeVoucherSearch = () => {
-    if (!voucherEditMode) {
+    if (!voucherEditMode || embedded) {
       setSearchOpen(false);
       return;
     }
@@ -903,6 +914,10 @@ const ReceiptVoucher = () => {
             setMessage(null);
             setRedirectAfterMessage('');
             if (nextRoute && message.type === 'success') {
+              if (embedded) {
+                onClose?.();
+                return;
+              }
               navigate(nextRoute);
             }
           }}

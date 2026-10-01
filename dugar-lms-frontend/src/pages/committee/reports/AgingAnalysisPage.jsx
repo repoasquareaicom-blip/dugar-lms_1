@@ -1,6 +1,7 @@
-import { Printer, RotateCcw, Search, Sheet } from 'lucide-react';
+import { Printer, RotateCcw, Search, Sheet, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import AgingDrilldownDrawer from '../../../components/aging-analysis/AgingDrilldownDrawer';
+import ReceiptVoucher from '../../accounts/transactions/ReceiptVoucher';
 import { fetchAgingAnalysis, fetchAgingContractDetail, fetchAgingContractEmis, fetchAgingContractReceipts, fetchAgingContracts, fetchAgingRawVoucher } from '../../../services/agingAnalysisService';
 import { fetchContractAreaOptions } from '../../../services/contractsService';
 
@@ -277,6 +278,26 @@ function SummaryStrip({ summary }) {
   );
 }
 
+function VoucherEditReportModal({ voucherNumber, onClose }) {
+  if (!voucherNumber) return null;
+  return (
+    <div className="no-print fixed inset-0 z-[2100] flex items-center justify-center bg-black/45 p-3">
+      <div className="relative flex h-[94vh] w-[96vw] max-w-[1500px] flex-col overflow-hidden border-2 border-blue-950 bg-white shadow-2xl">
+        <button type="button" onClick={onClose} className="absolute right-[6px] top-[6px] z-[80] grid h-8 w-8 place-items-center border border-red-300 bg-white text-red-700 shadow hover:bg-red-50" title="Close Voucher Edit" aria-label="Close Voucher Edit">
+          <X size={16} />
+        </button>
+        <div className="flex items-center justify-between border-b border-black/20 bg-blue-50 px-3 py-2">
+          <div className="text-[13px] font-black uppercase text-[#0052CC]">Voucher Edit - {voucherNumber}</div>
+          <div className="h-8 w-8" />
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <ReceiptVoucher embedded initialVoucherNumber={voucherNumber} onClose={onClose} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function consolidatedTotalRow(rows) {
   if (!rows.length) return null;
   const total = rows.reduce((sum, row) => sum + Number(row.total || 0), 0);
@@ -317,6 +338,7 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [drilldown, setDrilldown] = useState({ open: false, loading: false, contracts: [], detail: null, emis: [], receipts: [] });
+  const [voucherEditModal, setVoucherEditModal] = useState({ open: false, voucherNumber: '' });
 
   useEffect(() => {
     setActiveTab(initialTab === 'consolidated' ? 'consolidated' : 'branch');
@@ -392,6 +414,12 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
     } catch (error) {
       setDrilldown((current) => ({ ...current, rawVoucherLoading: false, rawVoucherMessage: error?.response?.data?.message || error?.message || 'Unable to load raw voucher details.' }));
     }
+  };
+
+  const openVoucherEdit = (receipt) => {
+    const voucherNumber = String(receipt?.voucherNumber || '').trim();
+    if (!voucherNumber) return;
+    setVoucherEditModal({ open: true, voucherNumber });
   };
 
   const print = async () => {
@@ -511,7 +539,13 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
           ? <ReportTable columns={branchColumns} rows={branchRows} footerRow={branchFooter} onCellClick={openBranchDrilldown} />
           : <ReportTable columns={consolidatedColumns} rows={consolidatedRows} footerRow={consolidatedFooter} />}
       </div>
-      <AgingDrilldownDrawer state={drilldown} onClose={() => setDrilldown({ open: false, loading: false, contracts: [], detail: null, emis: [], receipts: [] })} onSelectContract={selectDrilldownContract} onSelectReceipt={selectDrilldownReceipt} />
+      <AgingDrilldownDrawer state={drilldown} onClose={() => setDrilldown({ open: false, loading: false, contracts: [], detail: null, emis: [], receipts: [] })} onSelectContract={selectDrilldownContract} onSelectReceipt={selectDrilldownReceipt} onOpenVoucherEdit={openVoucherEdit} />
+      {voucherEditModal.open && (
+        <VoucherEditReportModal
+          voucherNumber={voucherEditModal.voucherNumber}
+          onClose={() => setVoucherEditModal({ open: false, voucherNumber: '' })}
+        />
+      )}
       <div className="aging-print-root">
         <div className="aging-print-title">Branch Wise Aging Analysis As on {titleDate}</div>
         <table className="aging-print-table">

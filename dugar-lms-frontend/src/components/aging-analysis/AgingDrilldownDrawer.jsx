@@ -49,7 +49,7 @@ function RawTable({ title, rows }) {
   );
 }
 
-export default function AgingDrilldownDrawer({ state, onClose, onSelectContract, onSelectReceipt }) {
+export default function AgingDrilldownDrawer({ state, onClose, onSelectContract, onSelectReceipt, onOpenVoucherEdit }) {
   if (!state?.open) return null;
   const contracts = state.contracts || [];
   const detail = state.detail;
@@ -149,7 +149,19 @@ export default function AgingDrilldownDrawer({ state, onClose, onSelectContract,
                     >
                       <td className="border border-black/20 px-2 py-1">{receipt.voucherDate || ''}</td>
                       <td className="border border-black/20 px-2 py-1">
-                        {onSelectReceipt ? <button type="button" className="font-bold text-[#0052CC] underline decoration-dotted underline-offset-2">{receipt.voucherNumber || ''}</button> : receipt.voucherNumber || ''}
+                        {onSelectReceipt ? (
+                          <button
+                            type="button"
+                            className="font-bold text-[#0052CC] underline decoration-dotted underline-offset-2"
+                            onClick={(event) => {
+                              if (!onOpenVoucherEdit) return;
+                              event.stopPropagation();
+                              onOpenVoucherEdit(receipt);
+                            }}
+                          >
+                            {receipt.voucherNumber || ''}
+                          </button>
+                        ) : receipt.voucherNumber || ''}
                       </td>
                       <td className="border border-black/20 px-2 py-1">{receipt.voucherType || ''}</td>
                       <td className="border border-black/20 px-2 py-1">{receipt.receiptNumber || receipt.temporaryReceiptNumber || ''}</td>

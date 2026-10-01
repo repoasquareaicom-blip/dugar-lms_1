@@ -269,24 +269,24 @@ const metrics = [
     label: '18', 
     count: 'Litigation', 
     icon: <CheckSquare size={18} />, 
-    // bg-[#D97706]/15 creates a light amber tint
-    bg: 'bg-red-600/45 border-red-600/30 text-red-600',
+    // bg-[#059669]/65 creates a green tint
+    bg: 'bg-[#059669]/65 border-[#059669]/30 text-[#059669]',
     trend: '+2' 
   },
   { 
     label: '22', 
     count: 'Repo Inventory', 
     icon: <Wallet size={18} />, 
-    // bg-[#059669]/15 creates a light emerald tint
-    bg: 'bg-[#059669]/65 border-[#059669]/30 text-[#059669]', 
+    // bg-[#0052CC]/65 creates a blue tint
+    bg: 'bg-[#0052CC]/65 border-[#0052CC]/30 text-[#0052CC]',
     trend: 'Stable' 
   },
   { 
     label: '23.89%', 
     count: 'Avg IRR', 
     icon: <TrendingUp size={18} />, 
-    // bg-[#7C3AED]/15 creates a light purple tint
-    bg: 'bg-[#7C3AED]/65 border-[#7C3AED]/30 text-[#7C3AED]', 
+    // bg-[#059669]/65 creates a green tint
+    bg: 'bg-[#059669]/65 border-[#059669]/30 text-[#059669]',
     trend: '+0.5%' 
   },
 ];
