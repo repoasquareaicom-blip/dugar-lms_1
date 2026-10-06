@@ -225,6 +225,54 @@ class ContractListRepositoryTest {
         assertThat(sql).contains("LOWER(TRIM(COALESCE(access_user.user_group, ''))) = 'user'");
         assertThat(sql).doesNotContain("created_user");
         assertThat(sql).doesNotContain("c.created_by");
-        assertThat(((MapSqlParameterSource) paramsCaptor.getValue()).getValue("restricted")).isEqualTo(true);
+        assertThat(((MapSqlParameterSource) paramsCaptor.getValue()).getValue("fullAccess")).isEqualTo(false);
+    }
+
+    @Test
+    void cibilSubmissionExportUsesActiveContractFiltersAndDoesNotApplyPagination() {
+        ContractListRepository repository = new ContractListRepository(namedParameterJdbcTemplate);
+        when(namedParameterJdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class)))
+            .thenReturn(List.of());
+
+        repository.findCibilSubmissionExport(new ContractListCriteria(
+            "Ravi",
+            "BR-01",
+            null,
+            "HP",
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            null,
+            3,
+            25,
+            "contractDate",
+            "desc"
+        ), new ReportAccessScope(false));
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<SqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(SqlParameterSource.class);
+        org.mockito.Mockito.verify(namedParameterJdbcTemplate).query(
+            sqlCaptor.capture(),
+            paramsCaptor.capture(),
+            any(RowMapper.class)
+        );
+
+        String sql = sqlCaptor.getValue();
+        assertThat(sql).contains("WHERE c.is_active = TRUE");
+        assertThat(sql).contains("UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'");
+        assertThat(sql).contains("FROM contract_repayment_structures repayment_exists");
+        assertThat(sql).contains("c.area_code = :branch");
+        assertThat(sql).contains("c.contract_type = :product");
+        assertThat(sql).contains("ORDER BY c.contract_date DESC, c.contract_id DESC");
+        assertThat(sql).doesNotContain("LIMIT :size");
+        assertThat(sql).doesNotContain("OFFSET :offset");
+
+        MapSqlParameterSource params = (MapSqlParameterSource) paramsCaptor.getValue();
+        assertThat(params.getValue("keywordPattern")).isEqualTo("%ravi%");
+        assertThat(params.getValue("branch")).isEqualTo("BR-01");
+        assertThat(params.getValue("product")).isEqualTo("HP");
     }
 }

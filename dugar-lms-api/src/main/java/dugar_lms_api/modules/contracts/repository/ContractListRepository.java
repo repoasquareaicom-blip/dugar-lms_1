@@ -1,6 +1,7 @@
 package dugar_lms_api.modules.contracts.repository;
 
 import dugar_lms_api.modules.accessmanagement.dto.ContractOptionDto;
+import dugar_lms_api.modules.contracts.dto.CibilSubmissionExportRow;
 import dugar_lms_api.modules.contracts.dto.ContractAreaOptionDto;
 import dugar_lms_api.modules.contracts.dto.ContractListDto;
 import dugar_lms_api.modules.contracts.service.ContractListCriteria;
@@ -117,6 +118,33 @@ public class ContractListRepository {
     private static final String FIND_SQL_PREFIX = """
         SELECT
         """ + CONTRACT_LIST_COLUMNS + FROM_SQL;
+
+    private static final String CIBIL_SUBMISSION_EXPORT_SQL_PREFIX = """
+        SELECT
+            NULLIF(TRIM(pm.full_name), '') AS consumer_name,
+            pm.date_of_birth,
+            NULLIF(TRIM(pm.pan_number), '') AS pan_number,
+            NULLIF(TRIM(pm.aadhaar_number), '') AS aadhaar_number,
+            NULLIF(TRIM(pm.contact_number), '') AS mobile_number,
+            NULLIF(TRIM(co_pm.contact_number), '') AS co_applicant_mobile_number,
+            NULLIF(TRIM(pm.email_id), '') AS email_id,
+            NULLIF(TRIM(pm.city), '') AS city,
+            NULLIF(TRIM(c.contract_number), '') AS contract_number,
+            c.contract_date,
+            c.loan_amount,
+            first_repayment.installment_amount AS emi_amount
+        """ + FROM_SQL + """
+        LEFT JOIN party_masters co_pm
+            ON UPPER(TRIM(co_pm.party_code)) = UPPER(TRIM(c.co_applicant_code))
+           AND co_pm.is_active = TRUE
+        LEFT JOIN LATERAL (
+            SELECT repayment.installment_amount
+            FROM contract_repayment_structures repayment
+            WHERE repayment.contract_id = c.contract_id
+            ORDER BY repayment.sequence_no
+            LIMIT 1
+        ) first_repayment ON TRUE
+        """;
 
     private static final String COUNT_SQL = """
         SELECT COUNT(*)
@@ -282,6 +310,21 @@ public class ContractListRepository {
         rs.getString("guarantor_occupation")
     );
 
+    private static final RowMapper<CibilSubmissionExportRow> CIBIL_SUBMISSION_ROW_MAPPER = (rs, rowNum) -> new CibilSubmissionExportRow(
+        rs.getString("consumer_name"),
+        rs.getObject("date_of_birth", java.time.LocalDate.class),
+        rs.getString("pan_number"),
+        rs.getString("aadhaar_number"),
+        rs.getString("mobile_number"),
+        rs.getString("co_applicant_mobile_number"),
+        rs.getString("email_id"),
+        rs.getString("city"),
+        rs.getString("contract_number"),
+        rs.getObject("contract_date", java.time.LocalDate.class),
+        rs.getBigDecimal("loan_amount"),
+        rs.getBigDecimal("emi_amount")
+    );
+
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
     public ContractListRepository(NamedParameterJdbcTemplate namedParameterJdbcTemplate) {
@@ -295,6 +338,15 @@ public class ContractListRepository {
     public List<ContractListDto> find(ContractListCriteria criteria, ReportAccessScope accessScope) {
         QueryParts queryParts = queryParts(criteria, accessScope);
         return namedParameterJdbcTemplate.query(findSql(criteria, queryParts.whereSql()), queryParts.params(), CONTRACT_LIST_ROW_MAPPER);
+    }
+
+    public List<CibilSubmissionExportRow> findCibilSubmissionExport(ContractListCriteria criteria, ReportAccessScope accessScope) {
+        QueryParts queryParts = queryParts(criteria, accessScope);
+        return namedParameterJdbcTemplate.query(
+            CIBIL_SUBMISSION_EXPORT_SQL_PREFIX + queryParts.whereSql() + orderBySql(criteria),
+            queryParts.params(),
+            CIBIL_SUBMISSION_ROW_MAPPER
+        );
     }
 
     public long count(ContractListCriteria criteria) {

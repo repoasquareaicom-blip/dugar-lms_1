@@ -3,7 +3,6 @@ package dugar_lms_api.modules.contracts.service;
 import dugar_lms_api.common.pagination.PageResponse;
 import dugar_lms_api.modules.contracts.dto.ContractListDto;
 import dugar_lms_api.modules.contracts.repository.ContractListRepository;
-import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -31,13 +30,13 @@ class ContractListServiceTest {
 
     @Test
     void defaultRequestUsesContractsOrderedByContractIdDesc() {
-        when(contractListRepository.count(any(), any(ReportAccessScope.class))).thenReturn(0L);
-        when(contractListRepository.find(any(), any(ReportAccessScope.class))).thenReturn(List.of());
+        when(contractListRepository.count(any())).thenReturn(0L);
+        when(contractListRepository.find(any())).thenReturn(List.of());
 
         PageResponse<ContractListDto> response = contractListService.getContracts(criteria(null, null, null, null, null));
 
         ArgumentCaptor<ContractListCriteria> criteriaCaptor = ArgumentCaptor.forClass(ContractListCriteria.class);
-        verify(contractListRepository).count(criteriaCaptor.capture(), any(ReportAccessScope.class));
+        verify(contractListRepository).count(criteriaCaptor.capture());
 
         ContractListCriteria criteria = criteriaCaptor.getValue();
         assertThat(criteria.page()).isEqualTo(0);
@@ -53,47 +52,47 @@ class ContractListServiceTest {
 
     @Test
     void trimsKeywordSearch() {
-        when(contractListRepository.count(any(), any(ReportAccessScope.class))).thenReturn(1L);
-        when(contractListRepository.find(any(), any(ReportAccessScope.class))).thenReturn(List.of(contract()));
+        when(contractListRepository.count(any())).thenReturn(1L);
+        when(contractListRepository.find(any())).thenReturn(List.of(contract()));
 
         PageResponse<ContractListDto> response = contractListService.getContracts(criteria(" 14507 ", null, null, null, null));
 
         ArgumentCaptor<ContractListCriteria> criteriaCaptor = ArgumentCaptor.forClass(ContractListCriteria.class);
-        verify(contractListRepository).find(criteriaCaptor.capture(), any(ReportAccessScope.class));
+        verify(contractListRepository).find(criteriaCaptor.capture());
         assertThat(criteriaCaptor.getValue().keyword()).isEqualTo("14507");
         assertThat(response.content()).hasSize(1);
     }
 
     @Test
     void sortByLoanAmountAscending() {
-        when(contractListRepository.count(any(), any(ReportAccessScope.class))).thenReturn(0L);
-        when(contractListRepository.find(any(), any(ReportAccessScope.class))).thenReturn(List.of());
+        when(contractListRepository.count(any())).thenReturn(0L);
+        when(contractListRepository.find(any())).thenReturn(List.of());
 
         contractListService.getContracts(criteria(null, null, null, "loanAmount", "asc"));
 
         ArgumentCaptor<ContractListCriteria> criteriaCaptor = ArgumentCaptor.forClass(ContractListCriteria.class);
-        verify(contractListRepository).find(criteriaCaptor.capture(), any(ReportAccessScope.class));
+        verify(contractListRepository).find(criteriaCaptor.capture());
         assertThat(criteriaCaptor.getValue().sortColumn()).isEqualTo("loanAmount");
         assertThat(criteriaCaptor.getValue().sortDirection()).isEqualTo("asc");
     }
 
     @Test
     void invalidSortFieldFallsBackToContractDateDesc() {
-        when(contractListRepository.count(any(), any(ReportAccessScope.class))).thenReturn(0L);
-        when(contractListRepository.find(any(), any(ReportAccessScope.class))).thenReturn(List.of());
+        when(contractListRepository.count(any())).thenReturn(0L);
+        when(contractListRepository.find(any())).thenReturn(List.of());
 
         contractListService.getContracts(criteria(null, null, null, "contract_id;drop table contracts", "sideways"));
 
         ArgumentCaptor<ContractListCriteria> criteriaCaptor = ArgumentCaptor.forClass(ContractListCriteria.class);
-        verify(contractListRepository).find(criteriaCaptor.capture(), any(ReportAccessScope.class));
+        verify(contractListRepository).find(criteriaCaptor.capture());
         assertThat(criteriaCaptor.getValue().sortColumn()).isEqualTo("contractDate");
         assertThat(criteriaCaptor.getValue().sortDirection()).isEqualTo("desc");
     }
 
     @Test
     void pageSizeCannotExceedMaximum() {
-        when(contractListRepository.count(any(), any(ReportAccessScope.class))).thenReturn(0L);
-        when(contractListRepository.find(any(), any(ReportAccessScope.class))).thenReturn(List.of());
+        when(contractListRepository.count(any())).thenReturn(0L);
+        when(contractListRepository.find(any())).thenReturn(List.of());
 
         PageResponse<ContractListDto> response = contractListService.getContracts(new ContractListCriteria(
             null,
@@ -114,15 +113,15 @@ class ContractListServiceTest {
         ));
 
         ArgumentCaptor<ContractListCriteria> criteriaCaptor = ArgumentCaptor.forClass(ContractListCriteria.class);
-        verify(contractListRepository).find(criteriaCaptor.capture(), any(ReportAccessScope.class));
+        verify(contractListRepository).find(criteriaCaptor.capture());
         assertThat(criteriaCaptor.getValue().size()).isEqualTo(250);
         assertThat(response.size()).isEqualTo(250);
     }
 
     @Test
     void emptyResultReturnsValidPageMetadata() {
-        when(contractListRepository.count(any(), any(ReportAccessScope.class))).thenReturn(0L);
-        when(contractListRepository.find(any(), any(ReportAccessScope.class))).thenReturn(List.of());
+        when(contractListRepository.count(any())).thenReturn(0L);
+        when(contractListRepository.find(any())).thenReturn(List.of());
 
         PageResponse<ContractListDto> response = contractListService.getContracts(new ContractListCriteria(
             "missing",

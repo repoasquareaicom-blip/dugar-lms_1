@@ -8,9 +8,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -120,7 +123,7 @@ public class DemandListService {
             .filter(row -> overdueCountMatches(row, request.overdueInstallmentCount()))
             .filter(row -> reportTypeMatches(row, request.reportType()))
             .toList();
-        return demandListRows(filteredRows, accessScope.userId());
+        return sortedRows(demandListRows(filteredRows, accessScope.userId()), request);
     }
 
     private List<DemandListRowDto> demandListRows(List<BranchWiseAgeingProcedureRepository.ProcedureContractReportRow> sourceRows, Long userId) {
@@ -155,6 +158,78 @@ public class DemandListService {
             .toList();
     }
 
+    private List<DemandListRowDto> sortedRows(List<DemandListRowDto> rows, DemandListRequest request) {
+        List<DemandListRowDto> sorted = new ArrayList<>(rows);
+        sorted.sort(sortComparator(sortColumn(request.sortColumn()), sortDirection(request.sortDirection())));
+        return sorted;
+    }
+
+    private Comparator<DemandListRowDto> sortComparator(String sortColumn, String sortDirection) {
+        boolean ascending = "asc".equals(sortDirection);
+        return switch (sortColumn) {
+            case "overdueAmount" -> ascending
+                ? Comparator.comparing(row -> money(row.overdueAmount()))
+                : Comparator.comparing((DemandListRowDto row) -> money(row.overdueAmount())).reversed();
+            case "contractNumber" -> {
+                Comparator<ContractSortKey> contractComparator = ascending
+                    ? Comparator.naturalOrder()
+                    : ContractSortKey.descendingComparator();
+                yield Comparator
+                    .comparing((DemandListRowDto row) -> contractSortKey(row.loanNumber()), contractComparator)
+                    .thenComparing(DemandListRowDto::contractId, Comparator.nullsLast(Comparator.reverseOrder()));
+            }
+            default -> ascending
+                ? Comparator.comparing(row -> row.overdueInstallmentCount() == null ? 0 : row.overdueInstallmentCount())
+                : Comparator.comparing((DemandListRowDto row) -> row.overdueInstallmentCount() == null ? 0 : row.overdueInstallmentCount()).reversed();
+        };
+    }
+
+    private ContractSortKey contractSortKey(String contractNumber) {
+        String value = clean(contractNumber);
+        if (value == null) {
+            return new ContractSortKey(2, BigInteger.ZERO, "");
+        }
+        if (value.matches("\\d+")) {
+            return new ContractSortKey(0, new BigInteger(value), value);
+        }
+        String upper = value.toUpperCase();
+        if (upper.matches("L-\\d+")) {
+            return new ContractSortKey(1, new BigInteger(upper.substring(2)), upper);
+        }
+        return new ContractSortKey(2, BigInteger.ZERO, upper);
+    }
+
+    private record ContractSortKey(int group, BigInteger number, String text) implements Comparable<ContractSortKey> {
+        private ContractSortKey {
+            number = number == null ? BigInteger.ZERO : number;
+            text = text == null ? "" : text;
+        }
+
+        @Override
+        public int compareTo(ContractSortKey other) {
+            int groupCompare = Integer.compare(group, other.group);
+            if (groupCompare != 0) {
+                return groupCompare;
+            }
+            int numberCompare = number.compareTo(other.number);
+            if (numberCompare != 0) {
+                return numberCompare;
+            }
+            return String.CASE_INSENSITIVE_ORDER.compare(text, other.text);
+        }
+
+        static Comparator<ContractSortKey> descendingComparator() {
+            return Comparator
+                .comparingInt((ContractSortKey key) -> switch (key.group) {
+                    case 1 -> 0;
+                    case 0 -> 1;
+                    default -> 2;
+                })
+                .thenComparing(ContractSortKey::number, Comparator.reverseOrder())
+                .thenComparing(ContractSortKey::text, String.CASE_INSENSITIVE_ORDER.reversed());
+        }
+    }
+
     private DemandListRequest validate(DemandListRequest request, boolean print) {
         if (request == null || request.asOnDate() == null) {
             throw new IllegalArgumentException("As On Date is required");
@@ -174,8 +249,8 @@ public class DemandListService {
             clean(request.keyword()),
             0,
             PRINT_ROW_LIMIT,
-            clean(request.sortColumn()),
-            clean(request.sortDirection())
+            sortColumn(request.sortColumn()),
+            sortDirection(request.sortDirection())
         );
     }
 
@@ -288,6 +363,24 @@ public class DemandListService {
             case "FULL_NAME_ADDRESS", "FULL_NAME_AND_ADDRESS" -> "FULL_NAME_ADDRESS";
             default -> "CONSOLIDATED";
         };
+    }
+
+    private String sortColumn(String value) {
+        String cleaned = clean(value);
+        if (cleaned == null) {
+            return "overdueInstallmentCount";
+        }
+        return switch (cleaned) {
+            case "overdueInstallmentCount", "count", "overdueCount" -> "overdueInstallmentCount";
+            case "overdueAmount", "amount" -> "overdueAmount";
+            case "contractNumber", "loanNumber" -> "contractNumber";
+            default -> "overdueInstallmentCount";
+        };
+    }
+
+    private String sortDirection(String value) {
+        String cleaned = clean(value);
+        return cleaned != null && (cleaned.equalsIgnoreCase("asc") || cleaned.equalsIgnoreCase("ascending")) ? "asc" : "desc";
     }
 
     private Integer validOverdueCount(Integer value) {

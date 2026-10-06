@@ -36,7 +36,7 @@ class DemandListServiceTest {
         DemandListResponse response = service.getDemandList(request(0, 1, "loanNumber", "asc"), null);
 
         assertThat(response.rows().totalElements()).isEqualTo(2);
-        assertThat(response.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("B", "A");
+        assertThat(response.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("A", "B");
         assertThat(response.rows().first()).isTrue();
         assertThat(response.rows().last()).isTrue();
     }
@@ -58,6 +58,69 @@ class DemandListServiceTest {
 
         assertThat(response.rows().content()).hasSize(2);
         assertThat(response.rows().size()).isEqualTo(2);
+    }
+
+    @Test
+    void defaultSortKeepsCurrentOverdueCountDescendingBehaviour() {
+        DemandListService service = service(List.of(
+            procedureRow(1L, "A", 1),
+            procedureRow(2L, "B", 3),
+            procedureRow(3L, "C", 2)
+        ));
+
+        DemandListResponse response = service.getDemandList(request(0, 25, null, null), null);
+
+        assertThat(response.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("B", "C", "A");
+    }
+
+    @Test
+    void demandListSortsByOverdueCountAscendingAndDescending() {
+        DemandListService service = service(List.of(
+            procedureRow(1L, "A", 2),
+            procedureRow(2L, "B", 1),
+            procedureRow(3L, "C", 3)
+        ));
+
+        DemandListResponse ascending = service.getDemandList(request(0, 25, "overdueInstallmentCount", "asc"), null);
+        DemandListResponse descending = service.getDemandList(request(0, 25, "overdueInstallmentCount", "desc"), null);
+
+        assertThat(ascending.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("B", "A", "C");
+        assertThat(descending.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("C", "A", "B");
+    }
+
+    @Test
+    void demandListSortsByOverdueAmountAscendingAndDescending() {
+        DemandListService service = service(List.of(
+            procedureRow(1L, "A", 1, "", "500.00"),
+            procedureRow(2L, "B", 1, "", "100.00"),
+            procedureRow(3L, "C", 1, "", "900.00")
+        ));
+
+        DemandListResponse ascending = service.getDemandList(request(0, 25, "overdueAmount", "asc"), null);
+        DemandListResponse descending = service.getDemandList(request(0, 25, "overdueAmount", "desc"), null);
+
+        assertThat(ascending.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("B", "A", "C");
+        assertThat(descending.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("C", "A", "B");
+    }
+
+    @Test
+    void demandListSortsContractNumberNaturallyWithoutNumericCastingFailures() {
+        DemandListService service = service(List.of(
+            procedureRow(1L, "16950", 1),
+            procedureRow(2L, "L-1019", 1),
+            procedureRow(3L, "16026", 1),
+            procedureRow(4L, " L-25 ", 1),
+            procedureRow(5L, "L-649", 1),
+            procedureRow(6L, "15939", 1),
+            procedureRow(7L, "l-1", 1),
+            procedureRow(8L, "ABC-2", 1)
+        ));
+
+        DemandListResponse ascending = service.getDemandList(request(0, 25, "contractNumber", "asc"), null);
+        DemandListResponse descending = service.getDemandList(request(0, 25, "contractNumber", "desc"), null);
+
+        assertThat(ascending.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("15939", "16026", "16950", "l-1", " L-25 ", "L-649", "L-1019", "ABC-2");
+        assertThat(descending.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("L-1019", "L-649", " L-25 ", "l-1", "16950", "16026", "15939", "ABC-2");
     }
 
     @Test
@@ -101,7 +164,7 @@ class DemandListServiceTest {
 
         DemandListResponse response = service.getDemandList(new DemandListRequest(LocalDate.of(2026, 1, 1), "AREA", null, null, null, null, null, null, null, null, "THREE_DUES_ABOVE", null, 0, 25, null, null), null);
 
-        assertThat(response.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("B", "C");
+        assertThat(response.rows().content()).extracting(DemandListRowDto::loanNumber).containsExactly("C", "B");
     }
 
     @Test
@@ -202,6 +265,10 @@ class DemandListServiceTest {
     }
 
     private BranchWiseAgeingProcedureRepository.ProcedureContractReportRow procedureRow(Long id, String loanNumber, int overdueCount, String flagCodes) {
+        return procedureRow(id, loanNumber, overdueCount, flagCodes, "400.00");
+    }
+
+    private BranchWiseAgeingProcedureRepository.ProcedureContractReportRow procedureRow(Long id, String loanNumber, int overdueCount, String flagCodes, String overdueAmount) {
         return new BranchWiseAgeingProcedureRepository.ProcedureContractReportRow(
             id,
             loanNumber,
@@ -236,7 +303,7 @@ class DemandListServiceTest {
             new BigDecimal("250.00"),
             new BigDecimal("1000.00"),
             overdueCount,
-            new BigDecimal("400.00"),
+            new BigDecimal(overdueAmount),
             LocalDate.of(2026, 1, 1),
             LocalDate.of(2026, 1, 1),
             BigDecimal.ZERO,

@@ -30,7 +30,13 @@ export default function DemandListFilters({
   const [selectedArea, setSelectedArea] = useState(null);
   const [areaLoading, setAreaLoading] = useState(false);
   const areaRef = useRef(null);
-  const setField = (field, value) => onChange({ ...filters, [field]: value });
+  const setField = (field, value) => {
+    if (field === 'reportType' && value === 'CONSOLIDATED') {
+      onChange({ ...filters, reportType: value, sortBy: 'contractNumber', sortOrder: 'desc' });
+      return;
+    }
+    onChange({ ...filters, [field]: value });
+  };
   const areaInputValue = selectedArea?.areaCode === filters.areaCode ? areaLabel(selectedArea) : filters.areaCode;
 
   useEffect(() => {
@@ -63,15 +69,25 @@ export default function DemandListFilters({
 
   return (
     <div className="no-print border-b border-black/20 bg-white px-2 py-2 text-[12px] text-black">
-      <table className="w-full max-w-5xl border-collapse border border-black/30">
+      <table className="w-full max-w-5xl table-fixed border-collapse border border-black/30">
+        <colgroup>
+          <col className="w-[140px]" />
+          <col className="w-[190px]" />
+          <col className="w-[115px]" />
+          <col className="w-[110px]" />
+          <col className="w-[160px]" />
+          <col className="w-[105px]" />
+          <col className="w-[175px]" />
+        </colgroup>
         <thead>
           <tr className="bg-slate-100">
-            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">As On Date</th>
-            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">Area</th>
-            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">Contract No</th>
-            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">No. of Overdues</th>
-            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">Overdue Sorting</th>
-            <th className="w-1/6 border border-black/30 px-2 py-1 text-left font-bold uppercase">Report Type</th>
+            <th className="border border-black/30 px-2 py-1 text-left font-bold uppercase">As On Date</th>
+            <th className="border border-black/30 px-2 py-1 text-left font-bold uppercase">Area</th>
+            <th className="border border-black/30 px-2 py-1 text-left font-bold uppercase">Contract No</th>
+            <th className="border border-black/30 px-2 py-1 text-left font-bold uppercase">No. of Overdues</th>
+            <th className="border border-black/30 px-2 py-1 text-left font-bold uppercase">Sort By</th>
+            <th className="border border-black/30 px-2 py-1 text-left font-bold uppercase">Sort Order</th>
+            <th className="border border-black/30 px-2 py-1 text-left font-bold uppercase">Report Type</th>
           </tr>
         </thead>
         <tbody>
@@ -120,9 +136,16 @@ export default function DemandListFilters({
               <input className={fieldClass} min="0" type="number" value={filters.overdueInstallmentCount} onChange={(event) => setField('overdueInstallmentCount', event.target.value)} />
             </td>
             <td className="border border-black/30">
-              <select className={fieldClass} value={filters.overdueSort} onChange={(event) => setField('overdueSort', event.target.value)}>
-                <option value="count">No. of Overdues</option>
-                <option value="amount">Overdue Amount</option>
+              <select className={fieldClass} value={filters.sortBy} onChange={(event) => setField('sortBy', event.target.value)}>
+                <option value="overdueInstallmentCount">No. of Overdues</option>
+                <option value="overdueAmount">Overdue Amount</option>
+                <option value="contractNumber">Contract Number</option>
+              </select>
+            </td>
+            <td className="border border-black/30">
+              <select className={fieldClass} value={filters.sortOrder} onChange={(event) => setField('sortOrder', event.target.value)}>
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
               </select>
             </td>
             <td className="border border-black/30">

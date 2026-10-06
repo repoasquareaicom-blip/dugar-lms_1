@@ -13,6 +13,8 @@ function paramsFrom(filters = {}) {
   addParam(params, 'contractNumber', String(filters.contractNumber || '').trim());
   addParam(params, 'overdueInstallmentCount', filters.overdueInstallmentCount);
   addParam(params, 'reportType', filters.reportType);
+  addParam(params, 'sortColumn', filters.sortBy || filters.sortColumn);
+  addParam(params, 'sortDirection', filters.sortOrder || filters.sortDirection);
   return params;
 }
 

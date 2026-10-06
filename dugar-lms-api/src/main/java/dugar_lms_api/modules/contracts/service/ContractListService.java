@@ -67,6 +67,10 @@ public class ContractListService {
         return contractListRepository.findAreaMasterOptions(normalize(keyword), limit == null ? 20 : limit);
     }
 
+    public ContractListCriteria validatedCriteria(ContractListCriteria criteria) {
+        return validate(criteria);
+    }
+
     private ContractListCriteria validate(ContractListCriteria criteria) {
         return new ContractListCriteria(
             normalize(criteria.keyword()),

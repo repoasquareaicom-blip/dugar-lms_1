@@ -17,7 +17,8 @@ const defaultFilters = {
   areaCode: '',
   contractNumber: '',
   overdueInstallmentCount: '',
-  overdueSort: 'count',
+  sortBy: 'contractNumber',
+  sortOrder: 'desc',
   reportType: 'CONSOLIDATED',
 };
 const pageSizeOptions = [10, 25, 50, 100];
@@ -63,16 +64,6 @@ function formatDateTime(value) {
     minute: '2-digit',
     hour12: true,
   }).format(date);
-}
-
-function sortedDemandRows(rows, overdueSort) {
-  const sorted = [...rows];
-  if (overdueSort === 'amount') {
-    sorted.sort((a, b) => Number(b.overdueAmount || 0) - Number(a.overdueAmount || 0));
-    return sorted;
-  }
-  sorted.sort((a, b) => Number(b.overdueInstallmentCount || 0) - Number(a.overdueInstallmentCount || 0));
-  return sorted;
 }
 
 function StackCell({ values, align = 'left' }) {
@@ -333,12 +324,6 @@ export default function DemandListPage() {
   const [ptpPopup, setPtpPopup] = useState({ open: false, row: null, history: [], loading: false, saving: false, ptpDate: '', message: '' });
   const [voucherEditModal, setVoucherEditModal] = useState({ open: false, voucherNumber: '' });
 
-  useEffect(() => {
-    if (!appliedFilters) return;
-    setRows((current) => sortedDemandRows(current, filters.overdueSort));
-    setPage(0);
-  }, [filters.overdueSort, appliedFilters]);
-
   const generate = async () => {
     if (!filters.asOnDate) {
       setMessage('As On Date is required.');
@@ -354,7 +339,7 @@ export default function DemandListPage() {
     try {
       const data = await fetchDemandList(filters);
       const content = data?.rows?.content || [];
-      setRows(sortedDemandRows(content, filters.overdueSort));
+      setRows(content);
       setPage(0);
       setTotalRecords(Number(data?.rows?.totalElements ?? content.length));
       setSummary(data?.summary || null);
@@ -374,6 +359,46 @@ export default function DemandListPage() {
       setLoadingMessage('');
     }
   };
+
+  useEffect(() => {
+    if (!appliedFilters) return;
+    if (filters.sortBy === appliedFilters.sortBy && filters.sortOrder === appliedFilters.sortOrder) return;
+
+    let active = true;
+    const nextFilters = {
+      ...appliedFilters,
+      sortBy: filters.sortBy,
+      sortOrder: filters.sortOrder,
+    };
+
+    setLoading(true);
+    setLoadingMessage('Sorting Demand List.');
+    setMessage('');
+    fetchDemandList(nextFilters)
+      .then((data) => {
+        if (!active) return;
+        const content = data?.rows?.content || [];
+        setRows(content);
+        setPage(0);
+        setTotalRecords(Number(data?.rows?.totalElements ?? content.length));
+        setSummary(data?.summary || null);
+        setWarnings(data?.warnings || []);
+        setAppliedFilters(nextFilters);
+        setPrintData(null);
+      })
+      .catch((error) => {
+        if (active) setMessage(demandListErrorMessage(error, 'Unable to sort Demand List.'));
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoading(false);
+        setLoadingMessage('');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filters.sortBy, filters.sortOrder, appliedFilters]);
 
   const reset = () => {
     setFilters(defaultFilters);

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Eye, FilePenLine, FilePlus2, Flag, Loader2, Printer, RotateCcw, Save, X } from 'lucide-react';
+import { CheckCircle2, Eye, FilePenLine, FilePlus2, FileSpreadsheet, Flag, Loader2, Printer, RotateCcw, Save, X } from 'lucide-react';
 import ServerDataTable from '../../../../components/common/ServerDataTable';
 import {
   fetchContractFlagMaster,
   fetchContractFlags,
   fetchContractsPage,
+  exportCibilSubmission,
   saveContractFlags,
 } from '../../../../services/contractsService';
 
@@ -52,6 +53,15 @@ const DEFAULT_HIDDEN_COLUMNS = {
   guarantorPinCode: false,
   guarantorOccupation: false,
 };
+
+function timestampForFileName(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}`;
+}
+
+function exportErrorMessage(error) {
+  return error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Unable to export CIBIL Submission.';
+}
 
 function displayFallback(value) {
   if (value === null || value === undefined || value === '') return '-';
@@ -332,6 +342,40 @@ function FlagButtonCell({ row, onOpen }) {
   );
 }
 
+function CibilExportReadyToast({ notice, visible, onClose }) {
+  if (!notice) return null;
+
+  return createPortal(
+    <div className={`fixed right-5 top-5 z-[99999] w-[340px] max-w-[calc(100vw-2rem)] transition-all duration-300 ${visible ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'}`}>
+      <div className="overflow-hidden rounded-lg border border-emerald-200 bg-white shadow-xl">
+        <div className="flex items-start gap-3 px-4 py-3.5 text-emerald-950">
+          <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-700">
+            <CheckCircle2 size={20} strokeWidth={2.8} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-black uppercase">
+              CIBIL Export Ready
+            </div>
+            <div className="mt-1 text-[12px] font-bold leading-relaxed text-slate-800">
+              <div>Excel file generated successfully.</div>
+              <div>72-field CIBIL submission file has been downloaded.</div>
+            </div>
+            {notice.fileName && (
+              <div className="mt-2 truncate rounded border border-emerald-100 bg-emerald-50/40 px-2 py-1 text-[11px] font-bold text-slate-500">
+                {notice.fileName}
+              </div>
+            )}
+          </div>
+          <button type="button" onClick={onClose} className="grid h-7 w-7 shrink-0 place-items-center rounded text-slate-500 hover:bg-white/80 hover:text-slate-900" title="Close">
+            <X size={15} strokeWidth={2.8} />
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function transformContractsResponse(data) {
   const rows = Array.isArray(data?.content) ? data.content : [];
 
@@ -355,6 +399,33 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
     saving: false,
     selected: {},
   });
+  const [exportError, setExportError] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportNotice, setExportNotice] = useState(null);
+  const [exportNoticeVisible, setExportNoticeVisible] = useState(false);
+
+  useEffect(() => {
+    if (!exportNotice) return undefined;
+
+    setExportNoticeVisible(true);
+    const hideTimer = window.setTimeout(() => setExportNoticeVisible(false), 3800);
+    const clearTimer = window.setTimeout(() => setExportNotice(null), 4200);
+
+    return () => {
+      window.clearTimeout(hideTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [exportNotice]);
+
+  const showExportReadyToast = (notice) => {
+    setExportNoticeVisible(false);
+    window.setTimeout(() => setExportNotice(notice), 10);
+  };
+
+  const closeExportNotice = () => {
+    setExportNoticeVisible(false);
+    window.setTimeout(() => setExportNotice(null), 180);
+  };
 
   const openContractForm = (row, mode) => {
     navigate('/credit/trans/contract/form', {
@@ -375,6 +446,37 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
         sourceWorkflow,
       },
     });
+  };
+
+  const downloadCibilSubmissionExport = async (tableState = {}) => {
+    if (exportLoading) return;
+
+    try {
+      setExportLoading(true);
+      setExportError('');
+      const { blob } = await exportCibilSubmission({
+        filters: tableState.filters || DEFAULT_FILTERS,
+        keyword: tableState.keyword || '',
+        sortColumn: tableState.sortColumn || 'contractDate',
+        sortDirection: tableState.sortDirection || 'desc',
+      });
+      const fileName = `CIBIL_Submission_${timestampForFileName()}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showExportReadyToast({
+        fileName,
+      });
+    } catch (error) {
+      setExportError(exportErrorMessage(error));
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   const createContract = () => {
@@ -649,8 +751,46 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
     return [viewContextMenuItem(row)];
   };
 
+  const titleAction = (tableState) => (
+    <>
+      {isActiveContracts && (
+        <div className="relative">
+          <button
+            type="button"
+            disabled={exportLoading}
+            onClick={() => downloadCibilSubmissionExport(tableState)}
+            className="inline-flex min-w-[190px] items-center justify-center gap-2 rounded-lg border-2 border-emerald-600 bg-emerald-600 px-3 py-1.5 text-[11px] font-black uppercase text-white shadow-sm transition-all hover:bg-emerald-700 disabled:cursor-not-allowed disabled:border-emerald-500 disabled:bg-emerald-500"
+          >
+            {exportLoading ? <Loader2 size={14} strokeWidth={3} className="animate-spin" /> : <FileSpreadsheet size={14} strokeWidth={3} />}
+            {exportLoading ? 'Generating CIBIL Excel...' : 'CIBIL Submission Export'}
+          </button>
+          {exportLoading && (
+            <div className="absolute left-0 right-0 top-full mt-1 h-1 overflow-hidden rounded-full bg-emerald-100">
+              <div className="h-full w-full animate-pulse rounded-full bg-emerald-500" />
+            </div>
+          )}
+        </div>
+      )}
+      {showCreate && (
+        <button
+          type="button"
+          onClick={createContract}
+          className="inline-flex items-center gap-2 rounded-lg border-2 border-[#0052CC] bg-[#0052CC] px-3 py-1.5 text-[11px] font-black uppercase text-white shadow-sm transition-all hover:bg-blue-700"
+        >
+          <FilePlus2 size={14} strokeWidth={3} />
+          Create New Contract
+        </button>
+      )}
+    </>
+  );
+
   return (
     <div className="w-full h-full min-h-0 bg-white" style={{ fontFamily: 'Calibri, sans-serif' }}>
+      {exportError && (
+        <div className="border-b border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-700">
+          {exportError}
+        </div>
+      )}
       <ServerDataTable
         columns={columns}
         defaultFilters={DEFAULT_FILTERS}
@@ -666,19 +806,11 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
         rowUpdates={flagRowUpdates}
         searchPlaceholder="Quick search contracts..."
         title={title}
-        titleAction={showCreate ? (
-          <button
-            type="button"
-            onClick={createContract}
-            className="inline-flex items-center gap-2 rounded-lg border-2 border-[#0052CC] bg-[#0052CC] px-3 py-1.5 text-[11px] font-black uppercase text-white shadow-sm transition-all hover:bg-blue-700"
-          >
-            <FilePlus2 size={14} strokeWidth={3} />
-            Create New Contract
-          </button>
-        ) : null}
+        titleAction={titleAction}
         transformResponse={transformContractsResponse}
         onRowDoubleClick={(row) => openContractForm(row, viewOnly || enableFlagging ? 'view' : 'edit')}
       />
+      <CibilExportReadyToast notice={exportNotice} visible={exportNoticeVisible} onClose={closeExportNotice} />
       {flagModal.open && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/30 px-4 py-6">
           <div className="w-full max-w-2xl overflow-hidden rounded-lg border-2 border-black/20 bg-white shadow-2xl">

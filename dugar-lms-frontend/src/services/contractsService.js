@@ -39,6 +39,37 @@ export async function fetchContractsPage({
   return response.data;
 }
 
+export async function exportCibilSubmission({
+  filters = {},
+  keyword = '',
+  sortColumn = 'contractDate',
+  sortDirection = 'desc',
+} = {}) {
+  const params = {
+    sortColumn,
+    sortDirection,
+  };
+
+  addParam(params, 'keyword', keyword);
+  addParam(params, 'branch', filters.branch);
+  addParam(params, 'status', filters.status);
+  addParam(params, 'product', filters.product);
+  addParam(params, 'customerName', filters.customerName);
+  addParam(params, 'contractDateFrom', filters.contractDateFrom);
+  addParam(params, 'contractDateTo', filters.contractDateTo);
+  addParam(params, 'minimumLoanAmount', filters.minimumLoanAmount);
+  addParam(params, 'maximumLoanAmount', filters.maximumLoanAmount);
+
+  const response = await apiClient.get('/contracts/cibil-submission-export', {
+    params,
+    responseType: 'blob',
+  });
+  return {
+    blob: response.data,
+    recordCount: Number(response.headers?.['x-record-count'] || 0),
+  };
+}
+
 export async function fetchContractFlagMaster() {
   const response = await apiClient.get('/contract-flags/master', authenticatedConfig());
   return Array.isArray(response.data) ? response.data : [];

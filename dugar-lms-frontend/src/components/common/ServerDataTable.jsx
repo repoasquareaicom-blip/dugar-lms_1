@@ -149,6 +149,15 @@ const ServerDataTable = ({
   const totalPages = Math.max(1, Math.ceil(totalElements / pageSize));
   const startRecord = totalElements === 0 ? 0 : page * pageSize + 1;
   const endRecord = Math.min(totalElements, (page + 1) * pageSize);
+  const titleActionState = useMemo(
+    () => ({
+      filters: appliedFilters,
+      keyword,
+      sortColumn,
+      sortDirection,
+    }),
+    [appliedFilters, keyword, sortColumn, sortDirection],
+  );
 
   const changeSort = (column) => {
     if (!column.sortable) return;
@@ -218,7 +227,7 @@ const ServerDataTable = ({
 
         {(title || titleAction) && (
           <div className="shrink-0 flex items-center justify-end gap-3">
-            {titleAction}
+            {typeof titleAction === 'function' ? titleAction(titleActionState) : titleAction}
             {title && (
               <div className="text-right text-[18px] font-black text-[#0052CC] uppercase tracking-tight">
                 {title}
