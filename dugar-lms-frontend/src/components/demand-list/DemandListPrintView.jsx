@@ -36,7 +36,7 @@ export default function DemandListPrintView({ data, filters }) {
               <tr key={row.contractId}>
                 {columns.map((column) => (
                   <td key={column.key} className={column.align === 'right' ? 'num' : column.align === 'center' ? 'center' : ''}>
-                    <PrintStack values={lineValues(displayRow, column.key)} />
+                    <PrintStack values={lineValues(displayRow, column.key, filters?.reportType)} />
                   </td>
                 ))}
               </tr>

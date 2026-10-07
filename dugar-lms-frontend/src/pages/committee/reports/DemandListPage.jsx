@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Flag, MessageSquare, X } from 'lucide-react';
 import AgingDrilldownDrawer from '../../../components/aging-analysis/AgingDrilldownDrawer';
 import DemandListFilters from '../../../components/demand-list/DemandListFilters';
-import { lineValues, visibleDemandListColumns } from '../../../components/demand-list/DemandListGrid';
+import { isFullNameAddressReport, lineValues, partyDetailLines, visibleDemandListColumns } from '../../../components/demand-list/DemandListGrid';
 import DemandListPrintView from '../../../components/demand-list/DemandListPrintView';
 import DemandListSummary from '../../../components/demand-list/DemandListSummary';
 import ReceiptVoucher from '../../accounts/transactions/ReceiptVoucher';
@@ -159,6 +159,33 @@ function DemandListTable({ rows, page, pageSize, onOpen, onParty, onFlag, onComm
       );
     }
     if (column.key === 'party') {
+      if (isFullNameAddressReport(reportType)) {
+        return (
+          <div className="space-y-0.5 leading-4">
+            {partyDetailLines(displayRow).map((value, index) => {
+              if (!value) return <div key={index} className="min-h-3" />;
+              const isBorrowerName = value === displayRow.borrowerName;
+              const isGuarantorName = value === displayRow.guarantorName;
+              if (isBorrowerName || isGuarantorName) {
+                const person = isBorrowerName
+                  ? { role: 'Borrower', name: displayRow.borrowerName, phone: displayRow.borrowerPhone, address: displayRow.borrowerAddress }
+                  : { role: 'Guarantor', name: displayRow.guarantorName, phone: displayRow.guarantorPhone, address: displayRow.guarantorAddress };
+                return (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => onParty(person)}
+                    className="block text-left font-bold text-[#0052CC] underline decoration-dotted underline-offset-2 hover:text-[#003A8C]"
+                  >
+                    {value}
+                  </button>
+                );
+              }
+              return <div key={index} className="min-h-4 whitespace-normal text-black">{value}</div>;
+            })}
+          </div>
+        );
+      }
       const people = [
         { role: 'Borrower', name: displayRow.borrowerName, phone: displayRow.borrowerPhone, address: displayRow.borrowerAddress },
         { role: 'Guarantor', name: displayRow.guarantorName, phone: displayRow.guarantorPhone, address: displayRow.guarantorAddress },
@@ -209,7 +236,7 @@ function DemandListTable({ rows, page, pageSize, onOpen, onParty, onFlag, onComm
         </div>
       );
     }
-    return <StackCell values={lineValues(displayRow, column.key)} align={column.align || 'left'} />;
+    return <StackCell values={lineValues(displayRow, column.key, reportType)} align={column.align || 'left'} />;
   };
 
   return (
@@ -662,7 +689,7 @@ export default function DemandListPage() {
     const headerCells = columns.map((column) => `<th>${column.label.map(excelCell).join('<br/>')}</th>`).join('');
     const bodyRows = rowsForExport.map((row, index) => {
       const displayRow = { ...row, serialNumber: index + 1 };
-      return `<tr>${columns.map((column) => `<td>${lineValues(displayRow, column.key).map(excelCell).join('<br/>')}</td>`).join('')}</tr>`;
+      return `<tr>${columns.map((column) => `<td>${lineValues(displayRow, column.key, appliedFilters.reportType).map(excelCell).join('<br/>')}</td>`).join('')}</tr>`;
     }).join('');
     const html = `
       <html>

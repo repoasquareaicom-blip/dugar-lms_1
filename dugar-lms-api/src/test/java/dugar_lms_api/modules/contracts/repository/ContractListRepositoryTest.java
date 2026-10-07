@@ -231,10 +231,7 @@ class ContractListRepositoryTest {
     @Test
     void cibilSubmissionExportUsesActiveContractFiltersAndDoesNotApplyPagination() {
         ContractListRepository repository = new ContractListRepository(namedParameterJdbcTemplate);
-        when(namedParameterJdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class)))
-            .thenReturn(List.of());
-
-        repository.findCibilSubmissionExport(new ContractListCriteria(
+        ContractListCriteria criteria = new ContractListCriteria(
             "Ravi",
             "BR-01",
             null,
@@ -250,27 +247,20 @@ class ContractListRepositoryTest {
             25,
             "contractDate",
             "desc"
-        ), new ReportAccessScope(false));
-
-        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<SqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(SqlParameterSource.class);
-        org.mockito.Mockito.verify(namedParameterJdbcTemplate).query(
-            sqlCaptor.capture(),
-            paramsCaptor.capture(),
-            any(RowMapper.class)
         );
 
-        String sql = sqlCaptor.getValue();
+        String sql = repository.cibilSubmissionExportSql(criteria, new ReportAccessScope(false));
         assertThat(sql).contains("WHERE c.is_active = TRUE");
         assertThat(sql).contains("UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'");
         assertThat(sql).contains("FROM contract_repayment_structures repayment_exists");
+        assertThat(sql).contains("LEFT JOIN tmp_contract_report tcr");
         assertThat(sql).contains("c.area_code = :branch");
         assertThat(sql).contains("c.contract_type = :product");
         assertThat(sql).contains("ORDER BY c.contract_date DESC, c.contract_id DESC");
         assertThat(sql).doesNotContain("LIMIT :size");
         assertThat(sql).doesNotContain("OFFSET :offset");
 
-        MapSqlParameterSource params = (MapSqlParameterSource) paramsCaptor.getValue();
+        MapSqlParameterSource params = (MapSqlParameterSource) repository.cibilSubmissionExportParams(criteria, new ReportAccessScope(false));
         assertThat(params.getValue("keywordPattern")).isEqualTo("%ravi%");
         assertThat(params.getValue("branch")).isEqualTo("BR-01");
         assertThat(params.getValue("product")).isEqualTo("HP");

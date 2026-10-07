@@ -53,6 +53,13 @@ const DEFAULT_HIDDEN_COLUMNS = {
   guarantorPinCode: false,
   guarantorOccupation: false,
 };
+const CIBIL_PROCESSING_MESSAGES = [
+  'Fetching active contracts...',
+  'Calculating outstanding & overdue details...',
+  'Preparing 72-field CIBIL submission data...',
+  'Generating Excel workbook...',
+  'Finalizing your download...',
+];
 
 function timestampForFileName(date = new Date()) {
   const pad = (value) => String(value).padStart(2, '0');
@@ -357,7 +364,7 @@ function CibilExportReadyToast({ notice, visible, onClose }) {
               CIBIL Export Ready
             </div>
             <div className="mt-1 text-[12px] font-bold leading-relaxed text-slate-800">
-              <div>Excel file generated successfully.</div>
+              <div>Excel file generated and downloaded successfully.</div>
               <div>72-field CIBIL submission file has been downloaded.</div>
             </div>
             {notice.fileName && (
@@ -369,6 +376,62 @@ function CibilExportReadyToast({ notice, visible, onClose }) {
           <button type="button" onClick={onClose} className="grid h-7 w-7 shrink-0 place-items-center rounded text-slate-500 hover:bg-white/80 hover:text-slate-900" title="Close">
             <X size={15} strokeWidth={2.8} />
           </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function CibilProcessingOverlay({ message }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[99998] flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-[2px]">
+      <div className="w-full max-w-[390px] overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-2xl">
+        <div className="bg-gradient-to-b from-white to-blue-50 px-6 pb-5 pt-6 text-center">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-blue-100 bg-white text-[#0052CC] shadow-sm">
+            <FileSpreadsheet size={30} strokeWidth={2.5} />
+          </div>
+          <h2 className="mt-4 text-[18px] font-black uppercase leading-tight tracking-wide text-slate-950">
+            Generating CIBIL Submission Report
+          </h2>
+          <p className="mx-auto mt-2 max-w-[310px] text-[13px] font-semibold leading-relaxed text-slate-600">
+            Preparing active contract data and CIBIL financial information...
+          </p>
+        </div>
+
+        <div className="px-6 pb-6 pt-2">
+          <div className="flex flex-col items-center">
+            <div className="relative h-16 w-16">
+              <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
+              <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-[#0052CC] border-r-emerald-500" />
+              <div className="absolute inset-3 rounded-full bg-blue-50" />
+            </div>
+            <div className="mt-4 min-h-[38px] text-center">
+              <div className="text-[13px] font-black text-slate-900">{message}</div>
+              <div className="mt-2 h-1.5 w-52 overflow-hidden rounded-full bg-blue-100">
+                <div className="h-full w-1/2 animate-pulse rounded-full bg-[#0052CC]" />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] font-bold text-slate-700">
+            <div className="flex justify-between gap-4 border-b border-slate-200 py-1">
+              <span className="text-slate-500">Report</span>
+              <span className="text-right text-slate-900">CIBIL Submission</span>
+            </div>
+            <div className="flex justify-between gap-4 border-b border-slate-200 py-1">
+              <span className="text-slate-500">Format</span>
+              <span className="text-right text-slate-900">Excel (.xlsx)</span>
+            </div>
+            <div className="flex justify-between gap-4 py-1">
+              <span className="text-slate-500">Fields</span>
+              <span className="text-right text-slate-900">72 CIBIL Fields</span>
+            </div>
+          </div>
+
+          <p className="mt-4 text-center text-[12px] font-semibold text-slate-500">
+            Please wait. This may take a few moments.
+          </p>
         </div>
       </div>
     </div>,
@@ -401,8 +464,10 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
   });
   const [exportError, setExportError] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportStatusIndex, setExportStatusIndex] = useState(0);
   const [exportNotice, setExportNotice] = useState(null);
   const [exportNoticeVisible, setExportNoticeVisible] = useState(false);
+  const exportInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!exportNotice) return undefined;
@@ -416,6 +481,19 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
       window.clearTimeout(clearTimer);
     };
   }, [exportNotice]);
+
+  useEffect(() => {
+    if (!exportLoading) {
+      setExportStatusIndex(0);
+      return undefined;
+    }
+
+    const statusTimer = window.setInterval(() => {
+      setExportStatusIndex((current) => (current + 1) % CIBIL_PROCESSING_MESSAGES.length);
+    }, 1800);
+
+    return () => window.clearInterval(statusTimer);
+  }, [exportLoading]);
 
   const showExportReadyToast = (notice) => {
     setExportNoticeVisible(false);
@@ -449,10 +527,12 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
   };
 
   const downloadCibilSubmissionExport = async (tableState = {}) => {
-    if (exportLoading) return;
+    if (exportInFlightRef.current) return;
 
     try {
+      exportInFlightRef.current = true;
       setExportLoading(true);
+      setExportStatusIndex(0);
       setExportError('');
       const { blob } = await exportCibilSubmission({
         filters: tableState.filters || DEFAULT_FILTERS,
@@ -475,6 +555,7 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
     } catch (error) {
       setExportError(exportErrorMessage(error));
     } finally {
+      exportInFlightRef.current = false;
       setExportLoading(false);
     }
   };
@@ -811,6 +892,7 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
         onRowDoubleClick={(row) => openContractForm(row, viewOnly || enableFlagging ? 'view' : 'edit')}
       />
       <CibilExportReadyToast notice={exportNotice} visible={exportNoticeVisible} onClose={closeExportNotice} />
+      {exportLoading && <CibilProcessingOverlay message={CIBIL_PROCESSING_MESSAGES[exportStatusIndex]} />}
       {flagModal.open && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/30 px-4 py-6">
           <div className="w-full max-w-2xl overflow-hidden rounded-lg border-2 border-black/20 bg-white shadow-2xl">

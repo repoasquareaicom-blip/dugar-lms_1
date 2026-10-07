@@ -8,11 +8,22 @@ import dugar_lms_api.modules.contracts.service.ContractListCriteria;
 import dugar_lms_api.modules.contracts.service.ContractListSortDirection;
 import dugar_lms_api.modules.contracts.service.ContractListSortField;
 import dugar_lms_api.modules.reports.ReportAccessScope;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.jdbc.core.PreparedStatementCreatorFactory;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterUtils;
+import org.springframework.jdbc.core.namedparam.ParsedSql;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 @Repository
@@ -121,22 +132,44 @@ public class ContractListRepository {
 
     private static final String CIBIL_SUBMISSION_EXPORT_SQL_PREFIX = """
         SELECT
+            c.contract_id,
             NULLIF(TRIM(pm.full_name), '') AS consumer_name,
             pm.date_of_birth,
+            NULLIF(TRIM(pm.salutation), '') AS salutation,
             NULLIF(TRIM(pm.pan_number), '') AS pan_number,
             NULLIF(TRIM(pm.aadhaar_number), '') AS aadhaar_number,
             NULLIF(TRIM(pm.contact_number), '') AS mobile_number,
             NULLIF(TRIM(co_pm.contact_number), '') AS co_applicant_mobile_number,
             NULLIF(TRIM(pm.email_id), '') AS email_id,
             NULLIF(TRIM(pm.city), '') AS city,
+            NULLIF(TRIM(pm.address_line_1), '') AS address_line_1,
+            NULLIF(TRIM(pm.address_line_2), '') AS address_line_2,
+            NULLIF(TRIM(pm.area), '') AS area,
+            NULLIF(TRIM(pm.state), '') AS state,
+            NULLIF(TRIM(pm.pin_code), '') AS pin_code,
             NULLIF(TRIM(c.contract_number), '') AS contract_number,
+            NULLIF(TRIM(c.contract_type), '') AS contract_type,
+            NULLIF(TRIM(a.vehicle_type_code), '') AS vehicle_type_code,
             c.contract_date,
+            tcr.last_payment_date,
             c.loan_amount,
+            tcr.principal_outstanding AS current_balance,
+            tcr.overdue_amount AS amount_overdue,
+            tcr.overdue_from_date,
+            (tcr.contract_id IS NOT NULL) AS demand_list_matched,
+            repayment_totals.repayment_tenure,
             first_repayment.installment_amount AS emi_amount
         """ + FROM_SQL + """
+        LEFT JOIN tmp_contract_report tcr
+            ON tcr.contract_id = c.contract_id
         LEFT JOIN party_masters co_pm
             ON UPPER(TRIM(co_pm.party_code)) = UPPER(TRIM(c.co_applicant_code))
            AND co_pm.is_active = TRUE
+        LEFT JOIN LATERAL (
+            SELECT SUM(COALESCE(repayment.number_of_installments, 0))::integer AS repayment_tenure
+            FROM contract_repayment_structures repayment
+            WHERE repayment.contract_id = c.contract_id
+        ) repayment_totals ON TRUE
         LEFT JOIN LATERAL (
             SELECT repayment.installment_amount
             FROM contract_repayment_structures repayment
@@ -311,17 +344,32 @@ public class ContractListRepository {
     );
 
     private static final RowMapper<CibilSubmissionExportRow> CIBIL_SUBMISSION_ROW_MAPPER = (rs, rowNum) -> new CibilSubmissionExportRow(
+        rs.getLong("contract_id"),
         rs.getString("consumer_name"),
         rs.getObject("date_of_birth", java.time.LocalDate.class),
+        rs.getString("salutation"),
         rs.getString("pan_number"),
         rs.getString("aadhaar_number"),
         rs.getString("mobile_number"),
         rs.getString("co_applicant_mobile_number"),
         rs.getString("email_id"),
         rs.getString("city"),
+        rs.getString("address_line_1"),
+        rs.getString("address_line_2"),
+        rs.getString("area"),
+        rs.getString("state"),
+        rs.getString("pin_code"),
         rs.getString("contract_number"),
+        rs.getString("contract_type"),
+        rs.getString("vehicle_type_code"),
         rs.getObject("contract_date", java.time.LocalDate.class),
+        rs.getObject("last_payment_date", java.time.LocalDate.class),
         rs.getBigDecimal("loan_amount"),
+        rs.getBigDecimal("current_balance"),
+        rs.getBigDecimal("amount_overdue"),
+        rs.getObject("overdue_from_date", java.time.LocalDate.class),
+        rs.getObject("demand_list_matched", Boolean.class),
+        rs.getObject("repayment_tenure", Integer.class),
         rs.getBigDecimal("emi_amount")
     );
 
@@ -341,12 +389,33 @@ public class ContractListRepository {
     }
 
     public List<CibilSubmissionExportRow> findCibilSubmissionExport(ContractListCriteria criteria, ReportAccessScope accessScope) {
+        return findCibilSubmissionExport(criteria, accessScope, LocalDate.now());
+    }
+
+    public List<CibilSubmissionExportRow> findCibilSubmissionExport(ContractListCriteria criteria, ReportAccessScope accessScope, LocalDate asOnDate) {
         QueryParts queryParts = queryParts(criteria, accessScope);
-        return namedParameterJdbcTemplate.query(
-            CIBIL_SUBMISSION_EXPORT_SQL_PREFIX + queryParts.whereSql() + orderBySql(criteria),
-            queryParts.params(),
-            CIBIL_SUBMISSION_ROW_MAPPER
-        );
+        String sql = cibilSubmissionExportSql(criteria, queryParts);
+        return namedParameterJdbcTemplate.getJdbcTemplate().execute((ConnectionCallback<List<CibilSubmissionExportRow>>) connection -> {
+            try (var call = connection.prepareStatement("CALL public.sp_branch_wise_ageing_test(?, ?, ?)")) {
+                call.setObject(1, asOnDate);
+                call.setString(2, null);
+                call.setString(3, accessScope == null ? null : accessScope.userGroup());
+                call.execute();
+            }
+            return queryOnConnection(connection, sql, queryParts.params(), CIBIL_SUBMISSION_ROW_MAPPER);
+        });
+    }
+
+    String cibilSubmissionExportSql(ContractListCriteria criteria, ReportAccessScope accessScope) {
+        return cibilSubmissionExportSql(criteria, queryParts(criteria, accessScope));
+    }
+
+    SqlParameterSource cibilSubmissionExportParams(ContractListCriteria criteria, ReportAccessScope accessScope) {
+        return queryParts(criteria, accessScope).params();
+    }
+
+    private String cibilSubmissionExportSql(ContractListCriteria criteria, QueryParts queryParts) {
+        return CIBIL_SUBMISSION_EXPORT_SQL_PREFIX + queryParts.whereSql() + orderBySql(criteria);
     }
 
     public long count(ContractListCriteria criteria) {
@@ -626,6 +695,27 @@ public class ContractListRepository {
             return "ORDER BY " + primarySort + "\n";
         }
         return "ORDER BY " + primarySort + ", c.contract_id DESC\n";
+    }
+
+    private <T> List<T> queryOnConnection(
+        Connection connection,
+        String sql,
+        SqlParameterSource params,
+        RowMapper<T> rowMapper
+    ) throws SQLException {
+        ParsedSql parsedSql = NamedParameterUtils.parseSqlStatement(sql);
+        String sqlToUse = NamedParameterUtils.substituteNamedParameters(parsedSql, params);
+        Object[] values = NamedParameterUtils.buildValueArray(parsedSql, params, null);
+        PreparedStatementCreatorFactory factory = new PreparedStatementCreatorFactory(sqlToUse);
+        try (var statement = factory.newPreparedStatementCreator(Arrays.asList(values)).createPreparedStatement(connection);
+             ResultSet resultSet = statement.executeQuery()) {
+            List<T> rows = new ArrayList<>();
+            int rowNumber = 0;
+            while (resultSet.next()) {
+                rows.add(rowMapper.mapRow(resultSet, rowNumber++));
+            }
+            return rows;
+        }
     }
 
     private record QueryParts(String whereSql, MapSqlParameterSource params) {

@@ -54,13 +54,59 @@ function areaDisplay(row) {
   return areaName ? `${areaCode} - ${areaName}` : areaCode;
 }
 
-function lineValues(row, key) {
+function cleanText(value) {
+  const cleaned = String(value ?? '').replace(/\s+/g, ' ').trim();
+  return cleaned && cleaned.toLowerCase() !== 'null' ? cleaned : '';
+}
+
+function isFullNameAddressReport(reportType) {
+  return String(reportType || '').trim().toUpperCase() === 'FULL_NAME_ADDRESS';
+}
+
+function formatPartyAddress(value) {
+  const parts = String(value ?? '')
+    .split(',')
+    .map(cleanText)
+    .filter(Boolean);
+  if (parts.length === 0) return '';
+
+  const pin = parts[parts.length - 1];
+  if (/^\d{5,6}$/.test(pin) && parts.length > 1) {
+    return `${parts.slice(0, -1).join(', ')} - ${pin}`;
+  }
+  return parts.join(', ');
+}
+
+function partyDetailLines(row) {
+  const borrower = [
+    cleanText(row.borrowerName),
+    formatPartyAddress(row.borrowerAddress),
+    cleanText(row.borrowerPhone),
+  ].filter(Boolean);
+  const guarantor = [
+    cleanText(row.guarantorName),
+    formatPartyAddress(row.guarantorAddress),
+    cleanText(row.guarantorPhone),
+  ].filter(Boolean);
+
+  return borrower.length > 0 && guarantor.length > 0
+    ? [...borrower, '', ...guarantor]
+    : [...borrower, ...guarantor];
+}
+
+function lineValues(row, key, reportType = 'CONSOLIDATED') {
   switch (key) {
     case 'serialNumber':
       return [row.serialNumber];
     case 'loanNumber':
-      return [row.loanNumber || '', row.agreementDate ? `Agreement: ${formatDate(row.agreementDate)}` : ''];
+      return [
+        row.loanNumber || '',
+        row.agreementDate ? `Agreement: ${formatDate(row.agreementDate)}` : '',
+      ].filter(Boolean);
     case 'party':
+      if (isFullNameAddressReport(reportType)) {
+        return partyDetailLines(row);
+      }
       return [
         row.borrowerName || '',
         row.guarantorName || '',
@@ -100,9 +146,7 @@ function lineValues(row, key) {
     case 'fullNameAddress':
       return [
         row.loanNumber || '',
-        row.borrowerName || '',
-        row.borrowerAddress || '',
-        row.borrowerPhone ? `Phone: ${row.borrowerPhone}` : '',
+        ...partyDetailLines(row),
       ].filter(Boolean);
     case 'flag':
       return [Number(row.flagCount || 0) > 0 ? row.flagNames || 'Flagged' : 'No flags'];
@@ -143,16 +187,6 @@ function StackCell({ values, align = 'left' }) {
 
 function visibleDemandListColumns({ showArea = true, reportType = 'CONSOLIDATED' } = {}) {
   const columns = groupedColumns.filter((column) => column.key !== 'flag' && column.key !== 'area');
-  if (reportType === 'FULL_NAME_ADDRESS') {
-    return [
-      { key: 'serialNumber', label: ['Sl. No'], align: 'right', sortField: 'serialNumber', width: 'w-[70px]' },
-      { key: 'fullNameAddress', label: ['Contract / Agreement', 'Borrower Full Name', 'Complete Address'], sortField: 'borrowerName', width: 'w-[420px]' },
-      { key: 'loanFlag', label: ['Loan Flag'], sortField: 'flagNames', width: 'w-[230px]' },
-      { key: 'overdue', label: ['No.of Overdues', 'O/D Amount', 'From Date', 'End Date'], align: 'right', sortField: 'overdueInstallmentCount', width: 'w-[165px]' },
-      { key: 'currentDue', label: ['Current Due'], align: 'right', sortField: 'currentDueAmount', width: 'w-[125px]' },
-      { key: 'currentDueDate', label: ['Due Date'], align: 'center', sortField: 'currentDueDate', width: 'w-[110px]' },
-    ];
-  }
   return columns;
 }
 
@@ -181,7 +215,7 @@ export default function DemandListGrid({ rows, page, pageSize, sortColumn, sortD
               <tr key={row.contractId} onDoubleClick={() => onOpen(row)} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-blue-50`}>
                 {visibleColumns.map((column) => (
                   <td key={column.key} className={`border border-black/30 px-2 py-1 align-top ${alignClass(column.align)}`}>
-                    <StackCell values={lineValues(displayRow, column.key)} align={column.align || 'left'} />
+                    <StackCell values={lineValues(displayRow, column.key, reportType)} align={column.align || 'left'} />
                   </td>
                 ))}
               </tr>
@@ -198,4 +232,4 @@ export default function DemandListGrid({ rows, page, pageSize, sortColumn, sortD
   );
 }
 
-export { groupedColumns as demandListColumns, formatDate, formatMoney, lineValues, visibleDemandListColumns };
+export { groupedColumns as demandListColumns, formatDate, formatMoney, isFullNameAddressReport, lineValues, partyDetailLines, visibleDemandListColumns };

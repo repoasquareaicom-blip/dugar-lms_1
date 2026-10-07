@@ -10,14 +10,18 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.Locale;
 import java.util.List;
 
 @Service
@@ -102,23 +106,39 @@ public class CibilSubmissionExportService {
 
     private final ContractListService contractListService;
     private final ContractListRepository contractListRepository;
+    private final Clock clock;
 
+    @Autowired
     public CibilSubmissionExportService(
         ContractListService contractListService,
         ContractListRepository contractListRepository
     ) {
+        this(contractListService, contractListRepository, Clock.systemDefaultZone());
+    }
+
+    CibilSubmissionExportService(
+        ContractListService contractListService,
+        ContractListRepository contractListRepository,
+        Clock clock
+    ) {
         this.contractListService = contractListService;
         this.contractListRepository = contractListRepository;
+        this.clock = clock;
     }
 
     public ExportResult export(ContractListCriteria criteria, Authentication authentication) {
         ContractListCriteria exportCriteria = contractListService.validatedCriteria(criteria);
         ReportAccessScope accessScope = ReportAccessScope.from(authentication);
-        List<CibilSubmissionExportRow> rows = contractListRepository.findCibilSubmissionExport(exportCriteria, accessScope);
-        return new ExportResult(workbook(rows), rows.size());
+        LocalDate asOnDate = LocalDate.now(clock);
+        List<CibilSubmissionExportRow> rows = contractListRepository.findCibilSubmissionExport(exportCriteria, accessScope, asOnDate);
+        return new ExportResult(workbook(rows, asOnDate), rows.size());
     }
 
     byte[] workbook(List<CibilSubmissionExportRow> rows) {
+        return workbook(rows, LocalDate.now(clock));
+    }
+
+    byte[] workbook(List<CibilSubmissionExportRow> rows, LocalDate asOnDate) {
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("CIBIL Submission");
@@ -131,7 +151,7 @@ public class CibilSubmissionExportService {
             }
 
             for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
-                writeDataRow(sheet.createRow(rowIndex + 1), rows.get(rowIndex));
+                writeDataRow(sheet.createRow(rowIndex + 1), rows.get(rowIndex), asOnDate);
             }
 
             for (int index = 0; index < CIBIL_HEADERS.length; index++) {
@@ -153,21 +173,34 @@ public class CibilSubmissionExportService {
         return style;
     }
 
-    private void writeDataRow(Row row, CibilSubmissionExportRow source) {
+    private void writeDataRow(Row row, CibilSubmissionExportRow source, LocalDate asOnDate) {
         setText(row, 0, source.consumerName());
         setDate(row, 1, source.dateOfBirth());
+        setText(row, 2, gender(source.salutation()));
         setText(row, 3, source.panNumber());
         setText(row, 12, source.aadhaarNumber());
         setText(row, 15, source.mobileNumber());
         setText(row, 19, source.coApplicantMobileNumber());
         setText(row, 21, source.emailId());
         setText(row, 22, source.emailId());
-        setText(row, 23, source.city());
+        setText(row, 23, residentialAddressLine1(source));
+        setText(row, 24, source.state());
+        setText(row, 25, source.pinCode());
+        setText(row, 26, "1");
         setText(row, 35, source.contractNumber());
+        setText(row, 36, accountType(source));
+        setText(row, 37, "1");
         setDate(row, 38, source.contractDate());
+        setDate(row, 39, source.lastPaymentDate());
+        setDate(row, 41, asOnDate);
         setNumber(row, 42, source.loanAmount());
+        setNumber(row, 43, source.currentBalance());
+        setNumber(row, 44, source.amountOverdue());
+        Integer daysPastDue = daysPastDue(source, asOnDate);
+        setInteger(row, 45, cibilDaysPastDue(daysPastDue));
+        setText(row, 53, assetClassification(daysPastDue));
+        setInteger(row, 59, source.repaymentTenure());
         setNumber(row, 60, source.emiAmount());
-        setNumber(row, 65, source.emiAmount());
     }
 
     private void setText(Row row, int columnIndex, String value) {
@@ -189,6 +222,103 @@ public class CibilSubmissionExportService {
             return;
         }
         row.createCell(columnIndex).setCellValue(value.doubleValue());
+    }
+
+    private void setInteger(Row row, int columnIndex, Integer value) {
+        if (value == null) {
+            return;
+        }
+        row.createCell(columnIndex).setCellValue(value);
+    }
+
+    private String accountType(CibilSubmissionExportRow source) {
+        String vehicleType = normalize(source.vehicleTypeCode());
+        if (vehicleType != null) {
+            String vehicleMapped = switch (vehicleType) {
+                case "PRIVATE CAR", "TAXI PERMIT" -> "01";
+                case "THREE WHEELER" -> "13";
+                case "SCV", "MCV", "HCV" -> "17";
+                default -> null;
+            };
+            if (vehicleMapped != null) {
+                return vehicleMapped;
+            }
+        }
+
+        String contractType = normalize(source.contractType());
+        if ("LAP".equals(contractType) || "COLLATERAL".equals(contractType)) {
+            return "03";
+        }
+        return null;
+    }
+
+    private String residentialAddressLine1(CibilSubmissionExportRow source) {
+        return joinSpace(source.addressLine1(), source.addressLine2(), source.area());
+    }
+
+    private String gender(String salutation) {
+        String normalized = normalize(salutation);
+        if (normalized == null) {
+            return null;
+        }
+        normalized = normalized.endsWith(".") ? normalized.substring(0, normalized.length() - 1) : normalized;
+        return switch (normalized) {
+            case "MR" -> "Male";
+            case "MS", "MRS" -> "Female";
+            default -> null;
+        };
+    }
+
+    private String joinSpace(String... values) {
+        StringBuilder builder = new StringBuilder();
+        for (String value : values) {
+            String cleaned = value == null ? null : value.trim();
+            if (cleaned == null || cleaned.isBlank()) {
+                continue;
+            }
+            if (!builder.isEmpty()) {
+                builder.append(' ');
+            }
+            builder.append(cleaned);
+        }
+        return builder.isEmpty() ? null : builder.toString();
+    }
+
+    private Integer daysPastDue(CibilSubmissionExportRow source, LocalDate asOnDate) {
+        if (!Boolean.TRUE.equals(source.demandListMatched()) || asOnDate == null) {
+            return null;
+        }
+        if (source.overdueFromDate() == null) {
+            return 0;
+        }
+        return (int) Math.max(ChronoUnit.DAYS.between(source.overdueFromDate(), asOnDate), 0);
+    }
+
+    private Integer cibilDaysPastDue(Integer daysPastDue) {
+        if (daysPastDue == null) {
+            return null;
+        }
+        return Math.min(daysPastDue, 900);
+    }
+
+    private String assetClassification(Integer daysPastDue) {
+        if (daysPastDue == null) {
+            return null;
+        }
+        if (daysPastDue == 0) {
+            return "01";
+        }
+        if (daysPastDue <= 90) {
+            return "05";
+        }
+        return "02";
+    }
+
+    private String normalize(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim().toUpperCase(Locale.ROOT);
     }
 
     public record ExportResult(byte[] workbook, int recordCount) {
