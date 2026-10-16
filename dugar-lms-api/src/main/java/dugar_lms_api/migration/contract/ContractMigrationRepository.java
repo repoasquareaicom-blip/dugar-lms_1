@@ -290,7 +290,7 @@ public class ContractMigrationRepository {
             .addValue("rcOnlineChecking", details.rcOnlineChecking())
             .addValue("hoCollectionToolBy", details.hoCollectionToolBy())
             .addValue("hoTvrDoneBy", details.hoTvrDoneBy())
-            .addValue("stockMarkedToBank", details.stockMarkedToBank())
+            .addValue("stockMarkedToBank", details.stockMarkedToBank() == null ? null : details.stockMarkedToBank().toString(), java.sql.Types.VARCHAR)
             .addValue("ownerSerialNumber", details.ownerSerialNumber())
             .addValue("stampDuty", details.stampDuty())
             .addValue("rtoCharges", details.rtoCharges())
@@ -385,7 +385,7 @@ public class ContractMigrationRepository {
         String rcOnlineChecking,
         String hoCollectionToolBy,
         String hoTvrDoneBy,
-        String stockMarkedToBank,
+        Long stockMarkedToBank,
         String ownerSerialNumber,
         BigDecimal stampDuty,
         BigDecimal rtoCharges,

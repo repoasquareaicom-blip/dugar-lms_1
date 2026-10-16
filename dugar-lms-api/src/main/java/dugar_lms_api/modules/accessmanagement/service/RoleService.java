@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RoleService {
 
-    public static final String SUPER_ADMIN_CODE = "SUPER_ADMIN_1";
+    public static final String SUPER_ADMIN_CODE = "SUPER_ADMIN";
 
     private final RoleRepository repository;
 
@@ -35,7 +35,7 @@ public class RoleService {
             .orElseThrow(() -> new IllegalArgumentException("Role not found."));
 
         if (isSuperAdmin(existing)) {
-            if (!SUPER_ADMIN_CODE.equalsIgnoreCase(clean(request.roleCode()))) {
+            if (!isSuperAdminCode(request.roleCode())) {
                 throw new IllegalArgumentException("SUPER_ADMIN role code cannot be changed.");
             }
             if (Boolean.FALSE.equals(request.isActive())) {
@@ -61,7 +61,11 @@ public class RoleService {
     }
 
     private boolean isSuperAdmin(Role role) {
-        return role != null && SUPER_ADMIN_CODE.equalsIgnoreCase(role.getRoleCode());
+        return role != null && isSuperAdminCode(role.getRoleCode());
+    }
+
+    public static boolean isSuperAdminCode(String roleCode) {
+        return SUPER_ADMIN_CODE.equalsIgnoreCase(roleCode == null ? "" : roleCode.trim());
     }
 
     private String clean(String value) {

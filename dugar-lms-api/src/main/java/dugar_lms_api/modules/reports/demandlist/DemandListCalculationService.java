@@ -45,6 +45,8 @@ public class DemandListCalculationService {
             null,
             null,
             null,
+            source.borrowerFiBy(),
+            source.loanReferredBy(),
             source.productType(),
             source.assetDescription(),
             source.vehicleTypeCode(),

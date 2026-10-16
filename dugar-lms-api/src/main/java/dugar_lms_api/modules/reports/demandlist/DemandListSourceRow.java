@@ -10,6 +10,8 @@ record DemandListSourceRow(
     String borrowerName,
     String guarantorCode,
     String guarantorName,
+    String borrowerFiBy,
+    String loanReferredBy,
     String productType,
     String contractType,
     String assetDescription,

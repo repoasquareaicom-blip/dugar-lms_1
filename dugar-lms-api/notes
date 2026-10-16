@@ -8,8 +8,7 @@ ssh
 ssh -i "H:\workspace\Dugar\LMS\LMS\Development V_1_0\dugar-lms-api\docs\Dugar-LMS-Key.pem" ubuntu@prolms.asquareai.com
 
 
-ssh -i "H:\workspace\Dugar\LMS\LMS\Development V_1_0\dugar-lms-api\docs\CoreLMS-Key.pem" -N -L 5435:127.0.0.1:5432 ubuntu@43.204.49.136
-
+c
 
 ssh -i "H:\workspace\Dugar\LMS\LMS\Development V_1_0\dugar-lms-api\docs\CoreLMS-Key.pem" ubuntu@43.204.49.136
 

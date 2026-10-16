@@ -3,6 +3,7 @@ package dugar_lms_api.modules.contracts.service;
 import dugar_lms_api.common.pagination.PageResponse;
 import dugar_lms_api.modules.contracts.dto.ContractAreaOptionDto;
 import dugar_lms_api.modules.contracts.dto.ContractListDto;
+import dugar_lms_api.modules.contracts.dto.LoanReferenceOptionDto;
 import dugar_lms_api.modules.contracts.repository.ContractListRepository;
 import dugar_lms_api.modules.reports.ReportAccessScope;
 import org.springframework.security.core.Authentication;
@@ -65,6 +66,14 @@ public class ContractListService {
 
     public List<ContractAreaOptionDto> getAreaMasterOptions(String keyword, Integer limit) {
         return contractListRepository.findAreaMasterOptions(normalize(keyword), limit == null ? 20 : limit);
+    }
+
+    public List<LoanReferenceOptionDto> getLoanReferenceOptions(String keyword, Integer limit, Authentication authentication) {
+        return contractListRepository.findLoanReferenceOptions(
+            normalize(keyword),
+            limit == null ? 10 : limit,
+            ReportAccessScope.from(authentication)
+        );
     }
 
     public ContractListCriteria validatedCriteria(ContractListCriteria criteria) {

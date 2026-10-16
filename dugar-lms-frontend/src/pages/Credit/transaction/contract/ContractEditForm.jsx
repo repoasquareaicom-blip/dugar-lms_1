@@ -22,6 +22,7 @@ import {
   saveContractPartyDraft,
   updateContractStatus,
 } from '../../../../services/contractsService';
+import { fetchActiveBankMasters } from '../../../../services/bankMasterService';
 
 // --- SUB-COMPONENTS ---
 
@@ -713,7 +714,7 @@ const FormSelect = ({ label, name, options, value, onChange, className = "", rea
         className={`border border-black/60 px-2 py-1 text-[16px] font-black text-black/90 focus:border-blue-600 outline-none rounded-sm w-full h-[36px] transition-all ${readOnly ? 'bg-slate-100 cursor-not-allowed' : 'bg-white cursor-pointer'}`}
       >
         <option value="">Select</option>
-        {options.map(opt => <option key={opt} value={opt} className="text-[14px]">{opt}</option>)}
+        {options.map(opt => <option key={opt.value ?? opt} value={opt.value ?? opt} className="text-[14px]">{opt.label ?? opt}</option>)}
       </select>
     </div>
   );
@@ -915,6 +916,7 @@ const ContractEditForm = () => {
   const [documentationDetails, setDocumentationDetails] = useState(() => ({
     areaCode: currentContractAreaCode(selectedContract),
   }));
+  const [activeBanks, setActiveBanks] = useState([]);
   const [documentationLoadVersion, setDocumentationLoadVersion] = useState(0);
   const [pendingDocuments, setPendingDocuments] = useState(() => pendingDocumentsFrom({}));
   const [documentUploads, setDocumentUploads] = useState([]);
@@ -935,6 +937,21 @@ const ContractEditForm = () => {
 
   const [productType, setProductType] = useState('');
   const [assetSecured, setAssetSecured] = useState('Secured');
+
+  useEffect(() => {
+    let active = true;
+    fetchActiveBankMasters()
+      .then((banks) => {
+        if (!active) return;
+        setActiveBanks(Array.isArray(banks) ? banks : []);
+      })
+      .catch(() => {
+        if (active) setDraftMessage('Unable to load active bank list.');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const startDraftLoad = () => {
     let completed = false;
@@ -1404,7 +1421,7 @@ const ContractEditForm = () => {
     hoCollectionToolBy: formValue(formData, 'documentation.hoCollectionToolBy'),
     areaCode: cleanContractAreaCode(documentationDetails.areaCode) || null,
     hoTvrDoneBy: formValue(formData, 'documentation.hoTvrDoneBy'),
-    stockMarkedToBank: formValue(formData, 'documentation.stockMarkedToBank'),
+    stockMarkedToBank: Number(formValue(formData, 'documentation.stockMarkedToBank')) || null,
     pendingDocuments,
     documentUploads: documentUploads.map(({ id, previewUrl, uploadProgress, ...upload }) => upload),
   });
@@ -1763,6 +1780,10 @@ const ContractEditForm = () => {
     vehicleByAgency: documentationDetails.vehicleByAgency,
     vehicleInspectionBy: documentationDetails.vehicleInspectionBy,
   };
+  const activeBankOptions = activeBanks.map((bank) => ({ value: String(bank.id), label: bank.bankName }));
+  if (documentationData.stockMarkedToBank && !activeBankOptions.some((bank) => bank.value === String(documentationData.stockMarkedToBank))) {
+    activeBankOptions.push({ value: String(documentationData.stockMarkedToBank), label: `${documentationDetails.stockMarkedBankName || 'Current bank'} (inactive)` });
+  }
   const activePreview = activePreviewIndex === null ? null : documentUploads[activePreviewIndex];
   const activePreviewSrc = activePreview?.previewUrl || activePreview?.storagePath;
   const visibleContractNumber = draftContract.contractNumber || displayContractNumber(selectedContract);
@@ -2343,7 +2364,14 @@ const ContractEditForm = () => {
                 </div>
                 <FormField label="TVR Done By (HO)" name="documentation.hoTvrDoneBy" value={documentationData.hoTvrDoneBy} readOnly={isViewMode} />
               </div>
-              <FormSelect label="Stock Marked to Bank" name="documentation.stockMarkedToBank" options={["Select Bank", "HDFC", "ICICI", "SBI", "Axis", "Kotak"]} value={documentationData.stockMarkedToBank || ''} readOnly={isViewMode} />
+              <FormSelect
+                label="Stock Marked to Bank"
+                name="documentation.stockMarkedToBank"
+                options={activeBankOptions}
+                value={documentationData.stockMarkedToBank || ''}
+                onChange={(event) => setDocumentationDetails((current) => ({ ...current, stockMarkedToBank: event.target.value }))}
+                readOnly={isViewMode}
+              />
             </div>
           </div>
         </div>

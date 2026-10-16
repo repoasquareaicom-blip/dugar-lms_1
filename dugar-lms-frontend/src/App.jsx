@@ -18,6 +18,9 @@ import Login from './pages/Login';
 import TopNavbar from './components/TopNavbar';
 import Footer from './components/Footer';
 import PartyCodeModify from './pages/Credit/Masters/PartyCodeModify';
+import BankCodeMaster from './pages/Credit/Masters/BankCodeMaster';
+import StockBankMarkingPage from './pages/Credit/transaction/StockBankMarkingPage';
+import StockStatementPage from './pages/Credit/reports/StockStatementPage';
 import ContractGrid from './pages/credit/transaction/contract/ContractGrid';
 import ContractEditForm from './pages/credit/transaction/contract/ContractEditForm.jsx';
 import LedgerCodeMaster from './pages/accounts/masters/LedgerCodeMaster';
@@ -32,6 +35,9 @@ import ConsolidatedPortfolioPage from './pages/committee/reports/ConsolidatedPor
 import RolesMaster from './pages/committee/masters/RolesMaster.jsx';
 import RoleMenuPermissions from './pages/committee/masters/RoleMenuPermissions.jsx';
 import UserManagement from './pages/committee/masters/UserManagement.jsx';
+import GenerateWordDocument from './pages/word-documents/GenerateWordDocument.jsx';
+import WordTemplateMaster from './pages/word-documents/WordTemplateMaster.jsx';
+import { verifyMenuAccess } from './services/menuAccessService';
 import { normalizeMenuTree } from './utils/menuNormalizer';
 import { fetchContractDashboard } from './services/dashboardService';
 
@@ -39,6 +45,43 @@ const ProtectedRoute = ({ children }) => {
   const user = localStorage.getItem('user');
   const token = localStorage.getItem('token');
   if (!user || !token) return <Navigate to="/login" replace />;
+  return children;
+};
+
+const MenuPermissionRoute = ({ menuCode, children }) => {
+  const [status, setStatus] = useState('checking');
+
+  useEffect(() => {
+    let active = true;
+    verifyMenuAccess(menuCode)
+      .then(() => {
+        if (active) setStatus('allowed');
+      })
+      .catch(() => {
+        if (active) setStatus('denied');
+      });
+    return () => {
+      active = false;
+    };
+  }, [menuCode]);
+
+  if (status === 'checking') {
+    return (
+      <div className="flex min-h-[320px] items-center justify-center text-[13px] font-black uppercase text-[#0052CC]">
+        Checking access...
+      </div>
+    );
+  }
+
+  if (status === 'denied') {
+    return (
+      <div className="flex min-h-[320px] flex-col items-center justify-center p-6 text-center">
+        <h1 className="text-[22px] font-black uppercase text-red-700">Access Denied</h1>
+        <p className="mt-2 text-[13px] font-bold text-black/70">You do not have permission to open this menu.</p>
+      </div>
+    );
+  }
+
   return children;
 };
 
@@ -474,6 +517,9 @@ function App() {
         <Route element={<ProtectedRoute><MainDashboardLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<WelcomeDashboard />} />
           <Route path="/credit/masters/party-code" element={<PartyCodeModify />} />
+          <Route path="/credit/masters/bank-code" element={<BankCodeMaster />} />
+          <Route path="/credit/transaction/stock-bank-marking" element={<MenuPermissionRoute menuCode="CREDIT_TRANSACTION_STOCK_BANK_MARKING"><StockBankMarkingPage /></MenuPermissionRoute>} />
+          <Route path="/credit/reports/stock-statement" element={<MenuPermissionRoute menuCode="CREDIT_REPORTS_STOCK_STATEMENT"><StockStatementPage /></MenuPermissionRoute>} />
           <Route path="/credit/transaction/contract/edit" element={<ContractGrid isDraft workflowStatus="E" title="Edit Contracts" showCreate={false} />} />
           <Route path="/credit/trans/contract/edit" element={<ContractGrid isDraft workflowStatus="E" title="Edit Contracts" showCreate={false} />} />
           <Route path="/credit/trans/contract-management/active-contracts" element={<ContractGrid />} />
@@ -522,6 +568,8 @@ function App() {
           <Route path="/committee/masters/user-management/roles" element={<RolesMaster />} />
           <Route path="/committee/masters/user-management/role-menu-permissions" element={<RoleMenuPermissions />} />
           <Route path="/committee/masters/user-management" element={<UserManagement />} />
+          <Route path="/administration/masters/word-template-master" element={<MenuPermissionRoute menuCode="ADMINISTRATION_MASTERS_WORD_TEMPLATE_MASTER"><WordTemplateMaster /></MenuPermissionRoute>} />
+          <Route path="/operations/transactions/generate-word-document" element={<MenuPermissionRoute menuCode="OPERATIONS_TRANSACTIONS_GENERATE_WORD_DOCUMENT"><GenerateWordDocument /></MenuPermissionRoute>} />
           <Route 
   path="*" 
   element={

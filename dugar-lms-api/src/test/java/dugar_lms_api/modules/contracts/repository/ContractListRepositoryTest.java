@@ -189,6 +189,61 @@ class ContractListRepositoryTest {
     }
 
     @Test
+    void loanReferenceOptionsUseContractNumberPrefixBeforeLimit() {
+        ContractListRepository repository = new ContractListRepository(namedParameterJdbcTemplate);
+        when(namedParameterJdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class)))
+            .thenReturn(List.of());
+
+        repository.findLoanReferenceOptions("14675", 10, new ReportAccessScope(false));
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<SqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(SqlParameterSource.class);
+        org.mockito.Mockito.verify(namedParameterJdbcTemplate).query(
+            sqlCaptor.capture(),
+            paramsCaptor.capture(),
+            any(RowMapper.class)
+        );
+
+        String sql = sqlCaptor.getValue();
+        assertThat(sql).contains("LOWER(TRIM(c.contract_number)) LIKE :contractPrefix");
+        assertThat(sql).contains("AND c.loan_close_date IS NULL");
+        assertThat(sql).contains("WHERE c.is_active = TRUE");
+        assertThat(sql).contains("AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'");
+        assertThat(sql).contains("ORDER BY TRIM(c.contract_number)");
+        assertThat(sql).contains("LIMIT :limit");
+        assertThat(sql).doesNotContain("LOWER(COALESCE(c.borrower_code, '')) LIKE");
+
+        MapSqlParameterSource params = (MapSqlParameterSource) paramsCaptor.getValue();
+        assertThat(params.getValue("contractPrefix")).isEqualTo("14675%");
+        assertThat(params.getValue("limit")).isEqualTo(10);
+    }
+
+    @Test
+    void loanReferenceOptionsPreserveAccessScope() {
+        ContractListRepository repository = new ContractListRepository(namedParameterJdbcTemplate);
+        when(namedParameterJdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class)))
+            .thenReturn(List.of());
+
+        repository.findLoanReferenceOptions("14", 75, new ReportAccessScope(false, 42L, "user"));
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<SqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(SqlParameterSource.class);
+        org.mockito.Mockito.verify(namedParameterJdbcTemplate).query(
+            sqlCaptor.capture(),
+            paramsCaptor.capture(),
+            any(RowMapper.class)
+        );
+
+        assertThat(sqlCaptor.getValue()).contains("scope_area.area_code");
+        assertThat(sqlCaptor.getValue()).contains("scope_contract.contract_number");
+
+        MapSqlParameterSource params = (MapSqlParameterSource) paramsCaptor.getValue();
+        assertThat(params.getValue("fullAccess")).isEqualTo(false);
+        assertThat(params.getValue("scopeUserId")).isEqualTo(42L);
+        assertThat(params.getValue("limit")).isEqualTo(50);
+    }
+
+    @Test
     void restrictedAccessUsesUpdatedByUserGroupOnly() {
         ContractListRepository repository = new ContractListRepository(namedParameterJdbcTemplate);
         when(namedParameterJdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class)))

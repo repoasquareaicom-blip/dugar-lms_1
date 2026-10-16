@@ -103,6 +103,42 @@ public class RolePermissionRepository {
         );
     }
 
+    public boolean canUserViewMenu(Long userId, String menuCode) {
+        if (userId == null || menuCode == null || menuCode.isBlank()) {
+            return false;
+        }
+
+        Boolean canView = namedParameterJdbcTemplate.queryForObject(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM role_permissions rp
+                JOIN menus m
+                  ON m.menu_id = rp.menu_id
+                 AND m.is_active = TRUE
+                 AND m.is_visible = TRUE
+                JOIN roles r
+                  ON r.role_id = rp.role_id
+                 AND r.is_active = TRUE
+                LEFT JOIN user_roles ur
+                  ON ur.role_id = r.role_id
+                 AND ur.user_id = :userId
+                LEFT JOIN users u
+                  ON u.user_id = :userId
+                 AND u.role_id = r.role_id
+                WHERE UPPER(TRIM(m.menu_code)) = UPPER(TRIM(:menuCode))
+                  AND rp.can_view = TRUE
+                  AND (ur.user_id IS NOT NULL OR u.user_id IS NOT NULL)
+            )
+            """,
+            new MapSqlParameterSource()
+                .addValue("userId", userId)
+                .addValue("menuCode", menuCode),
+            Boolean.class
+        );
+        return Boolean.TRUE.equals(canView);
+    }
+
     public void replaceViewPermissions(Long roleId, List<Long> menuIds, Long userId) {
         MapSqlParameterSource deleteParams = new MapSqlParameterSource()
             .addValue("roleId", roleId);

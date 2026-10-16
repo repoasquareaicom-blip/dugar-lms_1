@@ -16,13 +16,16 @@ public class ContractDocumentationDraftService {
 
     private final ContractDocumentationDraftRepository contractDocumentationDraftRepository;
     private final ContractAccessRepository contractAccessRepository;
+    private final StockBankMarkingService stockBankMarkingService;
 
     public ContractDocumentationDraftService(
         ContractDocumentationDraftRepository contractDocumentationDraftRepository,
-        ContractAccessRepository contractAccessRepository
+        ContractAccessRepository contractAccessRepository,
+        StockBankMarkingService stockBankMarkingService
     ) {
         this.contractDocumentationDraftRepository = contractDocumentationDraftRepository;
         this.contractAccessRepository = contractAccessRepository;
+        this.stockBankMarkingService = stockBankMarkingService;
     }
 
     public ContractDocumentationDraftDto getDocumentationDetails(Long contractId, Authentication authentication) {
@@ -37,6 +40,7 @@ public class ContractDocumentationDraftService {
         Authentication authentication
     ) {
         contractAccessRepository.requireAccess(contractId, ReportAccessScope.from(authentication));
+        stockBankMarkingService.validateBank(contractId, request.stockMarkedToBank());
         ContractDocumentationDraftDto documentation = withContractId(contractId, request);
         String updatedBy = auditUser(authentication);
         contractDocumentationDraftRepository.updateContract(documentation, updatedBy);
@@ -71,6 +75,7 @@ public class ContractDocumentationDraftService {
             documentation.areaCode(),
             documentation.hoTvrDoneBy(),
             documentation.stockMarkedToBank(),
+            documentation.stockMarkedBankName(),
             documentation.pendingDocuments(),
             documentation.documentUploads()
         );

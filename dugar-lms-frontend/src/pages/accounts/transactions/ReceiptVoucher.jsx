@@ -11,7 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { fetchContractsPage } from '../../../services/contractsService';
+import { fetchContractsPage, fetchLoanReferenceOptions } from '../../../services/contractsService';
 import { fetchLedgerCodes } from '../../../services/ledgerCodeService';
 import {
   authoriseVoucher,
@@ -1262,14 +1262,8 @@ const ContractLookup = ({ value, onChange, className = '' }) => (
       return item.contractNumber || item.legacyContractNumber || item.contractId || '';
     }}
     fetchOptions={async (keyword) => {
-      const data = await fetchContractsPage({ keyword, pageSize: 10, isDraft: false });
-      const contracts = data?.content || data?.items || data?.data || [];
-      const prefix = keyword.trim().toLowerCase();
-      if (!prefix) return contracts;
-      return contracts.filter((item) => {
-        const contractNumber = String(item.contractNumber || item.legacyContractNumber || item.contractId || '').toLowerCase();
-        return contractNumber.startsWith(prefix);
-      });
+      const contracts = await fetchLoanReferenceOptions({ keyword, limit: 10 });
+      return Array.isArray(contracts) ? contracts : [];
     }}
     renderOption={(item) => (
       <>

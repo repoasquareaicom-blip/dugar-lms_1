@@ -271,6 +271,8 @@ public class DemandListService {
             row.guarantor2Name(),
             row.guarantor2Phone(),
             row.guarantor2Address(),
+            row.borrowerFiBy(),
+            row.loanReferredBy(),
             row.productType(),
             row.vehicleMake(),
             row.vehicleTypeCode(),

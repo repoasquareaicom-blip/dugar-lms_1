@@ -24,7 +24,8 @@ public record ContractDocumentationDraftDto(
     String hoCollectionToolBy,
     String areaCode,
     String hoTvrDoneBy,
-    String stockMarkedToBank,
+    Long stockMarkedToBank,
+    String stockMarkedBankName,
     List<ContractPendingDocumentDto> pendingDocuments,
     List<ContractDocumentUploadDto> documentUploads
 ) {

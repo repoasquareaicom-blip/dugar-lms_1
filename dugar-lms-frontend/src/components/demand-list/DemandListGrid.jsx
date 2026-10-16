@@ -1,7 +1,8 @@
 const groupedColumns = [
   { key: 'serialNumber', label: ['Sl. No'], align: 'right', sortField: 'serialNumber', width: 'w-[70px]' },
-  { key: 'loanNumber', label: ['Loan No.'], sortField: 'loanNumber', width: 'w-[135px]' },
+  { key: 'loanNumber', label: ['Loan No/', 'Agreement Date'], sortField: 'loanNumber', width: 'w-[135px]' },
   { key: 'party', label: ['Name of Borrower', 'Name of Guarantor'], sortField: 'borrowerName', width: 'w-[260px]' },
+  { key: 'borrowerFiReferredBy', label: ['FI of Borrower /', 'Referred By'], sortField: 'borrowerFiBy', width: 'w-[190px]' },
   { key: 'loanFlag', label: ['Loan Flag'], sortField: 'flagNames', width: 'w-[230px]' },
   { key: 'area', label: ['Area'], sortField: 'areaCode', width: 'w-[150px]' },
   {
@@ -101,7 +102,7 @@ function lineValues(row, key, reportType = 'CONSOLIDATED') {
     case 'loanNumber':
       return [
         row.loanNumber || '',
-        row.agreementDate ? `Agreement: ${formatDate(row.agreementDate)}` : '',
+        row.agreementDate ? formatDate(row.agreementDate) : '',
       ].filter(Boolean);
     case 'party':
       if (isFullNameAddressReport(reportType)) {
@@ -110,6 +111,11 @@ function lineValues(row, key, reportType = 'CONSOLIDATED') {
       return [
         row.borrowerName || '',
         row.guarantorName || '',
+      ];
+    case 'borrowerFiReferredBy':
+      return [
+        `FI of Borrower: ${cleanText(row.borrowerFiBy) || '-'}`,
+        `Referred By: ${cleanText(row.loanReferredBy) || '-'}`,
       ];
     case 'area':
       return [areaDisplay(row)];

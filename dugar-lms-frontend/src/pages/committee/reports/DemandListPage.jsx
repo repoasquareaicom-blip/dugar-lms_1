@@ -154,7 +154,10 @@ function DemandListTable({ rows, page, pageSize, onOpen, onParty, onFlag, onComm
           >
             {displayRow.loanNumber || ''}
           </button>
-          {displayRow.agreementDate && <div className="text-[11px] font-bold text-black/70">Agreement: {lineValues(displayRow, 'loanNumber')[1]?.replace('Agreement: ', '')}</div>}
+          
+          {displayRow.agreementDate && (<div className="text-[11px] font-bold text-black/70">{lineValues(displayRow, 'loanNumber')[1]}
+  </div>
+)}
         </div>
       );
     }

@@ -127,7 +127,7 @@ const RoleMenuPermissions = () => {
   }, [rows]);
 
   const selectedRole = roles.find((role) => String(role.roleId) === String(selectedRoleId));
-  const isSuperAdminRole = selectedRole?.roleCode === 'SUPER_ADMIN_1';
+  const isSuperAdminRole = selectedRole?.roleCode === 'SUPER_ADMIN';
 
   const showNotice = (text, type = 'success') => {
     setNotice({ text, type });

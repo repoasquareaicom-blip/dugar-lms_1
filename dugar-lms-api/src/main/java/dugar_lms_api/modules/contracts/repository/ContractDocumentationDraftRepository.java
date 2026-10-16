@@ -37,10 +37,12 @@ public class ContractDocumentationDraftRepository {
             cd.ho_collection_tool_by,
             c.area_code,
             cd.ho_tvr_done_by,
-            cd.stock_marked_to_bank
+            bank.id AS stock_marked_to_bank,
+            bank.bank_name AS stock_marked_bank_name
         FROM contracts c
         LEFT JOIN contract_details cd
           ON cd.contract_id = c.contract_id
+        LEFT JOIN bank_masters bank ON bank.id::text = cd.stock_marked_to_bank
         WHERE c.contract_id = :contractId
         ORDER BY cd.contract_detail_id
         LIMIT 1
@@ -247,7 +249,8 @@ public class ContractDocumentationDraftRepository {
         rs.getString("ho_collection_tool_by"),
         rs.getString("area_code"),
         rs.getString("ho_tvr_done_by"),
-        rs.getString("stock_marked_to_bank"),
+        rs.getObject("stock_marked_to_bank", Long.class),
+        rs.getString("stock_marked_bank_name"),
         List.of(),
         List.of()
     );
@@ -401,6 +404,7 @@ public class ContractDocumentationDraftRepository {
             documentation.areaCode(),
             documentation.hoTvrDoneBy(),
             documentation.stockMarkedToBank(),
+            documentation.stockMarkedBankName(),
             pendingDocuments,
             uploads
         );
@@ -429,7 +433,7 @@ public class ContractDocumentationDraftRepository {
             .addValue("hoCollectionToolBy", clean(documentation.hoCollectionToolBy()))
             .addValue("areaCode", clean(documentation.areaCode()))
             .addValue("hoTvrDoneBy", clean(documentation.hoTvrDoneBy()))
-            .addValue("stockMarkedToBank", clean(documentation.stockMarkedToBank()));
+            .addValue("stockMarkedToBank", documentation.stockMarkedToBank() == null ? null : documentation.stockMarkedToBank().toString(), java.sql.Types.VARCHAR);
     }
 
     private String clean(String value) {

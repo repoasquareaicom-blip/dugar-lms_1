@@ -66,7 +66,7 @@ public class RoleMenuPermissionService {
     @Transactional
     public RoleMenuPermissionResponse save(Long roleId, RoleMenuPermissionRequest request, Long userId) {
         Role role = requireActiveRole(roleId);
-        if (RoleService.SUPER_ADMIN_CODE.equalsIgnoreCase(role.getRoleCode())) {
+        if (RoleService.isSuperAdminCode(role.getRoleCode())) {
             throw new IllegalArgumentException("SUPER_ADMIN permissions cannot be changed.");
         }
         Set<Long> normalizedMenuIds = normalizeMenuIds(request == null ? null : request.menuIds());

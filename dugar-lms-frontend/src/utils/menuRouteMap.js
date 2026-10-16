@@ -1,6 +1,9 @@
 const NAME_ROUTE_MAP = [
+  { keys: ['stock marking to bank', 'credit_transaction_stock_bank_marking'], route: '/credit/transaction/stock-bank-marking' },
+  { keys: ['stock statement', 'credit_reports_stock_statement'], route: '/credit/reports/stock-statement' },
   { keys: ['dashboard'], route: '/dashboard' },
   { keys: ['party code modify', 'party code', 'party master'], route: '/credit/masters/party-code' },
+  { keys: ['bank code', 'bank master'], route: '/credit/masters/bank-code' },
   { keys: ['branch active contracts', 'branch active contract', 'branch_active_contracts'], route: '/branch/active-contracts' },
   { keys: ['active contracts', 'active contract'], route: '/credit/trans/contract-management/active-contracts' },
   { keys: ['request to flag loan', 'request flag loan', 'flag loan'], route: '/branch/transaction/request-to-flag-loan' },
@@ -20,6 +23,8 @@ const NAME_ROUTE_MAP = [
   { keys: ['branch aging analysis', 'branch ageing analysis', 'branch_aging_analysis'], route: '/branch/aging-analysis' },
   { keys: ['aging analysis', 'ageing analysis'], route: '/committee/reports/aging-analysis' },
   { keys: ['ledger code', 'ledger master'], route: '/accounts/masters/ledger-code' },
+  { keys: ['word template master'], route: '/administration/masters/word-template-master' },
+  { keys: ['generate word document'], route: '/operations/transactions/generate-word-document' },
   { keys: ['role menu permissions', 'role permissions'], route: '/committee/masters/user-management/role-menu-permissions' },
   { keys: ['roles', 'role master'], route: '/committee/masters/user-management/roles' },
   { keys: ['user management', 'user master'], route: '/committee/masters/user-management' },

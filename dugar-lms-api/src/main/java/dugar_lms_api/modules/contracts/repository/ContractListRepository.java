@@ -4,6 +4,7 @@ import dugar_lms_api.modules.accessmanagement.dto.ContractOptionDto;
 import dugar_lms_api.modules.contracts.dto.CibilSubmissionExportRow;
 import dugar_lms_api.modules.contracts.dto.ContractAreaOptionDto;
 import dugar_lms_api.modules.contracts.dto.ContractListDto;
+import dugar_lms_api.modules.contracts.dto.LoanReferenceOptionDto;
 import dugar_lms_api.modules.contracts.service.ContractListCriteria;
 import dugar_lms_api.modules.contracts.service.ContractListSortDirection;
 import dugar_lms_api.modules.contracts.service.ContractListSortField;
@@ -289,6 +290,34 @@ public class ContractListRepository {
         )
         """;
 
+    private static final String FIND_LOAN_REFERENCE_OPTIONS_SQL_PREFIX = """
+        SELECT
+            c.contract_id,
+            NULLIF(TRIM(c.contract_number), '') AS contract_number,
+            NULLIF(TRIM(c.legacy_contract_number), '') AS legacy_contract_number,
+            NULLIF(TRIM(c.contract_type), '') AS product,
+            NULLIF(TRIM(c.contract_type), '') AS contract_type,
+            NULLIF(TRIM(c.area_code), '') AS branch,
+            NULLIF(TRIM(c.area_code), '') AS area_code,
+            NULLIF(TRIM(c.borrower_code), '') AS customer_code,
+            NULLIF(TRIM(c.borrower_code), '') AS borrower_code,
+            COALESCE(NULLIF(TRIM(pm.full_name), ''), NULLIF(TRIM(c.borrower_code), ''), '-') AS customer_name,
+            COALESCE(NULLIF(TRIM(pm.full_name), ''), NULLIF(TRIM(c.borrower_code), ''), '-') AS borrower_name,
+            COALESCE(NULLIF(TRIM(CONCAT_WS(', ', NULLIF(TRIM(pm.address_line_1), ''), NULLIF(TRIM(pm.address_line_2), ''), NULLIF(TRIM(pm.area), ''))), ''), '-') AS customer_address,
+            NULLIF(TRIM(pm.city), '') AS customer_city,
+            NULLIF(TRIM(pm.state), '') AS customer_state,
+            NULLIF(TRIM(pm.pin_code), '') AS customer_pin_code
+        FROM contracts c
+        LEFT JOIN party_masters pm
+            ON UPPER(TRIM(pm.party_code)) = UPPER(TRIM(c.borrower_code))
+           AND pm.is_active = TRUE
+        WHERE c.is_active = TRUE
+          AND UPPER(TRIM(COALESCE(c.status, ''))) = 'Y'
+          AND c.loan_close_date IS NULL
+          AND NULLIF(TRIM(c.contract_number), '') IS NOT NULL
+          AND LOWER(TRIM(c.contract_number)) LIKE :contractPrefix
+        """;
+
     private static final RowMapper<ContractListDto> CONTRACT_LIST_ROW_MAPPER = (rs, rowNum) -> new ContractListDto(
         rs.getLong("contract_id"),
         rs.getString("contract_number"),
@@ -371,6 +400,24 @@ public class ContractListRepository {
         rs.getObject("demand_list_matched", Boolean.class),
         rs.getObject("repayment_tenure", Integer.class),
         rs.getBigDecimal("emi_amount")
+    );
+
+    private static final RowMapper<LoanReferenceOptionDto> LOAN_REFERENCE_OPTION_ROW_MAPPER = (rs, rowNum) -> new LoanReferenceOptionDto(
+        rs.getLong("contract_id"),
+        rs.getString("contract_number"),
+        rs.getString("legacy_contract_number"),
+        rs.getString("product"),
+        rs.getString("contract_type"),
+        rs.getString("branch"),
+        rs.getString("area_code"),
+        rs.getString("customer_code"),
+        rs.getString("borrower_code"),
+        rs.getString("customer_name"),
+        rs.getString("borrower_name"),
+        rs.getString("customer_address"),
+        rs.getString("customer_city"),
+        rs.getString("customer_state"),
+        rs.getString("customer_pin_code")
     );
 
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
@@ -479,6 +526,25 @@ public class ContractListRepository {
                 );
             }
         );
+    }
+
+    public List<LoanReferenceOptionDto> findLoanReferenceOptions(String keyword, int limit, ReportAccessScope accessScope) {
+        String cleanedKeyword = normalizeLower(keyword);
+        if (cleanedKeyword == null) {
+            return List.of();
+        }
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("contractPrefix", cleanedKeyword + "%")
+            .addValue("limit", Math.max(1, Math.min(limit, 50)));
+        StringBuilder sql = new StringBuilder(FIND_LOAN_REFERENCE_OPTIONS_SQL_PREFIX);
+        appendAccessFilter(sql, params, accessScope);
+        sql.append("""
+            ORDER BY TRIM(c.contract_number)
+            LIMIT :limit
+            """);
+
+        return namedParameterJdbcTemplate.query(sql.toString(), params, LOAN_REFERENCE_OPTION_ROW_MAPPER);
     }
 
     public boolean existsActiveContractNumber(String contractNumber) {

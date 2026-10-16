@@ -191,6 +191,8 @@ public class BranchWiseAgeingProcedureRepository {
                     COALESCE(NULLIF(TRIM(g2m.full_name), ''), NULLIF(TRIM(c.guarantor_2_code), '')) AS guarantor_2_name,
                     NULLIF(TRIM(g2m.contact_number), '') AS guarantor_2_phone,
                     NULLIF(TRIM(CONCAT_WS(', ', NULLIF(TRIM(g2m.address_line_1), ''), NULLIF(TRIM(g2m.address_line_2), ''), NULLIF(TRIM(g2m.area), ''), NULLIF(TRIM(g2m.city), ''), NULLIF(TRIM(g2m.state), ''), NULLIF(TRIM(g2m.pin_code), ''))), '') AS guarantor_2_address,
+                    NULLIF(TRIM(cd.borrower_fi_by), '') AS borrower_fi_by,
+                    NULLIF(TRIM(cd.loan_referred_by), '') AS loan_referred_by,
                     r.contract_date,
                     r.first_emi_date,
                     r.vehicle_make,
@@ -233,6 +235,9 @@ public class BranchWiseAgeingProcedureRepository {
                 LEFT JOIN party_masters g2m
                   ON UPPER(TRIM(g2m.party_code)) = UPPER(TRIM(c.guarantor_2_code))
                  AND g2m.is_active = TRUE
+                LEFT JOIN contract_details cd
+                  ON cd.contract_id = r.contract_id
+                 AND cd.is_active = TRUE
                 LEFT JOIN last_paid lp
                   ON lp.contract_number = UPPER(TRIM(r.contract_number))
                 LEFT JOIN flags
@@ -276,6 +281,8 @@ public class BranchWiseAgeingProcedureRepository {
                             rs.getString("guarantor_2_name"),
                             rs.getString("guarantor_2_phone"),
                             rs.getString("guarantor_2_address"),
+                            rs.getString("borrower_fi_by"),
+                            rs.getString("loan_referred_by"),
                             rs.getObject("contract_date", LocalDate.class),
                             rs.getObject("first_emi_date", LocalDate.class),
                             rs.getString("vehicle_make"),
@@ -461,6 +468,8 @@ public class BranchWiseAgeingProcedureRepository {
         String guarantor2Name,
         String guarantor2Phone,
         String guarantor2Address,
+        String borrowerFiBy,
+        String loanReferredBy,
         LocalDate contractDate,
         LocalDate firstEmiDate,
         String vehicleMake,

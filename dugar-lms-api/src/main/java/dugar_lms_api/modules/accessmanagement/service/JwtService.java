@@ -47,11 +47,11 @@ public class JwtService {
     }
 
     public Long extractUserId(String token) {
-        return extractClaim(token, claims -> claims.get("userId", Long.class));
+        return extractClaim(token, claims -> extractLongClaim(claims, "userId"));
     }
 
     public Long extractRoleId(String token) {
-        return extractClaim(token, claims -> claims.get("roleId", Long.class));
+        return extractClaim(token, claims -> extractLongClaim(claims, "roleId"));
     }
 
     public String extractRoleCode(String token) {
@@ -85,6 +85,17 @@ public class JwtService {
     private <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         Claims claims = parseClaims(token);
         return claimsResolver.apply(claims);
+    }
+
+    private Long extractLongClaim(Claims claims, String claimName) {
+        Object value = claims.get(claimName);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return Long.parseLong(String.valueOf(value));
     }
 
     private boolean isTokenExpired(String token) {

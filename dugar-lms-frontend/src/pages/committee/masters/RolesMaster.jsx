@@ -6,7 +6,7 @@ import { createRole, fetchRoles, updateRole } from '../../../services/roleServic
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
 const DEFAULT_FILTERS = {};
 const DEFAULT_HIDDEN_COLUMNS = {};
-const SUPER_ADMIN_CODE = 'SUPER_ADMIN_1';
+const SUPER_ADMIN_CODE = 'SUPER_ADMIN';
 const emptyForm = {
   roleName: '',
   roleCode: '',

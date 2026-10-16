@@ -180,7 +180,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         // Example:
-        // SUPER_ADMIN_1 becomes SUPER_ADMIN
+        // SUPER_ADMIN_1 becomes SUPER_ADMIN for legacy tokens.
         normalizedRoleCode =
             normalizedRoleCode.replaceFirst("_\\d+$", "");
 

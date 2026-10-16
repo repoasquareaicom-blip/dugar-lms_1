@@ -20,6 +20,8 @@ public record DemandListRowDto(
     String guarantor2Name,
     String guarantor2Phone,
     String guarantor2Address,
+    String borrowerFiBy,
+    String loanReferredBy,
     String productType,
     String assetDescription,
     String vehicleTypeCode,

@@ -3,6 +3,7 @@ package dugar_lms_api.modules.contracts.controller;
 import dugar_lms_api.common.pagination.PageResponse;
 import dugar_lms_api.modules.contracts.dto.ContractAreaOptionDto;
 import dugar_lms_api.modules.contracts.dto.ContractListDto;
+import dugar_lms_api.modules.contracts.dto.LoanReferenceOptionDto;
 import dugar_lms_api.modules.contracts.service.CibilSubmissionExportService;
 import dugar_lms_api.modules.contracts.service.CibilSubmissionExportService.ExportResult;
 import dugar_lms_api.modules.contracts.service.ContractListCriteria;
@@ -133,5 +134,14 @@ public class ContractListController {
         @RequestParam(required = false) Integer limit
     ) {
         return ResponseEntity.ok(contractListService.getAreaMasterOptions(keyword, limit));
+    }
+
+    @GetMapping("/loan-reference-options")
+    public ResponseEntity<java.util.List<LoanReferenceOptionDto>> listLoanReferenceOptions(
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) Integer limit,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(contractListService.getLoanReferenceOptions(keyword, limit, authentication));
     }
 }

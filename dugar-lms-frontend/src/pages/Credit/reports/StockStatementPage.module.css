@@ -1,0 +1,38 @@
+.track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--stock-track);
+}
+
+.blue {
+  --stock-track: #dbeafe;
+  --stock-glow: #0052cc;
+}
+
+.green {
+  --stock-track: #dcfce7;
+  --stock-glow: #15803d;
+}
+
+.shimmer {
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--stock-glow), transparent);
+  box-shadow: 0 0 8px var(--stock-glow);
+  animation: stock-shimmer 1.35s ease-in-out infinite;
+}
+
+@keyframes stock-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(350%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    width: 100%;
+    animation: none;
+    opacity: 0.45;
+  }
+}

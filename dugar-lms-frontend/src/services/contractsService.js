@@ -39,6 +39,13 @@ export async function fetchContractsPage({
   return response.data;
 }
 
+export async function fetchLoanReferenceOptions({ keyword = '', limit = 10 } = {}) {
+  const params = { limit };
+  addParam(params, 'keyword', keyword);
+  const response = await apiClient.get('/contracts/loan-reference-options', { params });
+  return response.data;
+}
+
 export async function exportCibilSubmission({
   filters = {},
   keyword = '',
