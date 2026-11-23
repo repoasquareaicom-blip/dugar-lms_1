@@ -41,6 +41,7 @@ const ServerDataTable = ({
     totalElements: Number(data?.totalElements || 0),
   }),
   rowUpdates,
+  isRowSelected,
   onRowClick,
   onRowDoubleClick,
 }) => {
@@ -310,7 +311,7 @@ const ServerDataTable = ({
             )}
             {displayedRows.map((row, rowIndex) => {
               const rowId = getRowId(row) ?? rowIndex;
-              const isSelected = selectedRowId === rowId;
+              const isSelected = isRowSelected ? isRowSelected(row) : selectedRowId === rowId;
 
               return (
                 <tr

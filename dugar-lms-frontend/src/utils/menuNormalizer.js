@@ -1,4 +1,5 @@
 import { resolveMenuPath } from './menuRouteMap';
+import { documentMenuLabel } from './documentMenuLabels';
 
 const ICON_BY_NAME = [
   { keys: ['dashboard'], icon: 'LayoutDashboard' },
@@ -50,6 +51,9 @@ function sortMenus(items) {
 }
 
 function isInactive(menu) {
+  // Hide the retired settings page even in menu trees cached before migration.
+  if ((menu?.menuCode || menu?.menu_code || '').trim().toUpperCase() === 'ADMINISTRATION_MASTERS_DOCUMENT_AI_SETTINGS'
+      || (menu?.urlPath || menu?.url_path || menu?.path) === '/administration/masters/document-ai-settings') return true;
   return menu?.isActive === false
     || menu?.is_active === false
     || menu?.isVisible === false
@@ -76,7 +80,7 @@ function normalizeMenuItems(menus = []) {
     const normalized = {
       ...menu,
       menuId: menu.menuId ?? menu.menu_id ?? `${menu.menuCode || menu.menuName || 'menu'}-${index}`,
-      menuName: menu.menuName || menu.menu_name || menu.label || 'Menu',
+      menuName: documentMenuLabel(menu),
       menuCode: menu.menuCode || menu.menu_code || '',
       path: menu.urlPath || menu.path || '#',
       urlPath: menu.urlPath || menu.path || '#',
@@ -173,143 +177,6 @@ function ensureActiveContractsMenu(menuTree) {
     path: '/credit/trans/contract-management/draft-contracts',
     urlPath: '/credit/trans/contract-management/draft-contracts',
     displayOrder: nextOrder(contractManagement.subMenus),
-    subMenus: [],
-  });
-
-  return menuTree;
-}
-
-function ensureCommitteeDemandListMenu(menuTree) {
-  let committee = menuTree.find((menu) => menuMatches(menu, ['committee']));
-  if (!committee) {
-    committee = {
-      menuId: 'frontend-committee',
-      menuName: 'Committee',
-      menuCode: 'COMMITTEE',
-      icon: 'UsersRound',
-      path: '#',
-      urlPath: '#',
-      displayOrder: nextOrder(menuTree),
-      subMenus: [],
-    };
-    menuTree.push(committee);
-  }
-
-  committee.path = '#';
-  committee.urlPath = '#';
-  committee.icon = committee.icon || 'UsersRound';
-  committee.subMenus = committee.subMenus || [];
-
-  const reports = ensureMenu(committee, {
-    menuId: 'frontend-committee-reports',
-    menuName: 'Reports',
-    menuCode: 'COMMITTEE_REPORTS',
-    icon: 'FileBarChart2',
-    path: '#',
-    urlPath: '#',
-    displayOrder: nextOrder(committee.subMenus),
-    subMenus: [],
-  });
-
-  ensureMenu(reports, {
-    menuId: 'frontend-demand-list',
-    menuName: 'Demand List',
-    menuCode: 'COMMITTEE_DEMAND_LIST',
-    icon: 'FileSpreadsheet',
-    path: '/committee/reports/demand-list',
-    urlPath: '/committee/reports/demand-list',
-    displayOrder: nextOrder(reports.subMenus),
-    subMenus: [],
-  });
-
-  ensureMenu(reports, {
-    menuId: 'frontend-afc-report',
-    menuName: 'AFC Report',
-    menuCode: 'COMMITTEE_AFC_REPORT',
-    icon: 'FileText',
-    path: '/committee/reports/afc',
-    urlPath: '/committee/reports/afc',
-    displayOrder: nextOrder(reports.subMenus),
-    subMenus: [],
-  });
-
-  reports.subMenus = reports.subMenus.filter((menu) => !menuMatches(menu, ['consolidated portfolio']));
-
-  reports.subMenus = reports.subMenus.filter((menu) => {
-    if (!menuMatches(menu, ['aging analysis', 'ageing analysis'])) return true;
-    const path = menu.path || menu.urlPath || '#';
-    const code = normalizeText(menu.menuCode || menu.menu_code);
-    const hasChildren = (menu.subMenus || []).length > 0;
-    return code === 'committee_aging_analysis' || path === '#' || hasChildren;
-  });
-
-  const agingAnalysis = ensureMenu(reports, {
-    menuId: 'frontend-aging-analysis',
-    menuName: 'Aging Analysis',
-    menuCode: 'COMMITTEE_AGING_ANALYSIS',
-    icon: 'BarChart3',
-    path: '#',
-    urlPath: '#',
-    displayOrder: nextOrder(reports.subMenus),
-    subMenus: [],
-  });
-
-  agingAnalysis.path = '#';
-  agingAnalysis.urlPath = '#';
-  agingAnalysis.subMenus = agingAnalysis.subMenus || [];
-
-  ensureMenu(agingAnalysis, {
-    menuId: 'frontend-aging-branch-wise',
-    menuName: 'Branch Wise',
-    menuCode: 'COMMITTEE_AGING_BRANCH_WISE',
-    icon: 'GitBranch',
-    path: '/committee/aging-analysis/branch-wise',
-    urlPath: '/committee/aging-analysis/branch-wise',
-    displayOrder: 1,
-    subMenus: [],
-  });
-
-  ensureMenu(agingAnalysis, {
-    menuId: 'frontend-aging-consolidated',
-    menuName: 'Consolidated',
-    menuCode: 'COMMITTEE_AGING_CONSOLIDATED',
-    icon: 'Table2',
-    path: '/committee/aging-analysis/consolidated',
-    urlPath: '/committee/aging-analysis/consolidated',
-    displayOrder: 2,
-    subMenus: [],
-  });
-
-  ensureMenu(agingAnalysis, {
-    menuId: 'frontend-aging-loan-ticket-wise',
-    menuName: 'Loan Ticket Wise',
-    menuCode: 'COMMITTEE_AGING_LOAN_TICKET_WISE',
-    icon: 'IndianRupee',
-    path: '/committee/aging-analysis/loan-ticket-wise',
-    urlPath: '/committee/aging-analysis/loan-ticket-wise',
-    displayOrder: 3,
-    subMenus: [],
-  });
-
-  ensureMenu(agingAnalysis, {
-    menuId: 'frontend-aging-interest-wise',
-    menuName: 'Interest Wise',
-    menuCode: 'COMMITTEE_AGING_INTEREST_WISE',
-    icon: 'Percent',
-    path: '/committee/aging-analysis/interest-wise',
-    urlPath: '/committee/aging-analysis/interest-wise',
-    displayOrder: 4,
-    subMenus: [],
-  });
-
-  ensureMenu(agingAnalysis, {
-    menuId: 'frontend-aging-consolidated-portfolio',
-    menuName: 'Consolidated Portfolio',
-    menuCode: 'COMMITTEE_AGING_CONSOLIDATED_PORTFOLIO',
-    icon: 'PieChart',
-    path: '/committee/aging-analysis/consolidated-portfolio',
-    urlPath: '/committee/aging-analysis/consolidated-portfolio',
-    displayOrder: 5,
     subMenus: [],
   });
 

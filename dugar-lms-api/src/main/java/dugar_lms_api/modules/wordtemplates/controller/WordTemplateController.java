@@ -1,8 +1,6 @@
 package dugar_lms_api.modules.wordtemplates.controller;
 
 import dugar_lms_api.modules.wordtemplates.dto.WordTemplateDto;
-import dugar_lms_api.modules.wordtemplates.dto.WordTemplateGroupDto;
-import dugar_lms_api.modules.wordtemplates.dto.WordTemplateGroupRequest;
 import dugar_lms_api.modules.wordtemplates.dto.WordTemplateMetadataRequest;
 import dugar_lms_api.modules.wordtemplates.service.WordTemplateService;
 import jakarta.validation.Valid;
@@ -45,47 +43,19 @@ public class WordTemplateController {
     public WordTemplateController(WordTemplateService service) {
         this.service = service;
     }
-
-    @GetMapping("/groups")
-    public ResponseEntity<List<WordTemplateGroupDto>> groups(
-        @RequestParam(required = false) String keyword,
-        @RequestParam(required = false) Boolean isActive,
-        Authentication authentication
-    ) {
-        return ResponseEntity.ok(service.groups(keyword, isActive, authentication));
-    }
-
-    @PostMapping("/groups")
-    public ResponseEntity<WordTemplateGroupDto> createGroup(
-        @Valid @RequestBody WordTemplateGroupRequest request,
-        Authentication authentication
-    ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createGroup(request, authentication));
-    }
-
-    @PutMapping("/groups/{id}")
-    public ResponseEntity<WordTemplateGroupDto> updateGroup(
-        @PathVariable Long id,
-        @Valid @RequestBody WordTemplateGroupRequest request,
-        Authentication authentication
-    ) {
-        return ResponseEntity.ok(service.updateGroup(id, request, authentication));
-    }
-
-    @DeleteMapping("/groups/{id}")
-    public ResponseEntity<Void> deleteGroup(@PathVariable Long id, Authentication authentication) {
-        service.deleteGroup(id, authentication);
-        return ResponseEntity.noContent().build();
+    public record ActivationRequest(@jakarta.validation.constraints.NotNull Boolean isActive) {}
+    @PutMapping("/{id}/active")
+    public WordTemplateDto setActive(@PathVariable Long id,@Valid @RequestBody ActivationRequest request,Authentication auth) {
+        return service.setActive(id,request.isActive(),auth);
     }
 
     @GetMapping
     public ResponseEntity<List<WordTemplateDto>> templates(
-        @RequestParam(required = false) Long groupId,
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) Boolean isActive,
         Authentication authentication
     ) {
-        return ResponseEntity.ok(service.templates(groupId, keyword, isActive, authentication));
+        return ResponseEntity.ok(service.templates(keyword, isActive, authentication));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -97,13 +67,23 @@ public class WordTemplateController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.createTemplate(request, file, authentication));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<WordTemplateDto> updateTemplate(
         @PathVariable Long id,
         @Valid @RequestBody WordTemplateMetadataRequest request,
         Authentication authentication
     ) {
         return ResponseEntity.ok(service.updateTemplate(id, request, authentication));
+    }
+
+    @PutMapping(path = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<WordTemplateDto> updateTemplateWithFile(
+        @PathVariable Long id,
+        @Valid @ModelAttribute WordTemplateMetadataRequest request,
+        @RequestPart(value = "file", required = false) MultipartFile file,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(service.updateTemplateWithFile(id, request, file, authentication));
     }
 
     @PostMapping(path = "/{id}/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -121,10 +101,26 @@ public class WordTemplateController {
         return ResponseEntity.ok()
             .contentType(DOCX_MEDIA_TYPE)
             .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                .filename(download.filename())
+                .filename(download.filename(), java.nio.charset.StandardCharsets.UTF_8)
                 .build()
                 .toString())
             .body(download.resource());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private dugar_lms_api.modules.wordtemplates.automation.DocumentPdfConverter pdf;
+    @GetMapping("/{id}/preview")
+    public ResponseEntity<?> previewOriginal(@PathVariable Long id,Authentication auth) throws java.io.IOException {
+        var original=service.download(id,auth); // Same authorization; no contract resolution, merge or AI.
+        java.nio.file.Path input=java.nio.file.Files.createTempFile("dugar-original-",".docx");
+        try {
+            try(var stream=original.resource().getInputStream()){java.nio.file.Files.copy(stream,input,java.nio.file.StandardCopyOption.REPLACE_EXISTING);}
+            var converted=pdf.convert(input);
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,"inline; filename=original-template.pdf")
+                .header(HttpHeaders.CACHE_CONTROL,"no-store")
+                .body(new dugar_lms_api.modules.wordtemplates.automation.TemporaryDocumentResource(converted));
+        } finally {java.nio.file.Files.deleteIfExists(input);}
     }
 
     @DeleteMapping("/{id}")
@@ -154,6 +150,6 @@ public class WordTemplateController {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, String>> conflict(DataIntegrityViolationException exception) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "Duplicate or invalid Word Template record."));
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "Duplicate or invalid Document Template record."));
     }
 }

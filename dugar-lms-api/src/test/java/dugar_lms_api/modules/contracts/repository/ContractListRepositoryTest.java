@@ -28,6 +28,20 @@ class ContractListRepositoryTest {
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
     @Test
+    void documentSnapshotUsesGridFiltersAndScopeWithoutPagination() {
+        var repo=new ContractListRepository(namedParameterJdbcTemplate);
+        var id=java.util.UUID.randomUUID();
+        var criteria=new ContractListCriteria("needle","A1",null,"HP",null,null,null,null,null,false,null,7,25,"contractDate","desc");
+        repo.snapshotDocumentSelection(id,criteria,new ReportAccessScope(false,101L,"user"));
+        var sql=ArgumentCaptor.forClass(String.class);var params=ArgumentCaptor.forClass(SqlParameterSource.class);
+        org.mockito.Mockito.verify(namedParameterJdbcTemplate).update(sql.capture(),params.capture());
+        assertThat(sql.getValue()).contains("INSERT INTO document_export_items", "SELECT DISTINCT :documentJob", "contract_repayment_structures repayment_exists", ":scopeUserId", ":branch", ":product", ":keywordPattern").doesNotContain("LIMIT :size", "OFFSET :offset", "needle");
+        assertThat(params.getValue().getValue("documentJob")).isEqualTo(id);
+        assertThat(params.getValue().getValue("scopeUserId")).isEqualTo(101L);
+        assertThat(params.getValue().getValue("fullAccess")).isEqualTo(false);
+    }
+
+    @Test
     void generatedSqlUsesWhitelistedSortAndStableSecondarySort() {
         ContractListRepository repository = new ContractListRepository(namedParameterJdbcTemplate);
         when(namedParameterJdbcTemplate.query(any(String.class), any(SqlParameterSource.class), any(RowMapper.class)))

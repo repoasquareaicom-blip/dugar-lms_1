@@ -1,0 +1,434 @@
+
+-- ============================================================
+-- DUGAR LOAN EDGE LMS
+-- V079 - Contract Repayment Schedule Function
+--
+-- Strict Client Excel Calculation Method (Option B)
+--
+-- 1. Uses stored contracts.irr_rate without recalculation.
+-- 2. Uses contractual repayment structure EMI amounts.
+-- 3. Uses first_emi_date for monthly installment dates.
+-- 4. Does not adjust interest for moratorium months.
+-- 5. Does not force final principal balance to zero.
+-- 6. Does not perform final installment reconciliation.
+-- 7. Rounding adjustment is always zero.
+-- 8. Does not modify contract or collection data.
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.fn_contract_repayment_schedule(
+    p_contract_number VARCHAR
+)
+RETURNS TABLE (
+    installment_no INTEGER,
+    due_date DATE,
+    opening_principal NUMERIC,
+    emi_amount NUMERIC,
+    interest_amount NUMERIC,
+    principal_amount NUMERIC,
+    closing_principal NUMERIC,
+    rounding_adjustment NUMERIC
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog
+AS $function$
+
+DECLARE
+    v_contract public.contracts%ROWTYPE;
+    v_slab RECORD;
+    v_contract_json JSONB;
+
+    v_frequency TEXT;
+    v_terms TEXT;
+
+    v_slab_count BIGINT;
+    v_installments BIGINT;
+    v_invalid_slabs BIGINT;
+
+    v_repayment_total NUMERIC;
+    v_balance NUMERIC;
+
+    v_index INTEGER;
+    v_installment_no INTEGER := 0;
+
+BEGIN
+
+    -- ========================================================
+    -- 1. Validate Contract Number
+    -- ========================================================
+
+    IF p_contract_number IS NULL
+       OR btrim(p_contract_number) = '' THEN
+
+        RAISE EXCEPTION USING
+            ERRCODE = '22023',
+            MESSAGE = 'Contract number is required';
+
+    END IF;
+
+
+    -- ========================================================
+    -- 2. Load Contract
+    -- ========================================================
+
+    BEGIN
+
+        SELECT c.*
+        INTO STRICT v_contract
+        FROM public.contracts c
+        WHERE btrim(c.contract_number) =
+              btrim(p_contract_number);
+
+    EXCEPTION
+
+        WHEN NO_DATA_FOUND THEN
+
+            RAISE EXCEPTION
+                'Contract not found: %',
+                p_contract_number
+                USING ERRCODE = '22023';
+
+        WHEN TOO_MANY_ROWS THEN
+
+            RAISE EXCEPTION
+                'Ambiguous contract number: %',
+                p_contract_number
+                USING ERRCODE = '22023';
+
+    END;
+
+
+    -- ========================================================
+    -- 3. Validate Upfront EMI Status
+    -- ========================================================
+
+    v_contract_json := to_jsonb(v_contract);
+
+    IF NOT (v_contract_json ? 'is_first_emi_paid')
+       OR v_contract_json ->> 'is_first_emi_paid' IS NULL THEN
+
+        RAISE EXCEPTION
+            'Upfront EMI status is unavailable for contract: %',
+            p_contract_number
+            USING ERRCODE = '22023';
+
+    END IF;
+
+    IF v_contract_json ->> 'is_first_emi_paid' <> 'false' THEN
+
+        RAISE EXCEPTION
+            'Upfront EMI contracts are unsupported in Stage 1: %',
+            p_contract_number
+            USING ERRCODE = '22023';
+
+    END IF;
+
+
+    -- ========================================================
+    -- 4. Validate Repayment Type
+    -- ========================================================
+
+    IF NULLIF(
+           lower(btrim(v_contract.repayment_type)),
+           ''
+       ) IS NOT NULL
+       AND lower(btrim(v_contract.repayment_type)) <> 'emi'
+    THEN
+
+        RAISE EXCEPTION
+            'Unsupported repayment type for contract: %',
+            p_contract_number
+            USING ERRCODE = '22023';
+
+    END IF;
+
+
+    -- ========================================================
+    -- 5. Validate Monthly Frequency
+    -- ========================================================
+
+    v_frequency :=
+        NULLIF(lower(btrim(v_contract.payment_frequency)), '');
+
+    v_terms :=
+        NULLIF(lower(btrim(v_contract.repayment_terms)), '');
+
+    IF (v_frequency IS NULL AND v_terms IS NULL)
+       OR (v_frequency IS NOT NULL AND v_frequency <> 'monthly')
+       OR (v_terms IS NOT NULL AND v_terms <> 'monthly')
+    THEN
+
+        RAISE EXCEPTION
+            'Only explicit, consistent Monthly repayment frequency is supported: %',
+            p_contract_number
+            USING ERRCODE = '22023';
+
+    END IF;
+
+
+    -- ========================================================
+    -- 6. Validate Contract Financial Inputs
+    -- ========================================================
+
+    IF v_contract.loan_amount IS NULL
+       OR v_contract.loan_amount <= 0
+       OR v_contract.loan_amount::TEXT
+            IN ('NaN', 'Infinity', '-Infinity')
+
+       OR v_contract.irr_rate IS NULL
+       OR v_contract.irr_rate < 0
+       OR v_contract.irr_rate::TEXT
+            IN ('NaN', 'Infinity', '-Infinity')
+
+       OR v_contract.first_emi_date IS NULL
+       OR NOT isfinite(v_contract.first_emi_date)
+
+       OR v_contract.tenure_months IS NULL
+       OR v_contract.tenure_months <= 0
+
+       OR v_contract.finance_charges IS NULL
+       OR v_contract.finance_charges < 0
+       OR v_contract.finance_charges::TEXT
+            IN ('NaN', 'Infinity', '-Infinity')
+
+       OR v_contract.total_contract_value IS NULL
+       OR v_contract.total_contract_value <= 0
+       OR v_contract.total_contract_value::TEXT
+            IN ('NaN', 'Infinity', '-Infinity')
+    THEN
+
+        RAISE EXCEPTION
+            'Missing or invalid contractual financial inputs: %',
+            p_contract_number
+            USING ERRCODE = '22023';
+
+    END IF;
+
+
+    -- ========================================================
+    -- 7. Load and Validate Repayment Structure
+    -- ========================================================
+
+    SELECT
+        count(*),
+
+        sum(rs.number_of_installments),
+
+        sum(
+            rs.number_of_installments::NUMERIC
+            * rs.installment_amount
+        ),
+
+        count(*) FILTER (
+            WHERE rs.sequence_no IS NULL
+               OR rs.sequence_no <= 0
+               OR rs.number_of_installments IS NULL
+               OR rs.number_of_installments <= 0
+               OR rs.installment_amount IS NULL
+               OR rs.installment_amount <= 0
+               OR rs.installment_amount::TEXT
+                    IN ('NaN', 'Infinity', '-Infinity')
+        )
+
+    INTO
+        v_slab_count,
+        v_installments,
+        v_repayment_total,
+        v_invalid_slabs
+
+    FROM public.contract_repayment_structures rs
+    WHERE rs.contract_id = v_contract.contract_id;
+
+
+    IF v_slab_count = 0
+       OR v_invalid_slabs <> 0
+       OR v_installments IS DISTINCT FROM
+          v_contract.tenure_months::BIGINT
+    THEN
+
+        RAISE EXCEPTION
+            'Missing, invalid, or tenure-inconsistent repayment structure: %',
+            p_contract_number
+            USING ERRCODE = '22023';
+
+    END IF;
+
+
+    -- ========================================================
+    -- 8. Validate Repayment Slab Sequence
+    -- ========================================================
+
+    IF v_slab_count <> (
+        SELECT count(DISTINCT rs.sequence_no)
+        FROM public.contract_repayment_structures rs
+        WHERE rs.contract_id = v_contract.contract_id
+    )
+    THEN
+
+        RAISE EXCEPTION
+            'Ambiguous repayment slab sequence: %',
+            p_contract_number
+            USING ERRCODE = '22023';
+
+    END IF;
+
+
+    -- ========================================================
+    -- 9. Validate Contractual Repayment Total
+    -- ========================================================
+
+    IF v_repayment_total <> v_contract.total_contract_value
+       OR v_repayment_total - v_contract.loan_amount
+          <> v_contract.finance_charges
+    THEN
+
+        RAISE EXCEPTION
+            'Repayment totals do not reconcile with contract value and finance charges: %',
+            p_contract_number
+            USING ERRCODE = '22023';
+
+    END IF;
+
+
+    -- ========================================================
+    -- 10. Generate Repayment Schedule
+    -- ========================================================
+
+    v_balance := v_contract.loan_amount;
+
+    FOR v_slab IN
+
+        SELECT
+            rs.number_of_installments,
+            rs.installment_amount
+
+        FROM public.contract_repayment_structures rs
+
+        WHERE rs.contract_id = v_contract.contract_id
+
+        ORDER BY rs.sequence_no
+
+    LOOP
+
+        FOR v_index IN 1 .. v_slab.number_of_installments LOOP
+
+            v_installment_no := v_installment_no + 1;
+
+            installment_no := v_installment_no;
+
+
+            -- ------------------------------------------------
+            -- Due Date
+            -- ------------------------------------------------
+
+            due_date := (
+                v_contract.first_emi_date
+                + (v_installment_no - 1)
+                  * INTERVAL '1 month'
+            )::DATE;
+
+
+            -- ------------------------------------------------
+            -- Opening Principal
+            -- ------------------------------------------------
+
+            opening_principal := v_balance;
+
+
+            -- ------------------------------------------------
+            -- Contractual EMI Amount
+            -- ------------------------------------------------
+
+            emi_amount := v_slab.installment_amount;
+
+
+            -- ------------------------------------------------
+            -- Interest Calculation
+            --
+            -- Client Excel Formula:
+            -- ROUND(Opening Principal * IRR / 1200, 2)
+            -- ------------------------------------------------
+
+            interest_amount := round(
+                opening_principal
+                * v_contract.irr_rate
+                / 1200::NUMERIC,
+                2
+            );
+
+
+            -- ------------------------------------------------
+            -- Principal Calculation
+            -- ------------------------------------------------
+
+            principal_amount :=
+                emi_amount - interest_amount;
+
+
+            -- ------------------------------------------------
+            -- Closing Principal
+            -- ------------------------------------------------
+
+            closing_principal :=
+                opening_principal - principal_amount;
+
+
+            -- ------------------------------------------------
+            -- No Rounding Adjustment
+            -- ------------------------------------------------
+
+            rounding_adjustment := 0.00;
+
+
+            -- ------------------------------------------------
+            -- Validate Amortisation
+            -- ------------------------------------------------
+
+            IF principal_amount <= 0
+               OR interest_amount < 0
+               OR (
+                   v_installment_no < v_installments
+                   AND closing_principal <= 0
+               )
+            THEN
+
+                RAISE EXCEPTION
+                    'Unsupported amortisation at installment % for contract %',
+                    v_installment_no,
+                    p_contract_number
+                    USING ERRCODE = '22023';
+
+            END IF;
+
+
+            -- ------------------------------------------------
+            -- Carry Forward Closing Principal
+            -- ------------------------------------------------
+
+            v_balance := closing_principal;
+
+
+            -- ------------------------------------------------
+            -- Return Installment Row
+            -- ------------------------------------------------
+
+            RETURN NEXT;
+
+        END LOOP;
+
+    END LOOP;
+
+END;
+
+$function$;
+
+
+-- ============================================================
+-- Function Description
+-- ============================================================
+
+COMMENT ON FUNCTION
+    public.fn_contract_repayment_schedule(VARCHAR)
+IS
+    'Read-only contractual monthly repayment schedule using stored IRR and strict client Excel calculations. No moratorium interest adjustment, no final EMI reconciliation, and no forced zero closing balance. Rounding adjustment always zero.';

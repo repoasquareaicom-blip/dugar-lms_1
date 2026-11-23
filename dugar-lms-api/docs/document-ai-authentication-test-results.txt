@@ -1,0 +1,30 @@
+Hindi Reminder Letter authentication verification ? 2026-10-17
+
+Final relevant backend suite: 58 passed; 0 failures, errors or skipped tests.
+Backend Maven package: BUILD SUCCESS.
+
+Command from dugar-lms-api:
+$env:DOCUMENT_MENU_TEST_URL='jdbc:postgresql://127.0.0.1:55467/document_menu_test'
+mvn -o '-Dmaven.repo.local=C:/Users/ADMIN/.m2/repository' '-Dtest=DocumentAiAuthenticationTest,OpenAiTranslationGatewayTest,AiUsageConfigurationTest,DocumentEnhancementIntegrationTest,WordDocumentGenerationServiceTest' package
+
+Class counts:
+DocumentAiAuthenticationTest: 10 passed.
+AiUsageConfigurationTest: 3 passed.
+DocumentEnhancementIntegrationTest: 34 passed.
+OpenAiTranslationGatewayTest: 9 passed.
+WordDocumentGenerationServiceTest: 2 passed.
+
+Checks cover actual application.properties placeholder resolution with synthetic environment sources, direct Spring environment override precedence, exact single Bearer header/endpoint/model, surrounding whitespace removal, quote/embedded-whitespace/unresolved-placeholder rejection, startup/no-conversion behavior without a key, fixed 401 error messages and no retry or credential/provider-body disclosure.
+
+The PostgreSQL integration suite verifies a mocked 401 through the fixed Hindi Reminder Letter export: no successful/finalized document, no downloadable artifact and no translation-cache write. English Reminder Letter generation still completes with the gateway key empty and AI disabled. Existing cache-backed Hindi Reminder generation, calculations, scope, bulk exports and file lifecycle tests also passed. Fake transport verifies the fictional Bearer header on every provider call.
+
+All provider transports are mocked. No real OpenAI request or live credential check was made. Database writes were confined to disposable 127.0.0.1:55467/document_menu_test. That cluster was stopped after verification. No application/production database, production configuration or running backend was modified/restarted.
+
+A clean compile/test was run first to remove stale generated resources. The final build's target/classes/application.properties, executable JAR and original JAR were checked without displaying secret values: all use ${OPENAI_API_KEY:} and contain no OpenAI-key-shaped literals. Current backend source scan also found no such literals. Git index inspection found no committed/staged copy of the removed working-tree key. No staging or commit was performed.
+
+git diff --check: passed, with only the existing informational ReportAccessScope.java line-ending notice. No frontend files changed for this fix; no frontend rebuild was needed.
+
+Final Maven log: target/auth-verification.log (local ignored build output).
+Intermediate test failures were limited to a shell-encoded Hindi mock fixture; Java Unicode escapes corrected the fixture before the final passing run.
+
+Remaining: configure a valid OPENAI_API_KEY for the backend launch account/process, restart the launcher/backend, then perform an authorized live retry. Underlying credential validity, project/model access and the environment inherited by already-running backend processes remain unverified.

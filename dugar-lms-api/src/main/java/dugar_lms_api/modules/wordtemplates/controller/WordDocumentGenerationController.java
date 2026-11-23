@@ -35,6 +35,9 @@ public class WordDocumentGenerationController {
     private static final String GENERATE_MENU_CODE = "OPERATIONS_TRANSACTIONS_GENERATE_WORD_DOCUMENT";
     private static final MediaType DOCX_MEDIA_TYPE = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private dugar_lms_api.modules.wordtemplates.automation.DocumentAutomationService automation;
+
     private final WordDocumentGenerationService service;
     private final MenuAccessService menuAccessService;
 
@@ -58,7 +61,9 @@ public class WordDocumentGenerationController {
         @RequestParam(defaultValue = "CONTRACT") String dataSource,
         Authentication authentication
     ) {
-        requireMenu(WORD_TEMPLATE_MENU_CODE, authentication);
+        if (!menuAccessService.canView(WORD_TEMPLATE_MENU_CODE, authentication)) {
+            requireMenu(GENERATE_MENU_CODE, authentication);
+        }
         return ResponseEntity.ok(service.validate(id, dataSource));
     }
 
@@ -78,11 +83,21 @@ public class WordDocumentGenerationController {
         Authentication authentication
     ) {
         requireMenu(GENERATE_MENU_CODE, authentication);
-        WordDocumentGenerationService.GeneratedWordDocument generated = service.generate(request, authentication);
+        WordDocumentGenerationService.GeneratedWordDocument generated;
+        if (automation == null) generated = service.generate(request, authentication);
+        else {
+            java.util.UUID id = request.previewId();
+            if (id == null) {
+                var preview = automation.preview(request, request.languageCode(), authentication);
+                id = java.util.UUID.fromString(preview.get("generationId").toString());
+            }
+            automation.validateSelection(id, request, authentication);
+            generated = automation.finalizeDocument(id, authentication);
+        }
         return ResponseEntity.ok()
             .contentType(DOCX_MEDIA_TYPE)
             .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                .filename(generated.filename())
+                .filename(generated.filename(), java.nio.charset.StandardCharsets.UTF_8)
                 .build()
                 .toString())
             .body(generated.resource());
@@ -90,7 +105,7 @@ public class WordDocumentGenerationController {
 
     private void requireMenu(String menuCode, Authentication authentication) {
         if (!menuAccessService.canView(menuCode, authentication)) {
-            throw new AccessDeniedException("Word document access denied.");
+            throw new AccessDeniedException("Document access denied.");
         }
     }
 

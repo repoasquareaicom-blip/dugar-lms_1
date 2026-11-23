@@ -10,7 +10,11 @@ public record GenerateWordDocumentRequest(
     @NotNull(message = "Contract is required.")
     Long contractId,
 
-    @NotNull(message = "Word Template is required.")
-    Long templateId
+    @NotNull(message = "Document Template is required.")
+    Long templateId,
+    String languageCode,
+    java.util.UUID previewId
 ) {
+    public GenerateWordDocumentRequest(String dataSource, Long contractId, Long templateId) { this(dataSource,contractId,templateId,"en",null); }
+    public GenerateWordDocumentRequest { if(languageCode==null||languageCode.isBlank())languageCode="en"; }
 }

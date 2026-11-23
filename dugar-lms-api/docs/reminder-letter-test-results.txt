@@ -1,0 +1,41 @@
+Reminder Letter verification - 2026-10-17
+
+Backend full safe suite: 293 tests, 0 failures, 0 errors, 1 skipped (292 passed).
+Final focused Reminder Letter checks: 5 passed, including one added connection-reuse test and rechecks after access-scope hardening.
+Final authorization/HTTP checks: 5 passed, including one added ISO-date/invalid-date/access-denial endpoint check.
+The focused runs overlap the full suite; do not add all run counts as distinct tests.
+Backend Maven package: BUILD SUCCESS after final source changes.
+Frontend document tests: 17 passed, 0 failures.
+Frontend targeted ESLint (GenerateWordDocument.jsx and ReminderLetterGrid.jsx): passed, no warnings/errors.
+Frontend npm run build: passed. Existing Browserslist dataset-age and large-chunk warnings remain.
+git diff --check: passed; Git emits an informational Windows line-ending notice for a pre-existing changed file.
+
+Backend commands from dugar-lms-api:
+$env:DOCUMENT_MENU_TEST_URL='jdbc:postgresql://127.0.0.1:55467/document_menu_test'
+mvn -o '-Dmaven.repo.local=C:/Users/ADMIN/.m2/repository' '-Dtest=*,!DugarLmsApiApplicationTests' test
+mvn -o '-Dmaven.repo.local=C:/Users/ADMIN/.m2/repository' '-Dtest=DocumentEnhancementIntegrationTest#reminder*+concurrentReminder*' test
+mvn -o '-Dmaven.repo.local=C:/Users/ADMIN/.m2/repository' -Dtest=DocumentAutomationAuthorizationTest test
+mvn -o '-Dmaven.repo.local=C:/Users/ADMIN/.m2/repository' -DskipTests package
+
+Frontend commands from dugar-lms-frontend:
+npm run test:documents
+npx --no-install eslint src/pages/word-documents/GenerateWordDocument.jsx src/pages/word-documents/ReminderLetterGrid.jsx
+npm run build
+
+Only disposable loopback PostgreSQL 18.3 / document_menu_test was mutated. The tests reject remote hosts and application database names. The cluster started for verification was stopped after testing.
+Document migration chain through V075, Flyway validation and repeat migrate passed. V076 in tests is a fixture, not a deployment migration.
+DugarLmsApiApplicationTests was excluded because its hard-coded application datasource can run Flyway against the application database. StockBankLocalIntegrationTest remained opt-in/skipped.
+
+New coverage: same-connection procedure/function reads, one procedure call per grid calculation and per batch, six financial-grid columns, paging/search/filter snapshot reuse, all eleven placeholders and exact SQL address/words, all-matching ZIP, explicit selection filter enforcement, concurrent date/export isolation, same-connection reuse/temp cleanup, cache-backed Hindi generation without financial recalculation, current user-group scope despite a stale JWT group, snapshot expiry, HTTP ISO date parsing and denied access, frontend report controls/payload and calculation reuse.
+
+No historical migrations, existing financial procedure or document function were modified. No deployment, application/production DB mutation, or real OpenAI requests were performed.
+Actual LibreOffice/font layout, browser walkthrough, real Hindi linguistic quality and large-volume performance remain unverified. Local catalogue inspection found only the English Reminder Letter; provision the fixed Hindi variant through the existing controlled process before Hindi is available.
+See reminder-letter-implementation.md for design, modified files and prerequisites.
+
+Confirmed Pending Due filter follow-up (2026-10-17):
+Pending Due uses only the existing calculated CURRENT_DUE > 0; All Contracts has no Current Due restriction.
+Regression fixtures include positive Current Due with zero overdues, and zero Current Due with positive overdues and Total O/S.
+Grid/search and bulk all-matching/explicit selection checks confirm the same predicate. No financial recalculation was added.
+Focused PostgreSQL Reminder checks: 5 passed. Backend package passed.
+Frontend document tests: 17 passed. Frontend build passed.
+No migration or existing database function/procedure change was required.

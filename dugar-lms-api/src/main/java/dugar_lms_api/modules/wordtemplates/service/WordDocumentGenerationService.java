@@ -30,10 +30,12 @@ import java.util.Set;
 
 @Service
 public class WordDocumentGenerationService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private dugar_lms_api.modules.wordtemplates.automation.DocumentFieldService documentFields;
+
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter CONTRACT_DATE_FORMAT = DateTimeFormatter.ofPattern("MMM yyyy", Locale.ENGLISH);
-    private static final DecimalFormat AMOUNT_FORMAT = new DecimalFormat("##,##,##,##0.00");
 
     private final WordDocumentGenerationRepository repository;
     private final WordTemplateRepository templateRepository;
@@ -61,7 +63,14 @@ public class WordDocumentGenerationService {
 
     public WordTemplateValidationDto validate(Long templateId, String dataSource) {
         WordTemplateFile file = requireTemplateFile(templateId);
-        return validation(storageService.path(file.storagePath()), normalizeDataSource(dataSource));
+        String source = normalizeDataSource(dataSource);
+        var template = templateRepository.findTemplate(templateId);
+        if (template.isPresent() && dugar_lms_api.modules.wordtemplates.automation.ReminderLetterService.isReminder(template.get())) {
+            Set<String> codes = dugar_lms_api.modules.wordtemplates.automation.ReminderLetterService.CODES.stream()
+                .map(code -> "{{" + code + "}}").collect(java.util.stream.Collectors.toSet());
+            return validation(storageService.path(file.storagePath()), codes);
+        }
+        return validation(storageService.path(file.storagePath()), source);
     }
 
     public List<WordContractOptionDto> searchContracts(String keyword, int limit, Authentication authentication) {
@@ -97,19 +106,22 @@ public class WordDocumentGenerationService {
             String filename = filename(contract, templateFile.originalFilename());
             return new GeneratedWordDocument(filename, new UrlResource(output.toUri()));
         } catch (IOException exception) {
-            throw new IllegalArgumentException("Unable to create generated Word document.");
+            throw new IllegalArgumentException("Unable to create generated document.");
         }
     }
 
     public WordTemplateValidationDto validation(Path path, String dataSource) {
-        Set<String> known = placeholderRegistry.knownCodes(dataSource);
+        return validation(path, placeholderRegistry.knownCodes(dataSource));
+    }
+
+    private WordTemplateValidationDto validation(Path path, Set<String> known) {
         List<String> placeholders = docxTemplateEngine.extractPlaceholders(path).stream().toList();
-        List<String> recognized = placeholders.stream().filter(known::contains).toList();
-        List<String> unknown = placeholders.stream().filter(code -> !known.contains(code)).toList();
+        List<String> recognized = placeholders.stream().filter(code -> known.contains(code) || (documentFields != null && known.contains(documentFields.canonical(code, documentFields.aliases())))).toList();
+        List<String> unknown = placeholders.stream().filter(code -> !known.contains(code) && !(documentFields != null && known.contains(documentFields.canonical(code, documentFields.aliases())))).toList();
         return new WordTemplateValidationDto(placeholders, recognized, unknown);
     }
 
-    private Map<String, String> resolveContractValues(Map<String, Object> contract) {
+    public Map<String, String> resolveContractValues(Map<String, Object> contract) {
         Long contractId = longValue(contract.get("contract_id"));
         Map<String, Map<String, Object>> sourceRows = new HashMap<>();
         sourceRows.put("CONTRACT", contract);
@@ -148,7 +160,7 @@ public class WordDocumentGenerationService {
                 values.put(field.placeholderCode(), formatContractDate(row.get(field.sourceColumn())));
                 continue;
             }
-            if ("{{BORROWER_STATE}}".equals(field.placeholderCode())) {
+            if ("party_masters".equals(field.sourceTable()) && "state".equals(field.sourceColumn())) {
                 Object stateCode = row.get(field.sourceColumn());
                 values.put(field.placeholderCode(), repository.findOtherDescription(stringValue(stateCode)).orElse(formatValue(stateCode)));
                 continue;
@@ -186,9 +198,9 @@ public class WordDocumentGenerationService {
             return DATE_FORMAT.format(date);
         }
         if (value instanceof BigDecimal decimal) {
-            return AMOUNT_FORMAT.format(decimal);
+            return new DecimalFormat("##,##,##,##0.00").format(decimal);
         }
-        return String.valueOf(value).trim();
+        return String.valueOf(value);
     }
 
     private String formatContractDate(Object value) {
@@ -271,7 +283,7 @@ public class WordDocumentGenerationService {
 
     private WordTemplateFile requireTemplateFile(Long id) {
         return templateRepository.findTemplateFile(id)
-            .orElseThrow(() -> new IllegalArgumentException("Word Template not found."));
+            .orElseThrow(() -> new IllegalArgumentException("Document Template not found."));
     }
 
     private String normalizeDataSource(String dataSource) {

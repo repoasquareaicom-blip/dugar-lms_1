@@ -1,0 +1,39 @@
+Document Template and Bulk Generation - final local verification
+Date: 2026-10-16 (Asia/Calcutta)
+
+Backend full safe suite: 288 tests, 0 failures, 0 errors, 1 skipped (287 passed).
+Additional final PDF-export and converter/security checks: 6 passed, 0 failures/errors/skips.
+The additional run includes one new PDF-export workflow test and repeats five converter/support tests.
+DocumentEnhancementIntegrationTest: 25 passed in the full suite, plus the new PDF workflow passed separately.
+ContractListRepositoryTest: 9 passed. ContractListServiceTest: 6 passed.
+Backend package: BUILD SUCCESS; target/dugar-lms-api-0.0.1-SNAPSHOT.jar.
+Frontend document tests: 12 passed via npm run test:documents.
+Frontend npm run build: passed.
+Targeted ESLint: 0 errors; one pre-existing getRowId hook dependency warning in ServerDataTable.jsx.
+Build warnings: outdated Browserslist dataset and existing large JavaScript bundle.
+git diff --check: passed (Git also emits a non-failing Windows line-ending notice).
+
+Backend commands (from dugar-lms-api):
+$env:DOCUMENT_MENU_TEST_URL='jdbc:postgresql://127.0.0.1:55467/document_menu_test'
+mvn -o '-Dmaven.repo.local=C:/Users/ADMIN/.m2/repository' '-Dtest=*,!DugarLmsApiApplicationTests' test
+mvn -o '-Dmaven.repo.local=C:/Users/ADMIN/.m2/repository' -DskipTests package
+mvn -o '-Dmaven.repo.local=C:/Users/ADMIN/.m2/repository' '-Dtest=DocumentEnhancementIntegrationTest#pdfExportDownloadsPdfAndRemovesIntermediateFiles,DocumentExportSupportTest' test
+
+Frontend commands (from dugar-lms-frontend):
+npm run test:documents
+npm run build
+npx eslint src/pages/word-documents/GenerateWordDocument.jsx src/pages/word-documents/WordTemplateMaster.jsx src/pages/Credit/transaction/contract/ContractGrid.jsx src/components/common/ServerDataTable.jsx src/services/wordTemplateService.js src/utils/documentMenuLabels.js src/utils/menuNormalizer.js src/utils/menuRouteMap.js src/pages/word-documents/AiUsageBillingReport.jsx
+
+Database: isolated PostgreSQL 18.3, loopback 127.0.0.1:55467/document_menu_test only.
+Flyway document-module chain through V074, validation and repeat migration passed.
+Test-only V075 fixture is not a deployment migration.
+Application context test explicitly excluded because it hard-codes an application datasource and could run Flyway against it.
+StockBankLocalIntegrationTest remained opt-in and was skipped; it targets an application database.
+Initial dependency lookup required explicitly selecting the existing Maven cache; no POM framework version was changed.
+Initial stale frontend tests and failing backend access-scope/SQL assertions were fixed; final checks above passed.
+
+No application/production database writes, deployment, or real OpenAI requests were made.
+Provider transport and PDF subprocess boundaries are faked in tests.
+LibreOffice is not installed here: actual PDF layout/font fidelity, live browser workflows, large-volume performance, real Hindi linguistic quality and production schema equivalence remain unverified.
+The disposable PostgreSQL cluster started for this verification was stopped afterwards.
+See document-bulk-generation-continuation.md for rollout prerequisites and document-enhancement-files.txt for the file manifest.

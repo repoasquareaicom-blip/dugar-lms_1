@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Eye, FilePenLine, FilePlus2, FileSpreadsheet, Flag, Loader2, Printer, RotateCcw, Save, X } from 'lucide-react';
 import ServerDataTable from '../../../../components/common/ServerDataTable';
+import { openRepaymentSchedulePdf } from '../../../../services/repaymentScheduleService';
 import {
   fetchContractFlagMaster,
   fetchContractFlags,
@@ -448,8 +449,11 @@ function transformContractsResponse(data) {
   };
 }
 
-const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowStatus = null, showCreate = true, enableFlagging = false, viewOnly = false }) => {
+const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowStatus = null, showCreate = true, enableFlagging = false, viewOnly = false, documentSelection = null }) => {
   const navigate = useNavigate();
+  const selectionRequest = useRef(0);
+  const documentSelectionRef = useRef(documentSelection);
+  documentSelectionRef.current = documentSelection;
   const sourceWorkflow = workflowStatus || (isDraft ? 'DRAFT' : 'ACTIVE');
   const isActiveContracts = !isDraft && !workflowStatus;
   const [flagMaster, setFlagMaster] = useState([]);
@@ -463,6 +467,7 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
     selected: {},
   });
   const [exportError, setExportError] = useState('');
+  const [repaymentScheduleError, setRepaymentScheduleError] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
   const [exportStatusIndex, setExportStatusIndex] = useState(0);
   const [exportNotice, setExportNotice] = useState(null);
@@ -569,7 +574,13 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
   };
 
   const loadContractsPage = useCallback(
-    (params) => fetchContractsPage({ ...params, isDraft, workflowStatus }),
+    async (params) => {
+      const request = ++selectionRequest.current;
+      documentSelectionRef.current?.onQueryChange(params);
+      const data = await fetchContractsPage({ ...params, isDraft, workflowStatus });
+      if (request === selectionRequest.current) documentSelectionRef.current?.onResults(params, Number(data?.totalElements || 0));
+      return data;
+    },
     [isDraft, workflowStatus],
   );
 
@@ -814,6 +825,18 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
       return [
         viewContextMenuItem(row),
         editContextMenuItem(row),
+        {
+          label: 'Generate Repayment Schedule',
+          icon: <Printer size={14} />,
+          onClick: async () => {
+            setRepaymentScheduleError('');
+            try {
+              await openRepaymentSchedulePdf(row.contractId);
+            } catch (error) {
+              setRepaymentScheduleError(error.message || 'Unable to generate repayment schedule.');
+            }
+          },
+        },
       ];
     }
 
@@ -867,13 +890,20 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
 
   return (
     <div className="w-full h-full min-h-0 bg-white" style={{ fontFamily: 'Calibri, sans-serif' }}>
+      {repaymentScheduleError && (
+        <div role="alert" className="border-b border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-700">
+          {repaymentScheduleError}
+        </div>
+      )}
       {exportError && (
         <div className="border-b border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-700">
           {exportError}
         </div>
       )}
       <ServerDataTable
-        columns={columns}
+        columns={documentSelection ? [{ field: 'documentSelected', headerName: 'Select', minWidth: 65,
+          renderCell: (row) => <input type="checkbox" aria-label={`Select ${row.contractNumber}`} checked={documentSelection.isSelected(row)} disabled={documentSelection.disabled} onClick={(event) => event.stopPropagation()} onChange={() => documentSelection.onToggle(row)} /> }, ...columns] : columns}
+        isRowSelected={documentSelection?.isSelected}
         defaultFilters={DEFAULT_FILTERS}
         defaultHiddenColumns={DEFAULT_HIDDEN_COLUMNS}
         defaultPageSize={25}
@@ -881,15 +911,15 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
         defaultSortDirection="desc"
         fetchPage={loadContractsPage}
         filterFields={filterFields}
-        getContextMenuItems={contextMenuItems}
+        getContextMenuItems={documentSelection ? undefined : contextMenuItems}
         getRowId={(row) => row.contractId}
         pageSizeOptions={PAGE_SIZE_OPTIONS}
         rowUpdates={flagRowUpdates}
         searchPlaceholder="Quick search contracts..."
         title={title}
-        titleAction={titleAction}
+        titleAction={documentSelection ? documentSelection.renderActions : titleAction}
         transformResponse={transformContractsResponse}
-        onRowDoubleClick={(row) => openContractForm(row, viewOnly || enableFlagging ? 'view' : 'edit')}
+        onRowDoubleClick={documentSelection ? undefined : (row) => openContractForm(row, viewOnly || enableFlagging ? 'view' : 'edit')}
       />
       <CibilExportReadyToast notice={exportNotice} visible={exportNoticeVisible} onClose={closeExportNotice} />
       {exportLoading && <CibilProcessingOverlay message={CIBIL_PROCESSING_MESSAGES[exportStatusIndex]} />}

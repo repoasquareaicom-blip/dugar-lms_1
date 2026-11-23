@@ -35,6 +35,7 @@ import ConsolidatedPortfolioPage from './pages/committee/reports/ConsolidatedPor
 import RolesMaster from './pages/committee/masters/RolesMaster.jsx';
 import RoleMenuPermissions from './pages/committee/masters/RoleMenuPermissions.jsx';
 import UserManagement from './pages/committee/masters/UserManagement.jsx';
+import AiUsageBillingReport from './pages/word-documents/AiUsageBillingReport.jsx';
 import GenerateWordDocument from './pages/word-documents/GenerateWordDocument.jsx';
 import WordTemplateMaster from './pages/word-documents/WordTemplateMaster.jsx';
 import { verifyMenuAccess } from './services/menuAccessService';
@@ -568,6 +569,7 @@ function App() {
           <Route path="/committee/masters/user-management/roles" element={<RolesMaster />} />
           <Route path="/committee/masters/user-management/role-menu-permissions" element={<RoleMenuPermissions />} />
           <Route path="/committee/masters/user-management" element={<UserManagement />} />
+          <Route path="/administration/reports/ai-usage-billing" element={<MenuPermissionRoute menuCode="ADMINISTRATION_REPORTS_AI_USAGE_BILLING"><AiUsageBillingReport /></MenuPermissionRoute>} />
           <Route path="/administration/masters/word-template-master" element={<MenuPermissionRoute menuCode="ADMINISTRATION_MASTERS_WORD_TEMPLATE_MASTER"><WordTemplateMaster /></MenuPermissionRoute>} />
           <Route path="/operations/transactions/generate-word-document" element={<MenuPermissionRoute menuCode="OPERATIONS_TRANSACTIONS_GENERATE_WORD_DOCUMENT"><GenerateWordDocument /></MenuPermissionRoute>} />
           <Route 

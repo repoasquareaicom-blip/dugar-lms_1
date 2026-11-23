@@ -36,7 +36,8 @@ public class WordTemplateStorageService {
             String storedFilename = UUID.randomUUID() + ".docx";
             Path target = resolveStoredFilename(storedFilename);
             file.transferTo(target);
-            validateDocxStructure(target);
+            try { validateDocxStructure(target); }
+            catch (RuntimeException error) { deleteQuietly(storedFilename); throw error; }
             return new StoredTemplateFile(cleanOriginalFilename(file.getOriginalFilename()), storedFilename);
         } catch (IOException exception) {
             throw new IllegalArgumentException("Unable to store DOCX template.");
@@ -54,6 +55,15 @@ public class WordTemplateStorageService {
         } catch (MalformedURLException exception) {
             throw new IllegalArgumentException("Template file path is invalid.");
         }
+    }
+
+    public void validateStored(String storedFilename) {
+        if (storedFilename == null || storedFilename.isBlank()) throw new IllegalArgumentException("Upload a DOCX file first.");
+        Path file = path(storedFilename);
+        try {
+            if (!Files.isRegularFile(file) || Files.size(file) > maxFileSizeBytes) throw new IllegalArgumentException("Template file is missing or exceeds the size limit.");
+            validateDocxStructure(file);
+        } catch (IOException error) { throw new IllegalArgumentException("Unable to read template file."); }
     }
 
     public Path path(String storedFilename) {
@@ -93,11 +103,9 @@ public class WordTemplateStorageService {
     private void validateDocxStructure(Path path) {
         try (ZipFile zipFile = new ZipFile(path.toFile())) {
             if (zipFile.getEntry("[Content_Types].xml") == null || zipFile.getEntry("word/document.xml") == null) {
-                deleteQuietly(path.getFileName().toString());
                 throw new IllegalArgumentException("Invalid DOCX file structure.");
             }
         } catch (IOException exception) {
-            deleteQuietly(path.getFileName().toString());
             throw new IllegalArgumentException("Invalid DOCX file structure.");
         }
     }

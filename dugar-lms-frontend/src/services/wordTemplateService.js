@@ -1,10 +1,5 @@
 import apiClient from '../api/apiClient';
 
-export async function fetchWordTemplateGroups(params = {}) {
-  const response = await apiClient.get('/word-templates/groups', { params });
-  return response.data;
-}
-
 export async function fetchWordPlaceholders(params = {}) {
   const response = await apiClient.get('/word-documents/placeholders', { params });
   return response.data;
@@ -26,7 +21,7 @@ export async function generateWordDocument(payload) {
   });
   const disposition = response.headers?.['content-disposition'] || '';
   const match = disposition.match(/filename="?([^";]+)"?/i);
-  const filename = match?.[1] || 'generated-word-document.docx';
+  const filename = match?.[1] || 'generated-document.docx';
   const url = URL.createObjectURL(response.data);
   const link = document.createElement('a');
   link.href = url;
@@ -37,41 +32,20 @@ export async function generateWordDocument(payload) {
   URL.revokeObjectURL(url);
 }
 
-export async function createWordTemplateGroup(payload) {
-  const response = await apiClient.post('/word-templates/groups', payload);
-  return response.data;
-}
-
-export async function updateWordTemplateGroup(id, payload) {
-  const response = await apiClient.put(`/word-templates/groups/${encodeURIComponent(id)}`, payload);
-  return response.data;
-}
-
-export async function deleteWordTemplateGroup(id) {
-  await apiClient.delete(`/word-templates/groups/${encodeURIComponent(id)}`);
-}
-
 export async function fetchWordTemplates(params = {}) {
   const response = await apiClient.get('/word-templates', { params });
   return response.data;
 }
 
-export async function createWordTemplate(payload, onUploadProgress) {
-  const formData = new FormData();
-  formData.append('groupId', payload.groupId);
-  formData.append('templateName', payload.templateName);
-  formData.append('displayOrder', payload.displayOrder ?? 0);
-  formData.append('isActive', payload.isActive !== false);
-  formData.append('file', payload.file);
-  const response = await apiClient.post('/word-templates', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    onUploadProgress,
-  });
-  return response.data;
+export const DOCUMENT_TEMPLATES_CHANGED = 'document-templates-changed';
+function templatesChanged() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(DOCUMENT_TEMPLATES_CHANGED));
+  try { window.localStorage.setItem(DOCUMENT_TEMPLATES_CHANGED, `${Date.now()}-${Math.random()}`); } catch { /* Storage may be disabled. */ }
 }
-
-export async function updateWordTemplate(id, payload) {
-  const response = await apiClient.put(`/word-templates/${encodeURIComponent(id)}`, payload);
+export async function setWordTemplateActive(id, isActive) {
+  const response = await apiClient.put(`/word-templates/${encodeURIComponent(id)}/active`, { isActive });
+  templatesChanged();
   return response.data;
 }
 
@@ -82,11 +56,8 @@ export async function replaceWordTemplateFile(id, file, onUploadProgress) {
     headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress,
   });
+  templatesChanged();
   return response.data;
-}
-
-export async function deleteWordTemplate(id) {
-  await apiClient.delete(`/word-templates/${encodeURIComponent(id)}`);
 }
 
 export async function downloadWordTemplate(id, filename) {
@@ -96,7 +67,7 @@ export async function downloadWordTemplate(id, filename) {
   const url = URL.createObjectURL(response.data);
   const link = document.createElement('a');
   link.href = url;
-  link.download = filename || 'word-template.docx';
+  link.download = filename || 'document-template.docx';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

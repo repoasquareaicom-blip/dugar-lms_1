@@ -435,6 +435,14 @@ public class ContractListRepository {
         return namedParameterJdbcTemplate.query(findSql(criteria, queryParts.whereSql()), queryParts.params(), CONTRACT_LIST_ROW_MAPPER);
     }
 
+    /** Snapshot every authorized match using the exact same filters as the contract grid. */
+    public int snapshotDocumentSelection(java.util.UUID job, ContractListCriteria criteria, ReportAccessScope scope) {
+        QueryParts parts=queryParts(criteria,scope);
+        parts.params().addValue("documentJob",job);
+        return namedParameterJdbcTemplate.update("INSERT INTO document_export_items(job_id,contract_id,contract_number) SELECT DISTINCT :documentJob,c.contract_id,c.contract_number "
+            +FROM_SQL+parts.whereSql()+" ON CONFLICT DO NOTHING",parts.params());
+    }
+
     public List<CibilSubmissionExportRow> findCibilSubmissionExport(ContractListCriteria criteria, ReportAccessScope accessScope) {
         return findCibilSubmissionExport(criteria, accessScope, LocalDate.now());
     }

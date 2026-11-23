@@ -1,0 +1,36 @@
+Reminder Letter contract metadata verification ? 2026-10-17
+
+Final backend suite/build: BUILD SUCCESS.
+Tests run: 313; failures: 0; errors: 0; skipped: 1 (312 passed).
+Command from dugar-lms-api:
+$env:DOCUMENT_MENU_TEST_URL='jdbc:postgresql://127.0.0.1:55467/document_menu_test'
+mvn -o '-Dmaven.repo.local=C:/Users/ADMIN/.m2/repository' '-Dtest=*,!DugarLmsApiApplicationTests' package
+
+The application-context test was excluded because its hard-coded datasource can run Flyway against the application database. StockBankLocalIntegrationTest remained opt-in/skipped. No other tests were excluded.
+
+Focused run: 41 passed (overlaps the final full suite; do not add counts).
+-Dtest=ReminderLetterFunctionMigrationTest,DocumentEnhancementIntegrationTest,WordDocumentGenerationServiceTest
+
+Five new migration tests pass:
+- All eleven original values are unchanged; number/date append correctly, default argument survives, null metadata and all twelve English months are handled.
+- Aging Analysis connection prerequisite and active/non-draft/open filters remain enforced.
+- Existing owner, restricted execution grants/grant options and comment survive recreation.
+- Dependent view prevents DROP RESTRICT; view and original function remain intact after rollback.
+- Unexpected customized financial SQL aborts rather than being overwritten.
+
+Updated integration tests pass for all thirteen JSON values and English/Hindi DOCX merges. New metadata is excluded from mocked OpenAI payloads even when database rules request translation/date formatting. Existing translation caching and procedure-call counts remain unchanged. Upload validation recognizes the new tokens; original-template validation reports them as known, while legacy eleven-token DOCX files remain valid.
+
+The document migration chain includes V078, checksum validation and no-op repeat migrate. V079 is a test fixture only. The expected migration-failure log entries in dependency/customization tests are asserted successful safety checks, not test failures.
+
+Text comparison confirms that removing only the appended two columns and expressions reproduces the inspected function definition exactly. No original financial SQL, joins, Aging procedure, filters or translation-cache implementation were changed.
+
+An intermediate full run detected that a hardcoded OpenAI fallback had reappeared in application.properties. The environment-only reference was restored under the earlier security requirement; the test assertion was changed to a static boolean failure message so it cannot print the value. Generated failed-test diagnostics were redacted. The final full run above includes that correction and all authentication tests passed. No real provider call was made.
+
+git diff --check: passed; only the existing informational ReportAccessScope.java line-ending notice remains.
+Final Maven log: target/reminder-contract-fields-final.log.
+
+Writes were confined to disposable PostgreSQL 18.3 at 127.0.0.1:55467/document_menu_test; the test cluster was stopped after verification. The configured application database was inspected read-only using pg_get_functiondef, pg_depend, function metadata and source column types. V078 was NOT applied to the application or production database. No deployment, backend restart or real OpenAI request occurred. No frontend files changed and no frontend build was required for this request.
+
+Before using the new fields in the application, apply V078 through the normal controlled Flyway process and add {{CONTRACT_NUMBER}} / {{CONTRACT_DATE}} to the English/Hindi DOCX files as desired. Existing eleven-field templates remain compatible. Environments with custom function definitions/settings or dependencies require review rather than CASCADE or checksum repair.
+
+See reminder-letter-contract-placeholders.md for implementation details and the complete changed-file list.

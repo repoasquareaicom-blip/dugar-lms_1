@@ -13,7 +13,7 @@ import java.util.Optional;
 @Repository
 public class WordDocumentGenerationRepository {
 
-    private static final String ACCESS_FILTER = """
+    public static final String ACCESS_FILTER = """
         (
             :fullAccess = TRUE
             OR (
@@ -93,6 +93,21 @@ public class WordDocumentGenerationRepository {
                 );
             }
         );
+    }
+
+    public boolean isEligibleForDocument(Long id, ReportAccessScope scope) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM contracts c WHERE c.contract_id=:id AND c.is_active AND UPPER(TRIM(c.status))='Y' AND EXISTS(SELECT 1 FROM contract_repayment_structures r WHERE r.contract_id=c.contract_id) AND "+ACCESS_FILTER+")",accessParams(scope).addValue("id",id),Boolean.class));
+    }
+    public boolean exportHasInaccessibleContracts(java.util.UUID job, ReportAccessScope scope) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM document_export_items i LEFT JOIN contracts c ON c.contract_id=i.contract_id WHERE i.job_id=:job AND i.status='SUCCESS' AND (c.contract_id IS NULL OR NOT COALESCE(c.is_active,FALSE) OR COALESCE(UPPER(TRIM(c.status)),'')<>'Y' OR NOT EXISTS(SELECT 1 FROM contract_repayment_structures r WHERE r.contract_id=c.contract_id) OR NOT ("+ACCESS_FILTER+")))",accessParams(scope).addValue("job",job),Boolean.class));
+    }
+
+    public Optional<Map<String, Object>> findAccessibleContractByNumber(String number, ReportAccessScope scope) {
+        List<Map<String, Object>> matches = jdbcTemplate.queryForList(
+            "SELECT * FROM contracts c WHERE UPPER(TRIM(c.contract_number)) = UPPER(TRIM(:number)) AND " + ACCESS_FILTER + " LIMIT 2",
+            accessParams(scope).addValue("number", number));
+        if (matches.size() > 1) throw new IllegalArgumentException("Contract number is ambiguous");
+        return matches.stream().findFirst();
     }
 
     public Optional<Map<String, Object>> findAccessibleContract(Long contractId, ReportAccessScope scope) {

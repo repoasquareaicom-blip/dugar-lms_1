@@ -13,7 +13,7 @@ public record ReportAccessScope(boolean fullAccess, Long userId, String userGrou
 
     public static ReportAccessScope from(Authentication authentication) {
         if (authentication == null) {
-            return new ReportAccessScope(true, null, "admin");
+            return new ReportAccessScope(false, null, null);
         }
 
         String group = null;

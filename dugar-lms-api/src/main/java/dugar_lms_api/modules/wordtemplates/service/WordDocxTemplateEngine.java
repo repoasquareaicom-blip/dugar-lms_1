@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 @Service
 public class WordDocxTemplateEngine {
 
-    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{[A-Z0-9_]+}}");
+    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{[A-Za-z][A-Za-z0-9_]*}}");
 
     public Set<String> extractPlaceholders(Path path) {
         try (InputStream inputStream = Files.newInputStream(path);
@@ -46,7 +46,7 @@ public class WordDocxTemplateEngine {
             visitDocument(document, paragraph -> replaceInParagraph(paragraph, values));
             document.write(outputStream);
         } catch (IOException exception) {
-            throw new IllegalArgumentException("Unable to generate Word document.");
+            throw new IllegalArgumentException("Unable to generate document.");
         }
     }
 

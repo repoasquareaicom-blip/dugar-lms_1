@@ -1,0 +1,34 @@
+Template Master / Reminder Letter final verification ? 2026-10-17
+
+Backend clean tests + build: BUILD SUCCESS.
+Tests run: 297; failures: 0; errors: 0; skipped: 1 (296 passed).
+Command (from dugar-lms-api):
+$env:DOCUMENT_MENU_TEST_URL='jdbc:postgresql://127.0.0.1:55467/document_menu_test'
+mvn -o '-Dmaven.repo.local=C:/Users/ADMIN/.m2/repository' '-Dtest=*,!DugarLmsApiApplicationTests' clean package
+
+The application-context test was excluded because its hard-coded datasource can run Flyway on the application database. StockBankLocalIntegrationTest stayed opt-in/skipped. No other tests were excluded. Final full log: target/final-continuation.log.
+
+Frontend all available test scripts: 25 passed; 0 failed/skipped.
+Command (from dugar-lms-frontend):
+node --test scripts/testDocumentAutomation.mjs scripts/testDocumentMenuLabels.mjs scripts/testDocumentTemplateMaster.mjs scripts/testStockBankMarking.mjs scripts/testStockStatementLoading.mjs
+
+Frontend document npm script: 17 passed (a subset of those 25, not additional unique tests).
+npm run test:documents
+
+Targeted frontend lint: passed.
+npx --no-install eslint src/pages/word-documents/WordTemplateMaster.jsx src/pages/word-documents/GenerateWordDocument.jsx src/pages/word-documents/ReminderLetterGrid.jsx src/services/wordTemplateService.js
+
+Frontend production build: passed.
+npm run build
+Existing Browserslist dataset-age and large-bundle warnings remain.
+
+git diff --check: passed. Git reports an informational existing LF/CRLF notice for ReportAccessScope.java.
+Runtime group dependency search: no group_id, groupId, groupName or word_template_groups matches in the Word Template backend or document frontend source. Historical migration SQL and deliberate legacy-schema test fixtures remain.
+
+Flyway document migration chain through V077, checksum validation and no-op repeat migrate: passed on disposable PostgreSQL 18.3. V078 is only a test fixture. New regression tests cover existing IDs 6/7, already-removed group column, missing inactive definitions with no invented files, duplicate active-variant rollback, upload-only management, all required Reminder placeholders, activation gating, language independence and catalogue availability. Existing Reminder date/connection/filter/calculation/cache/bulk tests passed.
+
+Earlier intermediate runs exposed and then resolved null Boolean unboxing, obsolete verification SQL and stale fixture assumptions (group schema, explicit-ID sequences, injected alias metadata). The final clean run above includes all fixes.
+
+Database writes were confined to disposable 127.0.0.1:55467/document_menu_test. The started test cluster was stopped after verification. Read-only connection to the configured local application endpoint 127.0.0.1:5434 timed out; local template files for IDs 6/7 and pending application migrations remain unverified. No application/production DB migration, AWS deployment, real provider request or real LibreOffice rendering was performed.
+
+See template-master-reminder-integration.md for behavior/remaining checks and template-master-reminder-files.txt for the complete feature file manifest.
