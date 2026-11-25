@@ -22,14 +22,8 @@ public class RepaymentScheduleService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public RepaymentScheduleData load(long contractId, Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated() || authentication instanceof AnonymousAuthenticationToken) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Please sign in to generate a repayment schedule.");
-        }
-        if (contractId <= 0 || !access.canAccess(contractId, ReportAccessScope.from(authentication))) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract not found or not accessible.");
-        }
-        var header = repository.header(contractId).orElseThrow(() ->
-            new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract not found or not accessible."));
+        requireContractAccess(contractId, authentication);
+        var header = repository.header(contractId).orElseThrow(RepaymentScheduleService::inaccessibleContract);
         try {
             var rows = repository.schedule(header.contractNumber());
             if (rows.isEmpty()) {
@@ -44,5 +38,18 @@ public class RepaymentScheduleService {
             }
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Repayment schedule is temporarily unavailable.", exception);
         }
+    }
+
+    public void requireContractAccess(long contractId, Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated() || authentication instanceof AnonymousAuthenticationToken) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Please sign in to generate a repayment schedule.");
+        }
+        if (contractId <= 0 || !access.canAccess(contractId, ReportAccessScope.from(authentication))) {
+            throw inaccessibleContract();
+        }
+    }
+
+    static ResponseStatusException inaccessibleContract() {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract not found or not accessible.");
     }
 }

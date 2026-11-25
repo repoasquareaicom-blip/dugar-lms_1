@@ -37,6 +37,47 @@ public class RepaymentScheduleRepository {
             """, (rs, n) -> new Slab(rs.getInt(1), rs.getInt(2), rs.getBigDecimal(3)), contractId);
     }
 
+    Optional<NormalRepaymentSchedule.Details> normalDetails(long contractId) {
+        return jdbc.query("""
+            SELECT c.contract_number, c.contract_date, c.tenure_months, c.first_emi_date,
+                   c.payment_frequency, c.repayment_terms, c.loan_amount, c.finance_charges,
+                   c.bpfc_amount, c.insurance_deposit, c.total_contract_value,
+                   COALESCE(NULLIF(TRIM(CONCAT_WS(' ', NULLIF(TRIM(a.vehicle_make), ''),
+                       NULLIF(TRIM(a.version), ''))), ''),
+                       NULLIF(TRIM(CONCAT_WS(' ', NULLIF(TRIM(c.vehicle_make), ''),
+                       NULLIF(TRIM(c.equipment_model), ''))), '')) AS vehicle,
+                   NULLIF(TRIM(CONCAT_WS(' ', NULLIF(TRIM(p.salutation), ''),
+                       NULLIF(TRIM(p.full_name), ''))), '') AS borrower_name,
+                   p.swd_name, p.address_line_1, p.address_line_2, p.area, p.city,
+                   COALESCE(NULLIF(TRIM(state_lookup.other_desc), ''), p.state) AS state, p.pin_code
+            FROM public.contracts c
+            LEFT JOIN LATERAL (
+                SELECT pm.* FROM public.party_masters pm
+                WHERE upper(trim(pm.party_code)) = upper(trim(c.borrower_code)) AND pm.is_active
+                ORDER BY pm.id LIMIT 1
+            ) p ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT o.other_desc FROM public.g_others o
+                WHERE trim(o.other_code) = trim(p.state)
+                ORDER BY o.other_desc LIMIT 1
+            ) state_lookup ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT asset.vehicle_make, asset.version FROM public.assets asset
+                WHERE asset.contract_id = c.contract_id ORDER BY asset.asset_id LIMIT 1
+            ) a ON TRUE
+            WHERE c.contract_id = ?
+            """, (rs, n) -> new NormalRepaymentSchedule.Details(
+                rs.getString("contract_number"), rs.getObject("contract_date", LocalDate.class),
+                rs.getObject("tenure_months", Integer.class), rs.getObject("first_emi_date", LocalDate.class),
+                rs.getString("payment_frequency"), rs.getString("repayment_terms"), rs.getString("vehicle"),
+                rs.getString("borrower_name"), rs.getString("swd_name"), rs.getString("address_line_1"),
+                rs.getString("address_line_2"), rs.getString("area"), rs.getString("city"),
+                rs.getString("state"), rs.getString("pin_code"), rs.getBigDecimal("loan_amount"),
+                rs.getBigDecimal("finance_charges"), rs.getBigDecimal("bpfc_amount"),
+                rs.getBigDecimal("insurance_deposit"), rs.getBigDecimal("total_contract_value")),
+            contractId).stream().findFirst();
+    }
+
     public Totals totals(String contractNumber) {
         // Aggregate before rounding: displayed installment columns round independently.
         return jdbc.queryForObject("""

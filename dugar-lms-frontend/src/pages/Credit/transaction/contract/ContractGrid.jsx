@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Eye, FilePenLine, FilePlus2, FileSpreadsheet, Flag, Loader2, Printer, RotateCcw, Save, X } from 'lucide-react';
+import { CheckCircle2, Eye, FilePenLine, FilePlus2, FileSpreadsheet, FileText, Flag, Loader2, Printer, RotateCcw, Save, X } from 'lucide-react';
 import ServerDataTable from '../../../../components/common/ServerDataTable';
 import { openRepaymentSchedulePdf } from '../../../../services/repaymentScheduleService';
 import {
@@ -449,7 +449,7 @@ function transformContractsResponse(data) {
   };
 }
 
-const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowStatus = null, showCreate = true, enableFlagging = false, viewOnly = false, documentSelection = null }) => {
+const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowStatus = null, showCreate = true, enableFlagging = false, viewOnly = false, documentSelection = null, onOpenRepaymentSchedule = null }) => {
   const navigate = useNavigate();
   const selectionRequest = useRef(0);
   const documentSelectionRef = useRef(documentSelection);
@@ -688,7 +688,37 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
     () => [
       { field: 'serialNumber', headerName: 'S.No', minWidth: 70, align: 'center', headerAlign: 'center' },
       { field: 'contractId', headerName: 'Contract ID', minWidth: 110, align: 'right', headerAlign: 'right', sortable: true },
-      { field: 'contractNumber', headerName: 'Contract No', minWidth: 135, sortable: true },
+      {
+        field: 'contractNumber', headerName: 'Contract No', minWidth: 135, sortable: true,
+        renderCell: onOpenRepaymentSchedule ? (row) => (
+          <button
+            type="button"
+            title="Open repayment schedule PDF in a new tab"
+            onClick={() => onOpenRepaymentSchedule(row)}
+            className="text-blue-800 underline hover:text-blue-600"
+          >
+            {row.contractNumber}
+          </button>
+        ) : undefined,
+      },
+      ...(onOpenRepaymentSchedule ? [{
+        field: 'repaymentScheduleAction',
+        headerName: 'Action',
+        minWidth: 75,
+        align: 'center',
+        headerAlign: 'center',
+        renderCell: (row) => (
+          <button
+            type="button"
+            aria-label={'Open repayment schedule PDF for ' + row.contractNumber + ' in a new tab'}
+            title="Open repayment schedule PDF in a new tab"
+            onClick={() => onOpenRepaymentSchedule(row)}
+            className="inline-flex rounded p-1 text-blue-800 hover:bg-blue-100"
+          >
+            <FileText size={17} aria-hidden="true" />
+          </button>
+        ),
+      }] : []),
       ...(enableFlagging ? [{
         field: 'flagAction',
         headerName: 'Flag',
@@ -801,7 +831,7 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
       { field: 'guarantorPanNumber', headerName: 'Guarantor PAN', minWidth: 140, sortable: true },
       { field: 'guarantorOccupation', headerName: 'Guarantor Occupation', minWidth: 175, sortable: true },
     ],
-    [enableFlagging, openFlagModal],
+    [enableFlagging, onOpenRepaymentSchedule, openFlagModal],
   );
 
   const viewContextMenuItem = (row) => ({
@@ -911,15 +941,15 @@ const ContractGrid = ({ isDraft = false, title = 'Active Contracts', workflowSta
         defaultSortDirection="desc"
         fetchPage={loadContractsPage}
         filterFields={filterFields}
-        getContextMenuItems={documentSelection ? undefined : contextMenuItems}
+        getContextMenuItems={documentSelection || onOpenRepaymentSchedule ? undefined : contextMenuItems}
         getRowId={(row) => row.contractId}
         pageSizeOptions={PAGE_SIZE_OPTIONS}
         rowUpdates={flagRowUpdates}
         searchPlaceholder="Quick search contracts..."
         title={title}
-        titleAction={documentSelection ? documentSelection.renderActions : titleAction}
+        titleAction={onOpenRepaymentSchedule ? undefined : (documentSelection ? documentSelection.renderActions : titleAction)}
         transformResponse={transformContractsResponse}
-        onRowDoubleClick={documentSelection ? undefined : (row) => openContractForm(row, viewOnly || enableFlagging ? 'view' : 'edit')}
+        onRowDoubleClick={documentSelection || onOpenRepaymentSchedule ? undefined : (row) => openContractForm(row, viewOnly || enableFlagging ? 'view' : 'edit')}
       />
       <CibilExportReadyToast notice={exportNotice} visible={exportNoticeVisible} onClose={closeExportNotice} />
       {exportLoading && <CibilProcessingOverlay message={CIBIL_PROCESSING_MESSAGES[exportStatusIndex]} />}

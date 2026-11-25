@@ -11,17 +11,16 @@ const fieldClass = 'h-8 w-full border-0 bg-white px-2 text-[12px] text-black out
 
 const branchColumns = [
   ['area', 'Area', 'left'],
-  ['noOfAccounts', 'No.A/Cs', 'right'],
-  ['aum', 'AUM (Rs Lakhs)', 'right', 'lakhs'],
+  ['noOfAccounts', 'No. A/Cs', 'right'],
   ['current', 'Current (Rs Lakhs)', 'right', 'lakhs'],
-  ['bucket1To30', '1--30 (Rs Lakhs)', 'right', 'lakhs'],
-  ['bucket31To60', '31--60 (Rs Lakhs)', 'right', 'lakhs'],
-  ['bucket61To90', '61--90 (Rs Lakhs)', 'right', 'lakhs'],
-  ['bucket91To120', '91--120 (Rs Lakhs)', 'right', 'lakhs'],
-  ['bucket121To150', '121--150 (Rs Lakhs)', 'right', 'lakhs'],
-  ['bucket151To180', '151--180 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket1To30', '1–30 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket31To60', '31–60 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket61To90', '61–90 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket91To120', '91–120 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket121To150', '121–150 (Rs Lakhs)', 'right', 'lakhs'],
+  ['bucket151To180', '151–180 (Rs Lakhs)', 'right', 'lakhs'],
   ['bucketAbove180', '180 & above (Rs Lakhs)', 'right', 'lakhs'],
-  ['total', 'Total Outstanding (Rs Lakhs)', 'right', 'lakhs'],
+  ['aum', 'AUM (Rs Lakhs)', 'right', 'lakhs'],
 ];
 
 const consolidatedColumns = [
@@ -97,7 +96,6 @@ const branchBucketByKey = {
   bucket121To150: '121_150',
   bucket151To180: '151_180',
   bucketAbove180: 'above_180',
-  total: 'all',
 };
 
 function AgingFilters({ filters, loading, onChange, onExportExcel, onGenerate, onPrint, onReset }) {
@@ -257,17 +255,18 @@ function ReportTable({ columns, rows, footerRow, onCellClick }) {
   );
 }
 
-function SummaryStrip({ summary }) {
-  const items = [
-    ['No. of A/cs', Number(summary?.noOfAccounts || 0).toLocaleString('en-IN')],
-    ['AUM (Rs Lakhs)', formatLakhs(summary?.aum)],
-    ['Current (Rs Lakhs)', formatLakhs(summary?.current)],
-    ['Total Overdue (Rs Lakhs)', formatLakhs(summary?.totalOverdue)],
-    ['Total (Rs Lakhs)', formatLakhs(summary?.total)],
+function branchSummaryItems(summary) {
+  return [
+    ['NO. OF A/CS', Number(summary?.noOfAccounts || 0).toLocaleString('en-IN')],
+    ['CURRENT (RS LAKHS)', formatLakhs(summary?.current)],
+    ['TOTAL OVERDUE (RS LAKHS)', formatLakhs(summary?.totalOverdue)],
+    ['AUM (RS LAKHS)', formatLakhs(summary?.aum)],
   ];
+}
 
+function SummaryStrip({ items }) {
   return (
-    <div className="no-print grid grid-cols-2 border-b border-black/20 bg-[#f8fafc] text-[12px] sm:grid-cols-5">
+    <div className="no-print grid grid-cols-2 border-b border-black/20 bg-[#f8fafc] text-[12px] sm:grid-cols-4">
       {items.map(([label, value]) => (
         <div key={label} className="border-r border-black/10 px-3 py-2">
           <div className="font-bold uppercase text-black/60">{label}</div>
@@ -317,7 +316,6 @@ function branchTotalRow(rows, summary) {
   return {
     area: 'TOTAL',
     noOfAccounts: summary?.noOfAccounts ?? rows.reduce((sum, row) => sum + Number(row.noOfAccounts || 0), 0),
-    aum: summary?.aum ?? rows.reduce((total, row) => total + Number(row.aum || 0), 0),
     current: summary?.current ?? rows.reduce((total, row) => total + Number(row.current || 0), 0),
     bucket1To30: rows.reduce((total, row) => total + Number(row.bucket1To30 || 0), 0),
     bucket31To60: rows.reduce((total, row) => total + Number(row.bucket31To60 || 0), 0),
@@ -326,7 +324,7 @@ function branchTotalRow(rows, summary) {
     bucket121To150: rows.reduce((total, row) => total + Number(row.bucket121To150 || 0), 0),
     bucket151To180: rows.reduce((total, row) => total + Number(row.bucket151To180 || 0), 0),
     bucketAbove180: rows.reduce((total, row) => total + Number(row.bucketAbove180 || 0), 0),
-    total: summary?.total ?? rows.reduce((total, row) => total + Number(row.total || 0), 0),
+    aum: summary?.aum ?? rows.reduce((total, row) => total + Number(row.aum || 0), 0),
   };
 }
 
@@ -476,10 +474,16 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
         ${footerRow ? `<tr>${columns.map(([key, , , format]) => `<td><strong>${excelCell(displayValue(footerRow, key, format))}</strong></td>`).join('')}</tr>` : ''}
       </table>
     `;
+    const summaryItems = branchSummaryItems(report.summary);
     const html = `
       <html>
         <head><meta charset="utf-8" /></head>
         <body>
+          <table border="1">
+            <tr>${summaryItems.map(([label]) => `<th>${excelCell(label)}</th>`).join('')}</tr>
+            <tr>${summaryItems.map(([, value]) => `<td>${excelCell(value)}</td>`).join('')}</tr>
+          </table>
+          <br/>
           ${tableHtml(`Branch Wise ${title}`, branchColumns, report.branchWise || [], branchTotalRow(report.branchWise || [], report.summary))}
           <br/>
           ${tableHtml(`Consolidated ${title}`, consolidatedColumns, report.consolidated || [], consolidatedTotalRow(report.consolidated || []))}
@@ -500,6 +504,7 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
   const branchRows = data?.branchWise || [];
   const consolidatedRows = data?.consolidated || [];
   const branchFooter = branchTotalRow(branchRows, data?.summary);
+  const summaryItems = branchSummaryItems(data?.summary);
   const consolidatedFooter = consolidatedTotalRow(consolidatedRows);
   const titleDate = data?.asOnDate || appliedFilters?.asOnDate || filters.asOnDate;
 
@@ -529,7 +534,7 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
       <AgingFilters filters={filters} loading={loading} onChange={setFilters} onExportExcel={exportExcel} onGenerate={generate} onPrint={print} onReset={reset} />
       {message && <div className="no-print border-b border-red-200 bg-red-50 px-2 py-1 font-bold text-red-700">{message}</div>}
       {data?.warnings?.length > 0 && <div className="no-print border-b border-amber-200 bg-amber-50 px-2 py-1 font-bold text-amber-800">{data.warnings.join(' | ')}</div>}
-      <SummaryStrip summary={data?.summary} />
+      <SummaryStrip items={summaryItems} />
       <div className="no-print flex gap-1 border-b border-black/20 bg-white px-2 py-2">
         <button type="button" onClick={() => setActiveTab('branch')} className={`h-8 border px-3 text-[12px] font-bold uppercase ${activeTab === 'branch' ? 'border-[#0052CC] bg-[#0052CC] text-white' : 'border-black/30 bg-white text-black'}`}>Branch Wise</button>
         <button type="button" onClick={() => setActiveTab('consolidated')} className={`h-8 border px-3 text-[12px] font-bold uppercase ${activeTab === 'consolidated' ? 'border-[#0052CC] bg-[#0052CC] text-white' : 'border-black/30 bg-white text-black'}`}>Consolidated</button>
@@ -548,6 +553,10 @@ export default function AgingAnalysisPage({ initialTab = 'branch' }) {
       )}
       <div className="aging-print-root">
         <div className="aging-print-title">Branch Wise Aging Analysis As on {titleDate}</div>
+        <table className="aging-print-table">
+          <thead><tr>{summaryItems.map(([label]) => <th key={label} className="right">{label}</th>)}</tr></thead>
+          <tbody><tr>{summaryItems.map(([label, value]) => <td key={label} className="right">{value}</td>)}</tr></tbody>
+        </table>
         <table className="aging-print-table">
           <thead><tr>{branchColumns.map(([, label, align]) => <th key={label} className={align === 'right' ? 'right' : ''}>{label}</th>)}</tr></thead>
           <tbody>

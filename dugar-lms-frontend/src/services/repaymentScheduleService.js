@@ -1,8 +1,16 @@
 import apiClient from '../api/apiClient';
 
 export async function fetchRepaymentSchedulePdf(contractId) {
+  return fetchSchedulePdf(contractId, '/pdf');
+}
+
+export async function fetchNormalRepaymentSchedulePdf(contractId) {
+  return fetchSchedulePdf(contractId, '/normal/pdf');
+}
+
+async function fetchSchedulePdf(contractId, suffix) {
   try {
-    const response = await apiClient.get(`/contracts/${encodeURIComponent(contractId)}/repayment-schedule/pdf`, {
+    const response = await apiClient.get(`/contracts/${encodeURIComponent(contractId)}/repayment-schedule${suffix}`, {
       responseType: 'blob',
     });
     return response.data;

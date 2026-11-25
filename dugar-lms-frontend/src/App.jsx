@@ -37,6 +37,7 @@ import RoleMenuPermissions from './pages/committee/masters/RoleMenuPermissions.j
 import UserManagement from './pages/committee/masters/UserManagement.jsx';
 import AiUsageBillingReport from './pages/word-documents/AiUsageBillingReport.jsx';
 import GenerateWordDocument from './pages/word-documents/GenerateWordDocument.jsx';
+import RepaymentSchedulePage from './pages/operations/RepaymentSchedulePage.jsx';
 import WordTemplateMaster from './pages/word-documents/WordTemplateMaster.jsx';
 import { verifyMenuAccess } from './services/menuAccessService';
 import { normalizeMenuTree } from './utils/menuNormalizer';
@@ -572,6 +573,8 @@ function App() {
           <Route path="/administration/reports/ai-usage-billing" element={<MenuPermissionRoute menuCode="ADMINISTRATION_REPORTS_AI_USAGE_BILLING"><AiUsageBillingReport /></MenuPermissionRoute>} />
           <Route path="/administration/masters/word-template-master" element={<MenuPermissionRoute menuCode="ADMINISTRATION_MASTERS_WORD_TEMPLATE_MASTER"><WordTemplateMaster /></MenuPermissionRoute>} />
           <Route path="/operations/transactions/generate-word-document" element={<MenuPermissionRoute menuCode="OPERATIONS_TRANSACTIONS_GENERATE_WORD_DOCUMENT"><GenerateWordDocument /></MenuPermissionRoute>} />
+          <Route path="/operations/transactions/repayment-schedule-with-interest" element={<MenuPermissionRoute key="repayment-with-interest" menuCode="OPERATIONS_TRANSACTIONS_REPAYMENT_SCHEDULE_WITH_INTEREST"><RepaymentSchedulePage variant="with-interest" /></MenuPermissionRoute>} />
+          <Route path="/operations/transactions/repayment-schedule-normal" element={<MenuPermissionRoute key="repayment-normal" menuCode="OPERATIONS_TRANSACTIONS_REPAYMENT_SCHEDULE_NORMAL"><RepaymentSchedulePage variant="normal" /></MenuPermissionRoute>} />
           <Route 
   path="*" 
   element={

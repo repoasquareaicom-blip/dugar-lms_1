@@ -206,20 +206,20 @@ public class RepaymentSchedulePdf {
         }
     }
 
-    private static void text(PDPageContentStream canvas, PDType0Font font, float size, float x, float y,
+    static void text(PDPageContentStream canvas, PDType0Font font, float size, float x, float y,
                              String value, Color color) throws IOException {
         canvas.beginText(); canvas.setFont(font, size); canvas.setNonStrokingColor(color);
         canvas.newLineAtOffset(x, y); canvas.showText(value(value)); canvas.endText();
     }
     // Use the existing embedded Unicode font for a modest semibold stroke, including rupee glyphs.
-    private static void emphasis(PDPageContentStream canvas, PDType0Font font, float size, float x, float y,
+    static void emphasis(PDPageContentStream canvas, PDType0Font font, float size, float x, float y,
                                  String value, Color color) throws IOException {
         canvas.saveGraphicsState(); canvas.setStrokingColor(color); canvas.setLineWidth(size * 0.025f);
         canvas.setRenderingMode(RenderingMode.FILL_STROKE);
         text(canvas, font, size, x, y, value, color);
         canvas.restoreGraphicsState();
     }
-    private static float width(PDType0Font font, String value, float size) throws IOException {
+    static float width(PDType0Font font, String value, float size) throws IOException {
         return font.getStringWidth(value(value)) / 1000 * size;
     }
     private static String value(String value) { return value == null || value.isBlank() ? "-" : value.replaceAll("[\\p{Cntrl}]", " "); }
@@ -236,7 +236,7 @@ public class RepaymentSchedulePdf {
         return (rounded.signum() < 0 ? "-" : "") + "\u20b9" + integer;
     }
 
-    private static List<String> wrap(PDType0Font font, String text, float size, float maxWidth) throws IOException {
+    static List<String> wrap(PDType0Font font, String text, float size, float maxWidth) throws IOException {
         List<String> lines = new ArrayList<>();
         StringBuilder line = new StringBuilder();
         for (int codePoint : text.codePoints().toArray()) {

@@ -34,7 +34,12 @@ class AgingAnalysisServiceTest {
         LocalDate asOnDate = LocalDate.now();
         when(procedureRepository.getBranchWiseRows(eq(asOnDate), eq("F0001"), any(ReportAccessScope.class)))
             .thenReturn(List.of(
-                new AgingAnalysisBranchRowDto("F0001", "CHENNAI PARTHIBAN", 2, new BigDecimal("2000.00"), new BigDecimal("800.00"), new BigDecimal("1200.00"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("2000.00"), new BigDecimal("200.00"))
+                new AgingAnalysisBranchRowDto(
+                    "F0001", "CHENNAI PARTHIBAN", 2, new BigDecimal("2210.00"), new BigDecimal("800.00"),
+                    new BigDecimal("1200.00"), new BigDecimal("10.00"), new BigDecimal("20.00"),
+                    new BigDecimal("30.00"), new BigDecimal("40.00"), new BigDecimal("50.00"),
+                    new BigDecimal("60.00"), new BigDecimal("3000.00"), new BigDecimal("300.00")
+                )
             ));
         AgingAnalysisService service = service(mock(DemandListService.class), procedureRepository, mock(AgingAnalysisDrilldownRepository.class));
 
@@ -42,7 +47,11 @@ class AgingAnalysisServiceTest {
 
         assertThat(response.summary().noOfAccounts()).isEqualTo(2);
         assertThat(response.branchWise()).hasSize(1);
-        assertThat(response.summary().aum()).isEqualByComparingTo("2000.00");
+        assertThat(response.summary().aum()).isEqualByComparingTo("2210.00");
+        assertThat(response.summary().current()).isEqualByComparingTo("800.00");
+        assertThat(response.summary().totalOverdue()).isEqualByComparingTo("1410.00");
+        assertThat(response.summary().aum()).isEqualByComparingTo(response.summary().current().add(response.summary().totalOverdue()));
+        assertThat(response.summary().total()).isEqualByComparingTo("3000.00");
         assertThat(response.consolidated())
             .filteredOn(row -> "1--30".equals(row.label()))
             .singleElement()

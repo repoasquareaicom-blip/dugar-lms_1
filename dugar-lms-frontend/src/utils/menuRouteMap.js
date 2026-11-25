@@ -25,6 +25,8 @@ const NAME_ROUTE_MAP = [
   { keys: ['ledger code', 'ledger master'], route: '/accounts/masters/ledger-code' },
   { keys: ['document template master', 'word template master', 'administration_masters_word_template_master'], route: '/administration/masters/word-template-master' },
   { keys: ['generate document', 'generate word document', 'operations_transactions_generate_word_document'], route: '/operations/transactions/generate-word-document' },
+  { keys: ['repayment schedule with interest', 'operations_transactions_repayment_schedule_with_interest'], route: '/operations/transactions/repayment-schedule-with-interest' },
+  { keys: ['repayment schedule normal', 'operations_transactions_repayment_schedule_normal'], route: '/operations/transactions/repayment-schedule-normal' },
   { keys: ['role menu permissions', 'role permissions'], route: '/committee/masters/user-management/role-menu-permissions' },
   { keys: ['roles', 'role master'], route: '/committee/masters/user-management/roles' },
   { keys: ['user management', 'user master'], route: '/committee/masters/user-management' },

@@ -475,12 +475,19 @@ public class AgingAnalysisService {
 
     private AgingAnalysisSummaryDto summaryFromBranchRows(List<AgingAnalysisBranchRowDto> rows) {
         BigDecimal current = sumBranch(rows, AgingAnalysisBranchRowDto::current);
+        BigDecimal overdue = sumBranch(rows, AgingAnalysisBranchRowDto::bucket1To30)
+            .add(sumBranch(rows, AgingAnalysisBranchRowDto::bucket31To60))
+            .add(sumBranch(rows, AgingAnalysisBranchRowDto::bucket61To90))
+            .add(sumBranch(rows, AgingAnalysisBranchRowDto::bucket91To120))
+            .add(sumBranch(rows, AgingAnalysisBranchRowDto::bucket121To150))
+            .add(sumBranch(rows, AgingAnalysisBranchRowDto::bucket151To180))
+            .add(sumBranch(rows, AgingAnalysisBranchRowDto::bucketAbove180));
         BigDecimal total = sumBranch(rows, AgingAnalysisBranchRowDto::total);
         return new AgingAnalysisSummaryDto(
             rows.stream().mapToLong(AgingAnalysisBranchRowDto::noOfAccounts).sum(),
             sumBranch(rows, AgingAnalysisBranchRowDto::aum),
-            money(current),
-            money(total.subtract(current)),
+            current,
+            overdue,
             total
         );
     }

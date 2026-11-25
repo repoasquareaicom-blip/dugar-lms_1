@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { resolveMenuPath } from '../src/utils/menuRouteMap.js';
 
 const source = fs.readFileSync(new URL('../src/services/repaymentScheduleService.js', import.meta.url), 'utf8')
   .replace(/^import .*;\s*$/m, '').replace(/^export /gm, '');
@@ -13,13 +14,29 @@ function harness(get = async () => ({ data: new Blob(['pdf'], { type: 'applicati
   const URL = { createObjectURL: () => { calls.push(['blob']); return 'blob:repayment'; },
     revokeObjectURL: (url) => calls.push(['revoke', url]) };
   const api = { get: async (...args) => { calls.push(['get', ...args]); return get(...args); } };
-  const service = new Function('apiClient', 'window', 'URL', `${source}\nreturn {fetchRepaymentSchedulePdf,openRepaymentSchedulePdf};`)(api, window, URL);
+  const service = new Function('apiClient', 'window', 'URL', `${source}\nreturn {fetchRepaymentSchedulePdf,fetchNormalRepaymentSchedulePdf,openRepaymentSchedulePdf};`)(api, window, URL);
   return { ...service, calls, intervals, tab, window };
 }
 
 test('authenticated API client requests a PDF blob for the selected contract ID', async () => {
   const h = harness(); await h.fetchRepaymentSchedulePdf(6535);
   assert.deepEqual(h.calls[0], ['get', '/contracts/6535/repayment-schedule/pdf', { responseType: 'blob' }]);
+});
+test('standalone report menus resolve to distinct routes and open their corresponding PDFs', async () => {
+  for (const [menuCode, variant, fetcher, suffix] of [
+    ['OPERATIONS_TRANSACTIONS_REPAYMENT_SCHEDULE_WITH_INTEREST', 'with-interest', 'fetchRepaymentSchedulePdf', '/pdf'],
+    ['OPERATIONS_TRANSACTIONS_REPAYMENT_SCHEDULE_NORMAL', 'normal', 'fetchNormalRepaymentSchedulePdf', '/normal/pdf'],
+  ]) {
+    const h = harness();
+    assert.equal(resolveMenuPath({ menuCode }), `/operations/transactions/repayment-schedule-${variant}`);
+    await h.openRepaymentSchedulePdf(42, h[fetcher]);
+    assert.deepEqual(h.calls, [
+      ['open', '', '_blank'],
+      ['get', `/contracts/42/repayment-schedule${suffix}`, { responseType: 'blob' }],
+      ['blob'],
+      ['navigate', 'blob:repayment'],
+    ]);
+  }
 });
 test('opens a tab before awaiting HTTP, displays PDF, revokes URL only after tab closes', async () => {
   let resolve;
